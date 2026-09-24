@@ -1,0 +1,15 @@
+# Dependencias de Backend y Frontend
+/backend/vendor/
+/backend/node_modules/
+/frontend/node_modules/
+
+# Archivos de entorno y configuración sensible
+/backend/.env
+
+# Caché, logs y archivos temporales de Laravel
+/backend/storage/*.key
+/backend/storage/logs/*
+/backend/bootstrap/cache/*
+
+# Volúmenes y datos locales de Docker
+/data/

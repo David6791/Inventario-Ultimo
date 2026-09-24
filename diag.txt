@@ -1,0 +1,22 @@
+NAME                IMAGE                COMMAND                  SERVICE   CREATED          STATUS                  PORTS
+inventarios-api     inventarios-api      "docker-php-entrypoi…"   api       22 hours ago     Up 26 minutes           9000/tcp
+inventarios-db      postgres:16-alpine   "docker-entrypoint.s…"   db        22 hours ago     Up 22 hours (healthy)   0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+inventarios-nginx   nginx:1.27-alpine    "/docker-entrypoint.…"   nginx     22 hours ago     Up 22 hours             0.0.0.0:8000->80/tcp, [::]:8000->80/tcp
+inventarios-web     node:20-alpine       "docker-entrypoint.s…"   web       32 minutes ago   Up 4 minutes            0.0.0.0:4200->4200/tcp, [::]:4200->4200/tcp
+inventarios-web  | 
+inventarios-web  | added 960 packages, and audited 961 packages in 3m
+inventarios-web  | 
+inventarios-web  | 181 packages are looking for funding
+inventarios-web  |   run `npm fund` for details
+inventarios-web  | 
+inventarios-web  | 57 vulnerabilities (6 low, 16 moderate, 34 high, 1 critical)
+inventarios-web  | 
+inventarios-web  | To address issues that do not require attention, run:
+inventarios-web  |   npm audit fix
+inventarios-web  | 
+inventarios-web  | To address all issues (including breaking changes), run:
+inventarios-web  |   npm audit fix --force
+inventarios-web  | 
+inventarios-web  | Run `npm audit` for details.
+Laravel Framework 13.30.1
+angular: 000

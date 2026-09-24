@@ -1,0 +1,91 @@
+# =============================================================================
+# Despliegue del Sistema de Inventarios
+#
+# Sirve igual para una PC de la red institucional o para un servidor en
+# internet. La diferencia está en el archivo .env, no acá.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Diferencias con el entorno de desarrollo:
+#   - Angular se compila y se sirve como archivos estáticos (no `ng serve`)
+#   - PHP corre con php-fpm y opcache, no con `artisan serve`
+#   - Nginx sirve el frontend y hace de intermediario hacia la API
+#   - La base de datos NO expone su puerto afuera
+# =============================================================================
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      # Sin esto, los mensajes de error y el ordenamiento salen en inglés.
+      LANG: es_ES.utf8
+    volumes:
+      - datos-db:/var/lib/postgresql/data
+      # Copias de seguridad: se monta una carpeta del anfitrión para que
+      # `pg_dump` escriba donde se pueda recuperar sin entrar al contenedor.
+      - ./respaldos:/respaldos
+    # El puerto NO se publica: solo la API necesita llegar a la base, y lo
+    # hace por la red interna. Exponer 5432 a la red es una puerta de más.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: despliegue/php/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL}
+      APP_NAME: ${APP_NAME}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SANCTUM_STATEFUL_DOMAINS: ${DOMINIO}
+      SESSION_DOMAIN: ${SESSION_DOMAIN}
+      FRONTEND_URL: ${APP_URL}
+    volumes:
+      # Los PDF escaneados viven acá. Si esta carpeta se pierde, se pierden
+      # los respaldos documentales de todas las salidas e ingresos.
+      - archivos:/var/www/storage/app
+
+  web:
+    build:
+      context: ..
+      dockerfile: despliegue/nginx/Dockerfile
+      args:
+        # Ruta RELATIVA, no absoluta.
+        #
+        # Nginx sirve el frontend y la API por el mismo origen, así que `/api`
+        # resuelve correctamente desde cualquier dirección: localhost, la IP de
+        # la red, o una URL de túnel.
+        #
+        # Con una URL absoluta habría que reconstruir el contenedor cada vez
+        # que cambia la dirección de acceso — y la URL gratuita de Cloudflare
+        # cambia en cada reinicio.
+        API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${PUERTO_HTTP:-80}:80"
+
+volumes:
+  datos-db:
+  archivos:

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Atajos para no escribir `docker compose exec api ...` cada vez.
+#   ./inv artisan migrate
+#   ./inv composer require algo
+#   ./inv psql
+#   ./inv logs
+
+set -e
+
+case "$1" in
+  artisan)  shift; docker compose exec api php artisan "$@" ;;
+  composer) shift; docker compose exec api composer "$@" ;;
+  php)      shift; docker compose exec api php "$@" ;;
+  sh)       docker compose exec api bash ;;
+  npm)      shift; docker compose exec web npm "$@" ;;
+  ng)       shift; docker compose exec web npx ng "$@" ;;
+  psql)     docker compose exec db psql -U inventarios -d inventarios ;;
+  logs)     docker compose logs -f "${2:-}" ;;
+  up)       docker compose up -d ;;
+  down)     docker compose down ;;
+  reset)
+    echo "Esto BORRA la base de datos y la vuelve a sembrar."
+    read -p "¿Continuar? (s/N) " r
+    [[ "$r" == "s" ]] && docker compose exec api php artisan migrate:fresh --seed
+    ;;
+  *)
+    echo "Uso: ./inv {artisan|composer|php|sh|npm|ng|psql|logs|up|down|reset} [args]"
+    ;;
+esac

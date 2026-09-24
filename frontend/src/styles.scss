@@ -1,0 +1,200 @@
+/* =============================================================================
+   Sistema de Inventarios — base visual
+
+   El sujeto es un almacén institucional: quien usa esto pasa el día buscando un
+   código entre cientos de filas y necesita ver de un vistazo qué está agotado y
+   qué está por debajo del mínimo. La referencia no es un panel de métricas, es
+   un libro de registro.
+
+   Por eso: densidad alta, cero sombras, cero tarjetas repetidas, y un solo
+   elemento con carácter — la marca de estado en el borde de la fila.
+   ========================================================================== */
+
+@import "primeng/resources/themes/lara-light-blue/theme.css";
+@import "primeng/resources/primeng.css";
+@import "primeicons/primeicons.css";
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  /* Paleta ------------------------------------------------------------------
+     Petróleo profundo como tinta, papel gris frío, teal como acento. Ocre para
+     lo que exige atención y arcilla para lo que exige acción. */
+  --tinta:        #16323F;
+  --tinta-suave:  #5A7180;
+  --tinta-tenue:  #8FA3AE;
+  --papel:        #F7F8F8;
+  --superficie:   #FFFFFF;
+  --linea:        #DDE3E5;
+  --linea-tenue:  #EDF1F2;
+
+  --acento:       #0E7C86;
+  --acento-hover: #0A6169;
+  --acento-lavado:#E6F2F3;
+
+  --aviso:        #A67C00;   /* bajo mínimo */
+  --aviso-lavado: #FBF3DC;
+  --alerta:       #B4541E;   /* agotado, errores */
+  --alerta-lavado:#FBEEE7;
+  --bien:         #2E7D5B;
+
+  /* Tipografía ------------------------------------------------------------ */
+  --fuente: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fuente-codigo: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+
+  /* Escala: 1.200 (tercera menor). Suficiente contraste sin saltos bruscos en
+     pantallas densas de datos. */
+  --t-xs:   0.75rem;
+  --t-sm:   0.8125rem;
+  --t-base: 0.9375rem;
+  --t-md:   1.125rem;
+  --t-lg:   1.375rem;
+
+  --radio:  4px;
+
+  /* PrimeNG lee estas para sus componentes */
+  --primary-color: var(--acento);
+  --primary-color-text: #FFFFFF;
+  --surface-ground: var(--papel);
+  --surface-card: var(--superficie);
+  --surface-border: var(--linea);
+  --surface-100: var(--linea-tenue);
+  --text-color: var(--tinta);
+  --text-color-secondary: var(--tinta-suave);
+  --red-500: var(--alerta);
+  --red-400: var(--alerta);
+  --red-200: #E8C4B4;
+  --red-50:  var(--alerta-lavado);
+  --red-700: #8A3F16;
+  --orange-500: var(--aviso);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--fuente);
+  font-size: var(--t-base);
+  line-height: 1.5;
+  color: var(--tinta);
+  background: var(--papel);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Los códigos se comparan carácter por carácter; el monoespaciado acá es
+   funcional, no decorativo. */
+code, .codigo {
+  font-family: var(--fuente-codigo);
+  font-size: 0.9em;
+  letter-spacing: -0.01em;
+}
+
+/* Las cantidades alinean en columna. */
+.cifra {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Encabezado de página ------------------------------------------------------
+   Un solo patrón para todas las pantallas: título, una línea que explica de qué
+   se trata, y la acción principal a la derecha. */
+.pagina {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--linea);
+}
+.pagina h1 {
+  margin: 0 0 0.25rem;
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.pagina p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--t-sm);
+  color: var(--tinta-suave);
+  line-height: 1.55;
+}
+.pagina .acciones { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+/* Barra de filtros ---------------------------------------------------------- */
+.filtros {
+  display: flex;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 0.875rem;
+}
+.filtros .crece { flex: 1 1 16rem; min-width: 12rem; }
+
+/* Tablas --------------------------------------------------------------------
+   Sin zebra: con densidad alta las bandas compiten con la marca de estado. Las
+   separa una línea fina, como un libro rayado. */
+:host ::ng-deep,
+body {
+  .p-datatable .p-datatable-thead > tr > th {
+    background: var(--superficie);
+    border-bottom: 2px solid var(--linea);
+    color: var(--tinta-suave);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    padding: 0.625rem 0.75rem;
+  }
+  .p-datatable .p-datatable-tbody > tr > td {
+    border-bottom: 1px solid var(--linea-tenue);
+    padding: 0.5rem 0.75rem;
+    font-size: var(--t-sm);
+  }
+  .p-datatable .p-datatable-tbody > tr:hover { background: var(--acento-lavado); }
+}
+
+/* La marca de estado: una barra fina en el borde izquierdo de la fila, como la
+   pestaña de color de un libro físico. Es el único elemento con carácter. */
+tr.marca > td:first-child { box-shadow: inset 3px 0 0 0 transparent; }
+tr.marca-agotado  > td:first-child { box-shadow: inset 3px 0 0 0 var(--alerta); }
+tr.marca-bajo     > td:first-child { box-shadow: inset 3px 0 0 0 var(--aviso); }
+tr.marca-inactivo > td:first-child { box-shadow: inset 3px 0 0 0 var(--tinta-tenue); }
+
+tr.atenuada { color: var(--tinta-tenue); }
+tr.atenuada .codigo { color: var(--tinta-tenue); }
+
+/* Formularios --------------------------------------------------------------- */
+.campo { display: flex; flex-direction: column; gap: 0.3125rem; }
+.campo label { font-size: var(--t-sm); font-weight: 500; }
+.campo input, .campo textarea { width: 100%; }
+.campo .ayuda { font-size: var(--t-xs); color: var(--tinta-suave); }
+.campo .error { font-size: var(--t-xs); color: var(--alerta); }
+
+.rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+/* Estados vacíos: una invitación a actuar, no un cartel de error. */
+.vacio {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--tinta-suave);
+}
+.vacio i { font-size: 1.75rem; color: var(--tinta-tenue); display: block; margin-bottom: 0.75rem; }
+.vacio p { margin: 0 auto 1rem; max-width: 40ch; font-size: var(--t-sm); line-height: 1.55; }
+
+/* Accesibilidad ------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

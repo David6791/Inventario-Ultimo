@@ -1,0 +1,39 @@
+# Lo que NO debe entrar en la imagen.
+#
+# Copiar estas carpetas desde el equipo de desarrollo es la causa de que el
+# build falle o de que la imagen arrastre configuración local: `vendor/` trae
+# dependencias compiladas para otra plataforma, y `bootstrap/cache/` lista
+# paquetes que en producción no se instalan.
+
+# Dependencias: se instalan dentro del contenedor
+backend/vendor/
+frontend/node_modules/
+frontend/.angular/
+frontend/dist/
+
+# Estado local
+backend/.env
+backend/.env.*
+backend/bootstrap/cache/*.php
+backend/storage/logs/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+
+# Los escaneos viven en un volumen, no en la imagen
+backend/storage/app/solicitudes/
+backend/storage/app/salidas/
+backend/storage/app/ingresos/
+
+# Control de versiones y editores
+.git/
+.gitignore
+.vscode/
+.idea/
+*.log
+
+# El entorno de desarrollo
+docker-compose.yml
+inv.cmd
+despliegue/.env
+despliegue/respaldos/

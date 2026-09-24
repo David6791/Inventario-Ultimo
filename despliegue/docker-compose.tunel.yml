@@ -1,0 +1,25 @@
+# =============================================================================
+# Acceso desde fuera de la red, por túnel de Cloudflare
+#
+# Se usa JUNTO al compose principal:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.tunel.yml up -d
+#
+# El túnel sale DESDE el servidor hacia Cloudflare, así que no hace falta abrir
+# ningún puerto en el router ni tener IP pública. Funciona con CGNAT.
+# =============================================================================
+
+services:
+
+  tunel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - web
+    # `web` es el nombre del servicio en la red interna de Docker: el túnel
+    # entrega ahí, sin pasar por la red física.
+    command: tunnel --no-autoupdate --url http://web:80
+    # Sin token: Cloudflare asigna una URL temporal tipo
+    # https://algo-al-azar.trycloudflare.com, que sale en el log y CAMBIA en
+    # cada reinicio. Suficiente para probar; para algo permanente hace falta
+    # una cuenta y un dominio.
