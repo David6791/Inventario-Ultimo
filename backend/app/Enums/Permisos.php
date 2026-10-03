@@ -36,6 +36,13 @@ final class Permisos
         'usuarios'      => ['Usuarios',             'pi pi-users'],
         'roles'         => ['Roles y permisos',     'pi pi-shield'],
         'auditoria'     => ['Auditoría',            'pi pi-history'],
+        'activos'               => ['Activos fijos',             'pi pi-desktop'],
+        'activos-custodia'      => ['Custodia de activos',       'pi pi-user-edit'],
+        'activos-mantenimiento' => ['Mantenimiento de activos',  'pi pi-wrench'],
+        'activos-valuacion'     => ['Valuación y depreciación',  'pi pi-calculator'],
+        'activos-inventario'    => ['Inventario de activos',     'pi pi-check-square'],
+        'activos-bajas'         => ['Bajas de activos',          'pi pi-trash'],
+        'activos-config'        => ['Configuración de activos',  'pi pi-cog'],
         
     ];
 
@@ -140,6 +147,56 @@ final class Permisos
 
         // Auditoría
         'auditoria.ver'              => 'Consultar la bitácora de acciones',
+
+        // ── 2. Agregar a la constante CATALOGO ───────────────────────────────────────
+
+        // Activos fijos
+        'activos.ver'                => 'Consultar activos fijos y sus fichas',           // [S1]
+        'activos.crear'              => 'Dar de alta activos fijos',
+        'activos.editar'             => 'Modificar los datos de un activo',
+        'activos.codificar'          => 'Generar códigos y reimprimir etiquetas',
+        'activos.reportes'           => 'Ver y exportar los reportes del módulo',
+
+        // Custodia de activos
+        'activos-custodia.asignar'              => 'Asignar bienes a un custodio',
+        'activos-custodia.traspasar'            => 'Emitir traspasos internos de bienes',
+        'activos-custodia.autorizar-traspaso'   => 'Autorizar traspasos internos',
+        'activos-custodia.salida'               => 'Emitir salidas temporales de bienes',
+        'activos-custodia.autorizar-salida'     => 'Autorizar salidas temporales',
+        'activos-custodia.descargar'            => 'Emitir la constancia de descargo por desvinculación',
+
+        // Mantenimiento de activos
+        'activos-mantenimiento.ver'         => 'Consultar el plan y el historial de mantenimiento',
+        'activos-mantenimiento.registrar'   => 'Registrar mantenimientos ejecutados',
+        'activos-mantenimiento.capitalizar' => 'Capitalizar una mejora como mayor valor del bien',
+        'activos-mantenimiento.seguros'     => 'Administrar las pólizas de seguro de los bienes',
+
+        // Valuación y depreciación
+        'activos-valuacion.ver'                  => 'Consultar la valuación y la depreciación',
+        'activos-valuacion.calcular'             => 'Calcular el cierre mensual',
+        'activos-valuacion.cerrar'               => 'Cerrar el período de valuación',
+        'activos-valuacion.reabrir'              => 'Reabrir un período ya calculado',
+        'activos-valuacion.valor-recuperable'    => 'Registrar la prueba de valor recuperable',
+        'activos-valuacion.revaluo-registrar'    => 'Cargar una revalorización técnica',
+        'activos-valuacion.revaluo-aprobar'      => 'Aprobar una revalorización técnica',
+        'activos-valuacion.revaluo-contabilizar' => 'Contabilizar una revalorización aprobada',
+
+        // Inventario de activos
+        'activos-inventario.ver'        => 'Consultar las tomas físicas de activos',
+        'activos-inventario.planificar' => 'Planificar una toma física',
+        'activos-inventario.tomar'      => 'Ejecutar la verificación física de bienes',
+        'activos-inventario.resolver'   => 'Resolver las diferencias de una toma física',
+        'activos-inventario.cerrar'     => 'Cerrar la toma física y generar los ajustes',
+
+        // Bajas de activos
+        'activos-bajas.ver'        => 'Consultar las bajas de activos',
+        'activos-bajas.solicitar'  => 'Solicitar la baja de un bien',
+        'activos-bajas.dictaminar' => 'Emitir el informe técnico que sustenta la baja',
+        'activos-bajas.autorizar'  => 'Autorizar la baja y su disposición',
+
+        // Configuración de activos
+        'activos-config.ver'         => 'Consultar clases, ubicaciones y parámetros',
+        'activos-config.administrar' => 'Administrar clases, ubicaciones y parámetros',   // [S1]
     ];
 
     /** Nombre del rol con acceso total. Se resuelve vía Gate::before. */
