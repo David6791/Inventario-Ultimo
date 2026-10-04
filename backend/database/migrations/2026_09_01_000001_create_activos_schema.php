@@ -54,6 +54,7 @@ return new class extends Migration
 
     public function up(): void
     {
+        DB::statement('DROP SCHEMA IF EXISTS activos CASCADE');
         $path = database_path($this->sqlPath);
 
         if (! file_exists($path)) {

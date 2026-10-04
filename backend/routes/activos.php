@@ -4,6 +4,7 @@ use App\Modules\Activos\Http\Controllers\ClaseController;
 use App\Modules\Activos\Http\Controllers\ParametroController;
 use App\Modules\Activos\Http\Controllers\SubclaseController;
 use App\Modules\Activos\Http\Controllers\UbicacionController;
+use App\Modules\Activos\Http\Controllers\ActivoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,6 +17,29 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware(['auth:sanctum'])->group(function () {
+
+/* ---------------------------------------------------- Sprint 2 ------ */
+
+    Route::middleware('can:activos.ver')->group(function () {
+        Route::get('activos',                 [ActivoController::class, 'index']);
+        Route::get('activos/codigo/{codigo}', [ActivoController::class, 'porCodigo']);
+        Route::get('activos/{activo}',        [ActivoController::class, 'show']);
+    });
+
+    Route::middleware('can:activos.crear')->group(function () {
+        Route::post('activos', [ActivoController::class, 'store']);
+    });
+
+    Route::middleware('can:activos.editar')->group(function () {
+        Route::put('activos/{activo}', [ActivoController::class, 'update']);
+    });
+
+    Route::middleware('can:activos.codificar')->group(function () {
+        Route::post('activos/etiquetas', [ActivoController::class, 'etiquetas']);
+    });
+
+    // Responde 405 con explicación: los activos se dan de baja, no se borran.
+    Route::delete('activos/{activo}', [ActivoController::class, 'destroy']);
 
     Route::middleware('can:activos-config.ver')->group(function () {
         Route::get('clases',                        [ClaseController::class, 'index']);

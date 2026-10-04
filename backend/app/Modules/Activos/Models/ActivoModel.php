@@ -19,4 +19,8 @@ abstract class ActivoModel extends Model
     {
         return 'activos.' . $tabla;
     }
+    public function getConnectionName(): ?string
+    {
+        return config('database.default');
+    }
 }
