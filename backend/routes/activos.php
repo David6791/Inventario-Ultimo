@@ -5,6 +5,8 @@ use App\Modules\Activos\Http\Controllers\ParametroController;
 use App\Modules\Activos\Http\Controllers\SubclaseController;
 use App\Modules\Activos\Http\Controllers\UbicacionController;
 use App\Modules\Activos\Http\Controllers\ActivoController;
+use App\Modules\Activos\Http\Controllers\ImportacionController;
+use App\Modules\Activos\Http\Controllers\DocumentoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,16 +20,40 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
+    /* ------------------------------------------- Sprint 4: custodia ----- */
+
+    Route::middleware('can:activos.ver')->group(function () {
+        Route::get('documentos',              [DocumentoController::class, 'index']);
+        Route::get('documentos/{documento}',  [DocumentoController::class, 'show'])
+             ->whereNumber('documento');
+        Route::get('custodios/{custodio}/activos', [DocumentoController::class, 'porCustodio'])
+             ->whereNumber('custodio');
+    });
+
+    // El permiso fino lo resuelve DocumentoRequest según el tipo.
+    Route::post('documentos', [DocumentoController::class, 'store']);
+
+    Route::post('documentos/{documento}/confirmar', [DocumentoController::class, 'confirmar'])
+         ->whereNumber('documento');
+    Route::post('documentos/{documento}/anular',    [DocumentoController::class, 'anular'])
+         ->whereNumber('documento');
+    Route::post('documentos/{documento}/retorno',   [DocumentoController::class, 'registrarRetorno'])
+         ->whereNumber('documento');
 /* ---------------------------------------------------- Sprint 2 ------ */
 
     Route::middleware('can:activos.ver')->group(function () {
         Route::get('activos',                 [ActivoController::class, 'index']);
         Route::get('activos/codigo/{codigo}', [ActivoController::class, 'porCodigo']);
-        Route::get('activos/{activo}',        [ActivoController::class, 'show']);
+        Route::get('activos/{activo}', [ActivoController::class, 'show'])->whereNumber('activo');
+        Route::put('activos/{activo}', [ActivoController::class, 'update'])->whereNumber('activo');
+        Route::delete('activos/{activo}', [ActivoController::class, 'destroy'])->whereNumber('activo');
     });
 
     Route::middleware('can:activos.crear')->group(function () {
         Route::post('activos', [ActivoController::class, 'store']);
+        Route::get('activos/importar/plantilla', [ImportacionController::class, 'plantilla']);
+        Route::post('activos/importar/validar',  [ImportacionController::class, 'validar']);
+        Route::post('activos/importar',          [ImportacionController::class, 'importar']);
     });
 
     Route::middleware('can:activos.editar')->group(function () {
