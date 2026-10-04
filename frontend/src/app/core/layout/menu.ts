@@ -19,6 +19,10 @@ const ESTRUCTURA: ItemMenu[] = [
   { etiqueta: 'Tablero', icono: 'pi pi-home', ruta: '/tablero', permiso: 'dashboard.ver' },
   { etiqueta: 'Solicitudes de compra', icono: 'pi pi-file-edit',
     ruta: '/solicitudes', permiso: 'solicitudes.ver' },
+      { etiqueta: 'Custodia',          icono: 'pi pi-user-edit',
+    ruta: '/activos/custodia',              permiso: 'activos.ver' },
+  { etiqueta: 'Bienes por custodio', icono: 'pi pi-users',
+    ruta: '/activos/custodia/por-custodio', permiso: 'activos.ver' },
   {
     etiqueta: 'Movimientos', icono: 'pi pi-arrows-h', hijos: [
       { etiqueta: 'Ingresos',       icono: 'pi pi-arrow-down-left', ruta: '/ingresos',       permiso: 'ingresos.ver' },
@@ -59,6 +63,15 @@ const ESTRUCTURA: ItemMenu[] = [
       { etiqueta: 'Usuarios',         icono: 'pi pi-users',   ruta: '/usuarios',  permiso: 'usuarios.ver' },
       { etiqueta: 'Roles y permisos', icono: 'pi pi-shield',  ruta: '/roles',     permiso: 'roles.ver' },
       { etiqueta: 'Auditoría',        icono: 'pi pi-history', ruta: '/auditoria', permiso: 'auditoria.ver' },
+    ],
+  },
+    {
+    etiqueta: 'Activos fijos', icono: 'pi pi-desktop', hijos: [
+      { etiqueta: 'Registro de activos', icono: 'pi pi-list',      ruta: '/activos/registro',                   permiso: 'activos.ver' },
+      { etiqueta: 'Clases',              icono: 'pi pi-sitemap',   ruta: '/activos/configuracion/clases',       permiso: 'activos-config.ver' },
+      { etiqueta: 'Subclases',           icono: 'pi pi-tags',      ruta: '/activos/configuracion/subclases',    permiso: 'activos-config.ver' },
+      { etiqueta: 'Ubicaciones',         icono: 'pi pi-map-marker',ruta: '/activos/configuracion/ubicaciones',  permiso: 'activos-config.ver' },
+      { etiqueta: 'Parámetros',          icono: 'pi pi-sliders-h', ruta: '/activos/configuracion/parametros',   permiso: 'activos-config.ver' },
     ],
   },
 ];

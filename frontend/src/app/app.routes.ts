@@ -364,6 +364,10 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/reportes/reporte.component').then(m => m.ReporteComponent),
       },
+      {
+        path: 'activos',
+        loadChildren: () => import('./activos/activos.routes').then(m => m.ACTIVOS_ROUTES),
+      },
     ],
   },
 
