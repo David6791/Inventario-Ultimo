@@ -9,6 +9,8 @@ use App\Modules\Activos\Http\Controllers\ImportacionController;
 use App\Modules\Activos\Http\Controllers\DocumentoController;
 use App\Modules\Activos\Http\Controllers\CustodioController;
 use App\Modules\Activos\Http\Controllers\CierreController;
+use App\Modules\Activos\Http\Controllers\EmpleadoController;
+use App\Modules\Activos\Http\Controllers\CentroCostoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -21,6 +23,26 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware(['auth:sanctum'])->group(function () {
+    /* --------------------------------------- Personal y organización ---- */
+
+    Route::middleware('can:activos-config.administrar')->group(function () {
+        Route::post('empleados',                   [EmpleadoController::class, 'store']);
+        Route::put('empleados/{empleado}',         [EmpleadoController::class, 'update'])->whereNumber('empleado');
+        Route::post('empleados/{empleado}/baja',   [EmpleadoController::class, 'darDeBaja'])->whereNumber('empleado');
+
+        // ANTES que empleados/{empleado}
+        Route::post('empleados/importar/validar',  [EmpleadoController::class, 'validarImportacion']);
+        Route::post('empleados/importar',          [EmpleadoController::class, 'importar']);
+
+        Route::post('centros-costo',               [CentroCostoController::class, 'store']);
+        Route::put('centros-costo/{centro}',       [CentroCostoController::class, 'update'])->whereNumber('centro');
+    });
+    Route::middleware('can:activos.ver')->group(function () {
+        Route::get('empleados',            [EmpleadoController::class, 'index']);
+        Route::get('empleados/{empleado}', [EmpleadoController::class, 'show'])->whereNumber('empleado');
+        Route::get('centros-costo',        [CentroCostoController::class, 'index']);
+        Route::get('areas',                [CentroCostoController::class, 'areas']);
+    });
     /* ------------------------------------------ Sprint 5: valuación ----- */
 
     Route::middleware('can:activos-valuacion.ver')->group(function () {
