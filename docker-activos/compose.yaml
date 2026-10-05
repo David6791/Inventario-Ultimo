@@ -1,0 +1,108 @@
+# Stack aislado del módulo de Activos Fijos, para demostración en red local.
+#
+# Aislamiento respecto de lo que ya corre:
+#   - name propio        -> contenedores con prefijo activos-demo, no colisionan
+#   - red propia         -> no ve la red del stack existente
+#   - volumen propio     -> base de datos independiente, no toca la de producción
+#   - puertos corridos   -> 8080 / 5433 / 8081
+#
+#   docker compose up -d --build
+#   docker compose --profile build run --rm node      (compila el frontend)
+
+name: activos-demo
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: activos-demo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      POSTGRES_DB: ${DB_DATABASE:-activos_demo}
+      POSTGRES_USER: ${DB_USERNAME:-activos}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-activos_demo_2026}
+      TZ: America/La_Paz
+    ports:
+      - "${PUERTO_DB:-5433}:5432"          # 5433 en el host: no pisa un Postgres local en 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-activos} -d ${DB_DATABASE:-activos_demo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [activos]
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: activos-demo-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-activos_demo}
+      DB_USERNAME: ${DB_USERNAME:-activos}
+      DB_PASSWORD: ${DB_PASSWORD:-activos_demo_2026}
+      MIGRAR_AL_INICIAR: ${MIGRAR_AL_INICIAR:-true}
+      SEMBRAR_AL_INICIAR: ${SEMBRAR_AL_INICIAR:-true}
+    volumes:
+      - ../backend:/var/www/backend
+      - vendor:/var/www/backend/vendor
+    networks: [activos]
+
+  web:
+    image: nginx:1.27-alpine
+    container_name: activos-demo-web
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "${PUERTO_WEB:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../backend:/var/www/backend:ro
+      - ../frontend/dist/frontend/browser:/var/www/frontend:ro
+    networks: [activos]
+
+  # Compila el frontend y termina. No queda levantado.
+  node:
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile
+    container_name: activos-demo-node
+    profiles: [build]
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+      - node_modules:/app/node_modules
+    command: sh -c "npm ci && npx ng build --configuration production"
+    networks: [activos]
+
+  adminer:
+    image: adminer:4-standalone
+    container_name: activos-demo-adminer
+    restart: unless-stopped
+    depends_on: [db]
+    ports:
+      - "${PUERTO_ADMINER:-8081}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    networks: [activos]
+
+volumes:
+  pgdata:          # base de datos de la demo, independiente de la existente
+  vendor:
+  node_modules:
+
+networks:
+  activos:
+    name: activos-demo-net
