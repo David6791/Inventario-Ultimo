@@ -8,6 +8,7 @@ use App\Modules\Activos\Http\Controllers\ActivoController;
 use App\Modules\Activos\Http\Controllers\ImportacionController;
 use App\Modules\Activos\Http\Controllers\DocumentoController;
 use App\Modules\Activos\Http\Controllers\CustodioController;
+use App\Modules\Activos\Http\Controllers\CierreController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,7 +21,26 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware(['auth:sanctum'])->group(function () {
+    /* ------------------------------------------ Sprint 5: valuación ----- */
 
+    Route::middleware('can:activos-valuacion.ver')->group(function () {
+        Route::get('cierres',                      [CierreController::class, 'index']);
+        Route::get('cierres/{cierre}',             [CierreController::class, 'show'])->whereNumber('cierre');
+        Route::get('cierres/{cierre}/detalle',     [CierreController::class, 'detalle'])->whereNumber('cierre');
+        Route::get('cierres/{cierre}/conciliacion',[CierreController::class, 'conciliacion'])->whereNumber('cierre');
+    });
+
+    Route::middleware('can:activos-valuacion.calcular')->group(function () {
+        Route::post('cierres',                  [CierreController::class, 'abrir']);
+        Route::post('cierres/{cierre}/calcular',[CierreController::class, 'calcular'])->whereNumber('cierre');
+    });
+
+    // El permiso fino de cada acción lo valida el controlador: cerrar y
+    // reabrir exigen permisos distintos de calcular.
+    Route::post('cierres/{cierre}/cerrar',  [CierreController::class, 'cerrar'])->whereNumber('cierre');
+    Route::post('cierres/{cierre}/reabrir', [CierreController::class, 'reabrir'])->whereNumber('cierre');
+
+    Route::post('valor-recuperable', [CierreController::class, 'registrarValorRecuperable']);
     /* ------------------------------------------- Sprint 4: custodia ----- */
 
     Route::middleware('can:activos.ver')->group(function () {
