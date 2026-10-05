@@ -26,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'almacen'            => ResolverAlmacen::class,
         ]);
     })
+    ->withCommands([
+        App\Modules\Activos\Console\VerificarOrdenMigraciones::class,
+    ]) 
     ->withExceptions(function (Exceptions $exceptions) {
         /*
         | El frontend necesita respuestas JSON consistentes. Sin esto, un 403 de

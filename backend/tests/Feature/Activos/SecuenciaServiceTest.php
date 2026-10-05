@@ -48,13 +48,17 @@ class SecuenciaServiceTest extends TestCase
         $this->assertStringEndsWith('-05-01-000001', $otro);
     }
 
-    public function test_el_correlativo_no_se_reutiliza_tras_un_rollback_de_negocio(): void
+    public function test_el_correlativo_se_libera_si_el_alta_falla(): void
     {
         [$clase, $subclase] = $this->claseYSubclase('05', '02');
 
         $this->secuencias->generarCodigoActivo($clase, $subclase);
 
-        // Simula un alta que falla después de reservar el código.
+        // El servicio reserva el correlativo DENTRO de la transacción de
+        // negocio, no en una aparte. Si esa transacción falla, la reserva se
+        // revierte con ella y el número queda disponible: ni huecos, ni
+        // códigos repetidos ante concurrencia, porque el FOR UPDATE sigue
+        // bloqueando hasta el commit.
         try {
             DB::transaction(function () use ($clase, $subclase) {
                 $this->secuencias->generarCodigoActivo($clase, $subclase);
@@ -66,8 +70,7 @@ class SecuenciaServiceTest extends TestCase
 
         $siguiente = $this->secuencias->generarCodigoActivo($clase, $subclase);
 
-        // El 2 quedó consumido: se prefiere un hueco antes que un código repetido.
-        $this->assertStringEndsWith('-000003', $siguiente);
+        $this->assertStringEndsWith('-000002', $siguiente);
     }
 
     public function test_numera_documentos_por_tipo_y_gestion(): void

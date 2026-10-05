@@ -17,10 +17,10 @@ class SubclaseRequest extends FormRequest
         $id = $this->route('subclase')?->id;
 
         return [
-            'clase_id' => ['required', 'integer', Rule::exists('activos.clase', 'id')],
+            'clase_id' => ['required', 'integer', Rule::exists(\App\Modules\Activos\Models\Clase::class, 'id')],
             'codigo'   => [
                 'required', 'string', 'size:2', 'regex:/^[0-9]{2}$/',
-                Rule::unique('activos.subclase', 'codigo')
+                Rule::unique(\App\Modules\Activos\Models\Subclase::class, 'codigo')
                     ->where(fn ($q) => $q->where('clase_id', $this->input('clase_id')))
                     ->ignore($id),
             ],

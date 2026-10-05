@@ -17,15 +17,16 @@ class UbicacionRequest extends FormRequest
         $id = $this->route('ubicacion')?->id;
 
         return [
-            'codigo' => ['required', 'string', 'max:20',
-                         Rule::unique('activos.ubicacion', 'codigo')->ignore($id)],
+            'codigo'   => ['required', 'string', 'max:20',
+                           Rule::unique(\App\Modules\Activos\Models\Ubicacion::class, 'codigo')->ignore($id)],
+            'padre_id' => ['nullable', 'integer',
+                           Rule::exists(\App\Modules\Activos\Models\Ubicacion::class, 'id'),
+                           Rule::notIn([$id])],
             'nombre'        => ['required', 'string', 'max:150'],
             'unidad_org_id' => ['nullable', 'integer'],
             'sucursal'      => ['nullable', 'string', 'max:100'],
             'direccion'     => ['nullable', 'string', 'max:250'],
             'ambiente'      => ['nullable', 'string', 'max:100'],
-            'padre_id'      => ['nullable', 'integer', Rule::exists('activos.ubicacion', 'id'),
-                                Rule::notIn([$id])],
             'activo'        => ['boolean'],
         ];
     }

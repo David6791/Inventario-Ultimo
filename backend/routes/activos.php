@@ -7,6 +7,7 @@ use App\Modules\Activos\Http\Controllers\UbicacionController;
 use App\Modules\Activos\Http\Controllers\ActivoController;
 use App\Modules\Activos\Http\Controllers\ImportacionController;
 use App\Modules\Activos\Http\Controllers\DocumentoController;
+use App\Modules\Activos\Http\Controllers\CustodioController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,6 +29,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
              ->whereNumber('documento');
         Route::get('custodios/{custodio}/activos', [DocumentoController::class, 'porCustodio'])
              ->whereNumber('custodio');
+        Route::get('custodios',                    [CustodioController::class, 'index']);
+        Route::get('custodios/{custodio}/resumen', [CustodioController::class, 'resumen'])
+         ->whereNumber('custodio');
     });
 
     // El permiso fino lo resuelve DocumentoRequest según el tipo.
