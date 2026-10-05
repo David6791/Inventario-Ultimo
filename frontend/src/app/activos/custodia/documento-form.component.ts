@@ -352,15 +352,13 @@ export class DocumentoFormComponent implements OnInit {
   ngOnInit(): void {
     this.catalogos.listarUbicaciones(true).subscribe((u) => this.ubicaciones.set(u));
 
-    // La lista de personas sale del módulo de usuarios del sistema.
-    this.http.get<{ data: Usuario[] }>(`${environment.apiUrl}/usuarios`, {
-      params: { por_pagina: 200, activo: true } as any,
-    }).subscribe({
-      next: (r) => this.usuarios.set(r.data ?? []),
-      error: () => this.toast.add({
-        severity: 'warn', summary: 'No se pudo cargar la lista de usuarios',
-      }),
-    });
+    this.http.get<{ data: Usuario[] }>(`${environment.apiUrl}/activos/custodios`)
+      .subscribe({
+        next: (r) => this.usuarios.set(r.data ?? []),
+        error: () => this.toast.add({
+          severity: 'warn', summary: 'No se pudo cargar la lista de custodios',
+        }),
+      });
   }
 
   elegirTipo(t: TipoDocumento): void {

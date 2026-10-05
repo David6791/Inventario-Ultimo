@@ -14,8 +14,8 @@ import { DocumentoService } from '../core/services/documento.service';
 import { BienDeCustodio } from '../core/models/documento.model';
 import { ESTILOS_CONFIG } from '../core/estilos/configuracion.estilos';
 
-interface Usuario { id: number; name: string; cargo?: string | null; }
-
+//interface Usuario { id: number; name: string; cargo?: string | null; }
+interface Usuario { id: number; nombre: string; ci?: string | null; cargo?: string | null; }
 /**
  * Bienes a cargo de una persona.
  *
@@ -192,18 +192,17 @@ export class PorCustodioComponent implements OnInit {
   custodioId: number | null = null;
 
   ngOnInit(): void {
-    this.http.get<{ data: Usuario[] }>(`${environment.apiUrl}/usuarios`, {
-      params: { por_pagina: 200 } as any,
-    }).subscribe({
-      next: (r) => this.usuarios.set(r.data ?? []),
-      error: () => this.toast.add({
-        severity: 'warn', summary: 'No se pudo cargar la lista de usuarios',
-      }),
-    });
+    this.http.get<{ data: Usuario[] }>(`${environment.apiUrl}/activos/custodios`)
+      .subscribe({
+        next: (r) => this.usuarios.set(r.data ?? []),
+        error: () => this.toast.add({
+          severity: 'warn', summary: 'No se pudo cargar la lista de custodios',
+        }),
+      });
   }
 
-  nombreCustodio(): string {
-    return this.usuarios().find((u) => u.id === this.custodioId)?.name ?? '';
+    nombreCustodio(): string {
+    return this.usuarios().find((u) => u.id === this.custodioId)?.nombre ?? '';
   }
 
   cargar(): void {
