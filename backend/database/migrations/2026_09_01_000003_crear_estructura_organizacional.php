@@ -192,12 +192,24 @@ return new class extends Migration
      * cuenta en el sistema — que es la mayoría de quienes efectivamente
      * reciben bienes.
      */
-    private function migrarCustodios(): void
+        private function migrarCustodios(): void
     {
-        // Las columnas ya existen y son bigint sin FK; solo se agregan las
-        // restricciones hacia empleado. Si hubiera datos previos apuntando a
-        // users, esta migración fallaría: por eso se limpian antes.
-        DB::statement('UPDATE activos.activo SET custodio_id = NULL WHERE custodio_id IS NOT NULL');
+        DB::statement("
+            UPDATE activos.documento
+            SET estado = 'ANULADO',
+                motivo_anulacion = 'Anulado por migración: el custodio pasó de usuario a empleado',
+                anulado_por = COALESCE(confirmado_por, created_by),
+                anulado_at = now()
+            WHERE estado = 'CONFIRMADO'
+        ");
+
+        DB::statement("
+            UPDATE activos.activo
+            SET custodio_id = NULL,
+                estado = CASE WHEN estado = 'EN_USO' THEN 'REGISTRADO' ELSE estado END
+            WHERE custodio_id IS NOT NULL
+        ");
+
         DB::statement('UPDATE activos.documento SET custodio_origen_id = NULL, custodio_destino_id = NULL');
 
         DB::statement("
