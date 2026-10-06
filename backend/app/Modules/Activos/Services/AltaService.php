@@ -8,6 +8,7 @@ use App\Modules\Activos\Models\Clase;
 use App\Modules\Activos\Models\Movimiento;
 use App\Modules\Activos\Models\Parametro;
 use App\Modules\Activos\Models\Subclase;
+use App\Modules\Activos\Models\Ubicacion;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -48,8 +49,20 @@ class AltaService
             $esBienControl = $this->esBienDeControl($valorOrigen, $datos);
 
             // El código se reserva acá dentro, con la transacción abierta.
+            $ubicacion = Ubicacion::findOrFail($datos['ubicacion_id']);
+            $datos['centro_costo_id'] = $ubicacion->centro_efectivo;
+    
+            if (! $datos['centro_costo_id']) {
+                throw new RuntimeException(
+                    "La ubicación «{$ubicacion->nombre}» no pertenece a ningún centro de costo. "
+                    .'Asígnele uno antes de registrar bienes ahí.'
+                );
+            }
             $codigo = $this->secuencias->generarCodigoActivo($clase, $subclase);
 
+                    // El centro sale de la ubicación: pedirlo aparte permitiría registrar
+            // un bien en la ubicación de un centro imputándolo a otro.
+            
             $activo = Activo::create(array_merge($datos, [
                 'codigo'          => $codigo,
                 'correlativo'     => (int) substr($codigo, -6),

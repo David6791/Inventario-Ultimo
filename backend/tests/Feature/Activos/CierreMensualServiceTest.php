@@ -11,6 +11,8 @@ use App\Modules\Activos\Models\Ubicacion;
 use App\Modules\Activos\Models\Valuacion;
 use App\Modules\Activos\Services\AltaService;
 use App\Modules\Activos\Services\CierreMensualService;
+use App\Modules\Activos\Models\Area;
+use App\Modules\Activos\Models\CentroCosto;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -348,8 +350,7 @@ class CierreMensualServiceTest extends TestCase
             ['clase_id' => $clase->id, 'codigo' => '02'],
             ['nombre' => 'Portátiles', 'activo' => true]
         );
-        $ubicacion = Ubicacion::firstOrCreate(['codigo' => 'TEST'],
-            ['nombre' => 'Prueba', 'activo' => true]);
+        $ubicacion = $this->ubicacionDePrueba();
 
         return $this->altas->registrar([
             'clase_id' => $clase->id, 'subclase_id' => $subclase->id,
@@ -371,9 +372,7 @@ class CierreMensualServiceTest extends TestCase
             ['clase_id' => $clase->id, 'codigo' => '01'],
             ['nombre' => 'Terreno urbano', 'activo' => true]
         );
-        $ubicacion = Ubicacion::firstOrCreate(['codigo' => 'TEST'],
-            ['nombre' => 'Prueba', 'activo' => true]);
-
+        $ubicacion = $this->ubicacionDePrueba();
         return $this->altas->registrar([
             'clase_id' => $clase->id, 'subclase_id' => $subclase->id,
             'denominacion' => 'Terreno', 'serie' => 'TERRENO-1',
@@ -391,5 +390,26 @@ class CierreMensualServiceTest extends TestCase
             ->whereDate('periodo', $periodo)
             ->where('tipo', $tipo)
             ->first();
+    }
+        private function ubicacionDePrueba(): Ubicacion
+    {
+        $area = Area::firstOrCreate(
+            ['codigo' => 'TEST'],
+            ['nombre' => 'Área de prueba', 'activo' => true]
+        );
+
+        $centro = CentroCosto::firstOrCreate(
+            ['codigo' => 'CC-TEST'],
+            ['area_id' => $area->id, 'nombre' => 'Centro de prueba', 'activo' => true]
+        );
+
+        return Ubicacion::updateOrCreate(
+            ['codigo' => 'TEST'],
+            [
+                'nombre'          => 'Ubicación de prueba',
+                'centro_costo_id' => $centro->id,
+                'activo'          => true,
+            ]
+        );
     }
 }

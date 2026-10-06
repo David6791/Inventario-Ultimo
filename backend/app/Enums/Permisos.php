@@ -156,6 +156,7 @@ final class Permisos
         'activos.editar'             => 'Modificar los datos de un activo',
         'activos.codificar'          => 'Generar códigos y reimprimir etiquetas',
         'activos.reportes'           => 'Ver y exportar los reportes del módulo',
+        'activos.ver-todos-centros' => 'Ver los activos de todos los centros de costo, no solo de los almacenes asignados',
 
         // Custodia de activos
         'activos-custodia.asignar'              => 'Asignar bienes a un custodio',

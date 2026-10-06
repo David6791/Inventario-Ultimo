@@ -8,6 +8,8 @@ use App\Modules\Activos\Models\Parametro;
 use App\Modules\Activos\Models\Subclase;
 use App\Modules\Activos\Models\Ubicacion;
 use App\Modules\Activos\Services\AltaService;
+use App\Modules\Activos\Models\Area;
+use App\Modules\Activos\Models\CentroCosto;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -149,10 +151,7 @@ class AltaServiceTest extends TestCase
             ['clase_id' => $clase->id, 'codigo' => '02'],
             ['nombre' => 'Computadoras portátiles', 'vida_util_economica_meses' => 48, 'activo' => true]
         );
-        $ubicacion = Ubicacion::firstOrCreate(
-            ['codigo' => 'TEST'],
-            ['nombre' => 'Ubicación de prueba', 'activo' => true]
-        );
+        $ubicacion = $this->ubicacionDePrueba();
 
         $base = [
             'clase_id'            => $clase->id,
@@ -172,6 +171,27 @@ class AltaServiceTest extends TestCase
             array_merge($base, $datos),
             $costos ?? [['concepto' => 'PRECIO', 'monto' => 5000]],
             1
+        );
+    }
+        private function ubicacionDePrueba(): Ubicacion
+    {
+        $area = Area::firstOrCreate(
+            ['codigo' => 'TEST'],
+            ['nombre' => 'Área de prueba', 'activo' => true]
+        );
+
+        $centro = CentroCosto::firstOrCreate(
+            ['codigo' => 'CC-TEST'],
+            ['area_id' => $area->id, 'nombre' => 'Centro de prueba', 'activo' => true]
+        );
+
+        return Ubicacion::updateOrCreate(
+            ['codigo' => 'TEST'],
+            [
+                'nombre'          => 'Ubicación de prueba',
+                'centro_costo_id' => $centro->id,
+                'activo'          => true,
+            ]
         );
     }
 }

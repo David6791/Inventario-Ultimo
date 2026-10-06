@@ -85,7 +85,7 @@ return new class extends Migration
 
         if (! empty($intrusos)) {
             throw new RuntimeException(sprintf(
-                "No se revierte: el schema `activos` contiene %d tabla(s) que este módulo no creó:\n  %s\n\n"
+                "No se revierte: el schema `activRos` contiene %d tabla(s) que este módulo no creó:\n  %s\n\n"
                 ."Esto suele significar que alguna migración las creó ahí por un search_path contaminado.\n"
                 ."Muévalas a `public` antes de revertir, o bórrelas a mano si no sirven.\n"
                 ."Un DROP SCHEMA ... CASCADE acá se las llevaría por delante.",

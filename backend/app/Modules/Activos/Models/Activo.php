@@ -28,6 +28,7 @@ class Activo extends ActivoModel
         'orden_compra_id', 'recepcion_id', 'almacen_origen_id',
         'acta_recepcion_nro', 'acta_recepcion_fecha',
         'fecha_incorporacion', 'fecha_inicio_uso',
+        'fecha_baja', 'causal_baja', 'documento_baja_id',
         'moneda', 'tipo_cambio', 'valor_origen', 'valor_residual',
         'vida_util_economica_meses', 'vida_util_fiscal_meses',
         'regimen_fiscal', 'ds5563_ddjj_presentada',
