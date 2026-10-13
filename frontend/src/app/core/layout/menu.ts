@@ -72,6 +72,9 @@ const ESTRUCTURA: ItemMenu[] = [
       { etiqueta: 'Subclases',           icono: 'pi pi-tags',      ruta: '/activos/configuracion/subclases',    permiso: 'activos-config.ver' },
       { etiqueta: 'Ubicaciones',         icono: 'pi pi-map-marker',ruta: '/activos/configuracion/ubicaciones',  permiso: 'activos-config.ver' },
       { etiqueta: 'Parámetros',          icono: 'pi pi-sliders-h', ruta: '/activos/configuracion/parametros',   permiso: 'activos-config.ver' },
+      { etiqueta: 'Personal',          icono: 'pi pi-users',ruta: '/activos/organizacion/personal', permiso: 'activos.ver' },
+      { etiqueta: 'Centros de costo',  icono: 'pi pi-building',ruta: '/activos/organizacion/centros',  permiso: 'activos.ver' },
+      { etiqueta: 'Cierre mensual', icono: 'pi pi-calculator',ruta: '/activos/valuacion', permiso: 'activos-valuacion.ver' },
     ],
   },
 ];

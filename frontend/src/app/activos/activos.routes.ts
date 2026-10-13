@@ -2,11 +2,86 @@ import { Routes } from '@angular/router';
 import { conPermiso } from '../core/guards/permisos.guard';
 
 export const ACTIVOS_ROUTES: Routes = [
+  /* ------------------------------------------------- Sprint 2: valuación -- */
+    {
+    path: 'organizacion',
+    children: [
+      {
+        path: 'personal',
+        title: 'Personal',
+        canMatch: [conPermiso('activos.ver')],
+        loadComponent: () =>
+          import('./organizacion/empleados.component').then((m) => m.EmpleadosComponent),
+      },
+      {
+        path: 'importar',
+        title: 'Importar personal',
+        canMatch: [conPermiso('activos-config.administrar')],
+        loadComponent: () =>
+          import('./organizacion/importar-personal.component').then((m) => m.ImportarPersonalComponent),
+      },
+      {
+        path: 'centros',
+        title: 'Centros de costo',
+        canMatch: [conPermiso('activos.ver')],
+        loadComponent: () =>
+          import('./organizacion/centros-costo.component').then((m) => m.CentrosCostoComponent),
+      },
+      { path: '', redirectTo: 'personal', pathMatch: 'full' },
+    ],
+  },
+  {
+    path: 'valuacion',
+    children: [
+      {
+        path: '',
+        title: 'Cierre mensual',
+        canMatch: [conPermiso('activos-valuacion.ver')],
+        loadComponent: () =>
+          import('./valuacion/cierres-lista.component').then((m) => m.CierresListaComponent),
+      },
+      {
+        path: ':id',
+        title: 'Período de valuación',
+        canMatch: [conPermiso('activos-valuacion.ver')],
+        loadComponent: () =>
+          import('./valuacion/cierre-detalle.component').then((m) => m.CierreDetalleComponent),
+      },
+    ],
+  },
 
   /* ------------------------------------------------- Sprint 2: registro -- */
   {
     path: 'registro',
     children: [
+      {
+        path: 'organizacion',
+        children: [
+          {
+            path: 'personal',
+            title: 'Personal',
+            canMatch: [conPermiso('activos.ver')],
+            loadComponent: () =>
+              import('./organizacion/empleados.component').then((m) => m.EmpleadosComponent),
+          },
+          // 'importar' ANTES de cualquier ruta con parámetro
+          {
+            path: 'importar',
+            title: 'Importar personal',
+            canMatch: [conPermiso('activos-config.administrar')],
+            loadComponent: () =>
+              import('./organizacion/importar-personal.component').then((m) => m.ImportarPersonalComponent),
+          },
+          {
+            path: 'centros',
+            title: 'Centros de costo',
+            canMatch: [conPermiso('activos.ver')],
+            loadComponent: () =>
+              import('./organizacion/centros-costo.component').then((m) => m.CentrosCostoComponent),
+          },
+          { path: '', redirectTo: 'personal', pathMatch: 'full' },
+        ],
+      },
       {
         path: '',
         title: 'Activos fijos',
@@ -14,8 +89,7 @@ export const ACTIVOS_ROUTES: Routes = [
         loadComponent: () =>
           import('./registro/activo-lista.component').then((m) => m.ActivoListaComponent),
       },
-      // `nuevo` y `etiquetas` ANTES que `:id`: Angular toma la primera
-      // coincidencia y las interpretaría como identificadores.
+      // `nuevo` y `etiquetas` ANTES que `:id`
       {
         path: 'nuevo',
         title: 'Nuevo activo',
@@ -43,11 +117,12 @@ export const ACTIVOS_ROUTES: Routes = [
         canMatch: [conPermiso('activos.ver')],
         loadComponent: () =>
           import('./registro/activo-ficha.component').then((m) => m.ActivoFichaComponent),
-      },            
+      },
     ],
   },
 
-    {
+  /* ------------------------------------------------- Custodia -- */
+  {
     path: 'custodia',
     children: [
       {
@@ -57,7 +132,6 @@ export const ACTIVOS_ROUTES: Routes = [
         loadComponent: () =>
           import('./custodia/documento-lista.component').then((m) => m.DocumentoListaComponent),
       },
-      // 'nuevo' y 'por-custodio' ANTES que ':id'
       {
         path: 'nuevo',
         title: 'Nuevo documento',
@@ -81,6 +155,7 @@ export const ACTIVOS_ROUTES: Routes = [
       },
     ],
   },
+
   /* --------------------------------------------- Sprint 1: configuración -- */
   {
     path: 'configuracion',
@@ -120,12 +195,6 @@ export const ACTIVOS_ROUTES: Routes = [
       { path: '', redirectTo: 'clases', pathMatch: 'full' },
     ],
   },
-
-  // Sprints siguientes:
-  //   custodia   → sprint 4   (asignaciones, traspasos, salidas)
-  //   cierre     → sprint 5   (valuación mensual)
-  //   inventario → sprint 8   (toma física)
-  //   bajas      → sprint 9
 
   { path: '', redirectTo: 'registro', pathMatch: 'full' },
 ];

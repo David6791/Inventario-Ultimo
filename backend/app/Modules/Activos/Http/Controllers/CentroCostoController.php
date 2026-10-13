@@ -23,7 +23,7 @@ class CentroCostoController extends Controller
     {
         $centros = CentroCosto::query()
             ->with('area:id,codigo,nombre')
-            ->when(! $request->boolean('incluir_inactivos'), fn ($q) => $q->activos())
+            ->when(! $request->boolean('incluir_inactivos'), fn ($q) => $q->vigentes())
             ->when($request->filled('area_id'), fn ($q) => $q->where('area_id', $request->integer('area_id')))
             ->withCount(['empleados', 'activos'])
             ->orderBy('codigo')

@@ -5,6 +5,13 @@ import {
 
 export const routes: Routes = [
   {
+    path: 'a/:codigo',
+    title: 'Consulta de bien',
+    loadComponent: () =>
+      import('./activos/consulta/consulta-publica.component')
+        .then((m) => m.ConsultaPublicaComponent),
+  },
+  {
     path: 'ingresar',
     loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent),
   },

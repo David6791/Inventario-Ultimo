@@ -1,0 +1,53 @@
+═══════════════════════════════════════════════════════════════════════
+EL QR AHORA LLEVA LA URL
+═══════════════════════════════════════════════════════════════════════
+
+En etiquetas.component.ts, el <qrcode> hoy recibe solo el código:
+
+    [qrdata]="a.codigo"
+
+Pasa a recibir la URL completa:
+
+    [qrdata]="urlDe(a.codigo)"
+
+Y el método en la clase:
+
+  /**
+   * La URL que lleva el QR.
+   *
+   * Lleva la dirección y no solo el código para que cualquier cámara abra
+   * la ficha sin necesidad de una app. El costo es que la dirección queda
+   * impresa: por eso conviene un nombre de dominio fijo y no una IP.
+   */
+  urlDe(codigo: string): string {
+    return `${this.baseConsulta}/a/${codigo}`;
+  }
+
+Con la base tomada del parámetro del sistema:
+
+  readonly baseConsulta = signal<string>(window.location.origin);
+
+  // En ngOnInit, si quiere usar el parámetro configurable:
+  //   this.parametros.obtener('URL_CONSULTA_QR').subscribe(
+  //     (v) => this.baseConsulta.set(v)
+  //   );
+
+Usar window.location.origin como respaldo tiene sentido: si alguien
+imprime etiquetas desde el sistema, la dirección que ve en su navegador
+es la que funciona para él.
+
+═══════════════════════════════════════════════════════════════════════
+TAMAÑO DEL QR
+═══════════════════════════════════════════════════════════════════════
+
+Una URL es más larga que un código, así que el QR tiene más módulos y
+necesita más resolución para leerse bien.
+
+En el <qrcode>, conviene subir el nivel de corrección de errores a 'M'
+y el ancho a 120 px si hoy está en menos:
+
+    [width]="120"
+    errorCorrectionLevel="M"
+
+El nivel 'M' tolera hasta 15% de daño: suficiente para una etiqueta
+rayada o con polvo, que es la condición real en un acopio.

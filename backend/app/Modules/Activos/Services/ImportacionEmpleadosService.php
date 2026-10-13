@@ -60,9 +60,9 @@ class ImportacionEmpleadosService
     private const LIMITE_FILAS = 2000;
 
     /** Valida sin escribir nada. */
-    public function validar(string $ruta): array
+    public function validar(string $ruta, string $extension = 'xlsx')
     {
-        $filas = $this->leer($ruta);
+        $filas = $this->leer($ruta, $extension);
 
         if (empty($filas)) {
             throw new RuntimeException('El archivo no tiene filas con datos.');
@@ -94,9 +94,9 @@ class ImportacionEmpleadosService
     }
 
     /** Importa solo si no hay una sola fila con error. */
-    public function importar(string $ruta, int $usuarioId): array
+     public function importar(string $ruta, int $usuarioId, string $extension = 'xlsx'): array
     {
-        $resultado = $this->validar($ruta);
+        $resultado = $this->validar($ruta, $extension);
 
         if (! $resultado['resumen']['importable']) {
             throw new RuntimeException(sprintf(
@@ -161,9 +161,16 @@ class ImportacionEmpleadosService
 
     // ───────────────────────────────────────────────────────── Lectura
 
-    private function leer(string $ruta): array
+    private function leer(string $ruta, string $extension = 'xlsx'): array
     {
-        $hoja = Excel::toCollection(null, $ruta)->first() ?? collect();
+        // La ruta temporal de PHP no tiene extensión, así que hay que decirle
+        // explícitamente qué formato leer.
+        $tipo = match (strtolower($extension)) {
+            'xls' => \Maatwebsite\Excel\Excel::XLS,
+            'csv' => \Maatwebsite\Excel\Excel::CSV,
+            default => \Maatwebsite\Excel\Excel::XLSX,
+        };
+        $hoja = Excel::toCollection(null, $ruta, null, $tipo)->first() ?? collect();
 
         $indices = $this->ubicarColumnas($hoja);
 

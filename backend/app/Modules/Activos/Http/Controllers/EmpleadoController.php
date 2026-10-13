@@ -5,6 +5,8 @@ namespace App\Modules\Activos\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Activos\Models\Empleado;
 use App\Modules\Activos\Services\ImportacionEmpleadosService;
+use App\Modules\Activos\Services\PlantillaPersonalService;
+    use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -12,7 +14,7 @@ use RuntimeException;
 
 class EmpleadoController extends Controller
 {
-    public function __construct(private readonly ImportacionEmpleadosService $importacion)
+    public function __construct(private readonly ImportacionEmpleadosService $importacion, private readonly PlantillaPersonalService $plantillas,)
     {
     }
 
@@ -99,14 +101,19 @@ class EmpleadoController extends Controller
 
     // ───────────────────────────────────────────────────────── Importación
 
-    public function validarImportacion(Request $request): JsonResponse
+        public function validarImportacion(Request $request): JsonResponse
     {
         $request->validate([
             'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:5120'],
         ]);
 
+        $archivo = $request->file('archivo');
+
         try {
-            $resultado = $this->importacion->validar($request->file('archivo')->getRealPath());
+            $resultado = $this->importacion->validar(
+                $archivo->getRealPath(),
+                $archivo->getClientOriginalExtension()
+            );
         } catch (RuntimeException $e) {
             return response()->json(['mensaje' => $e->getMessage()], 422);
         }
@@ -114,15 +121,19 @@ class EmpleadoController extends Controller
         return response()->json($resultado);
     }
 
-    public function importar(Request $request): JsonResponse
+        public function importar(Request $request): JsonResponse
     {
         $request->validate([
             'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:5120'],
         ]);
 
+        $archivo = $request->file('archivo');
+
         try {
             $resultado = $this->importacion->importar(
-                $request->file('archivo')->getRealPath(), $request->user()->id
+                $archivo->getRealPath(),
+                $request->user()->id,
+                $archivo->getClientOriginalExtension()
             );
         } catch (RuntimeException $e) {
             return response()->json(['mensaje' => $e->getMessage()], 422);
@@ -192,5 +203,11 @@ class EmpleadoController extends Controller
             'tiene_acceso'     => $e->tieneAcceso(),
             'activo'           => $e->activo,
         ];
+    }
+    public function plantilla(): BinaryFileResponse
+    {
+        return response()
+            ->download($this->plantillas->generar(), 'plantilla-personal.xlsx')
+            ->deleteFileAfterSend();
     }
 }

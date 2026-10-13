@@ -19,7 +19,9 @@ import { DocumentoService } from '../core/services/documento.service';
 import { TIPOS_DOCUMENTO, TipoDocumento } from '../core/models/documento.model';
 import { ActivoLista } from '../core/models/activo.model';
 import { Ubicacion } from '../core/models/catalogo.model';
+import { Custodio } from '../core/models/organizacion.model';
 import { ESTILOS_CONFIG } from '../core/estilos/configuracion.estilos';
+import { OrganizacionService } from '../core/services/organizacion.service';
 
 interface Usuario { id: number; name: string; cargo?: string | null; }
 
@@ -82,8 +84,8 @@ interface Usuario { id: number; name: string; cargo?: string | null; }
               <span class="obligatorio" *ngIf="t === 'ASIGNACION'">obligatorio</span>
             </label>
             <p-dropdown inputId="custodio" formControlName="custodio_destino_id"
-                        [options]="usuarios()" optionLabel="name" optionValue="id"
-                        placeholder="Seleccione" [filter]="true" filterBy="name"
+                        [options]="usuarios()" optionLabel="etiqueta" optionValue="id"
+                        placeholder="Seleccione" [filter]="true" filterBy="etiqueta"
                         appendTo="body" />
             <small>Quien responde por el bien y firma su recepción.</small>
           </div>
@@ -326,6 +328,7 @@ export class DocumentoFormComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly toast = inject(MessageService);
+  private readonly organizacion = inject(OrganizacionService);
 
   readonly tipo = signal<TipoDocumento | null>(null);
   readonly disponibles = signal<ActivoLista[]>([]);
@@ -334,6 +337,7 @@ export class DocumentoFormComponent implements OnInit {
   readonly ubicaciones = signal<Ubicacion[]>([]);
   readonly buscando = signal(false);
   readonly guardando = signal(false);
+  readonly custodios = signal<Custodio[]>([]);
 
   readonly tipos = TIPOS_DOCUMENTO;
   readonly manana = new Date(Date.now() + 86_400_000);
@@ -355,6 +359,12 @@ export class DocumentoFormComponent implements OnInit {
     this.http.get<{ data: Usuario[] }>(`${environment.apiUrl}/activos/custodios`)
       .subscribe({
         next: (r) => this.usuarios.set(r.data ?? []),
+        error: () => this.toast.add({
+          severity: 'warn', summary: 'No se pudo cargar la lista de custodios',
+        }),
+      });
+    this.organizacion.listarCustodios().subscribe({
+        next: (c: any) => this.custodios.set(c),
         error: () => this.toast.add({
           severity: 'warn', summary: 'No se pudo cargar la lista de custodios',
         }),

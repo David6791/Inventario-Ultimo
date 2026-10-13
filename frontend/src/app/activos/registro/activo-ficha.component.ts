@@ -9,6 +9,7 @@ import { TableModule } from 'primeng/table';
 import { TabViewModule } from 'primeng/tabview';
 import { TagModule } from 'primeng/tag';
 import { TimelineModule } from 'primeng/timeline';
+import { GaleriaFotosComponent } from './galeria-fotos.component';
 import { ActivoService } from '../core/services/activo.service';
 import { Activo, ESTADOS_ACTIVO, SeveridadTag } from '../core/models/activo.model';
 
@@ -18,6 +19,7 @@ import { Activo, ESTADOS_ACTIVO, SeveridadTag } from '../core/models/activo.mode
   imports: [
     CommonModule, RouterLink, TabViewModule, CardModule, TagModule,
     TableModule, TimelineModule, ButtonModule, DividerModule, MessageModule,
+    GaleriaFotosComponent,
   ],
   template: `
     <ng-container *ngIf="activo() as a">
@@ -89,7 +91,9 @@ import { Activo, ESTADOS_ACTIVO, SeveridadTag } from '../core/models/activo.mode
             </div>
           </div>
         </p-tabPanel>
-
+        <p-tabPanel header="Fotografías">
+          <app-galeria-fotos [activoId]="a.id" />
+        </p-tabPanel>
         <!-- ------------------------------------------------------- Costo -->
         <p-tabPanel header="Costo de origen">
           <p-table [value]="a.costos ?? []" styleClass="p-datatable-sm">

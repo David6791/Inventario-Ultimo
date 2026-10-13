@@ -146,4 +146,24 @@ class Activo extends ActivoModel
     {
         return $this->codigo;
     }
+        public function fotos(): HasMany
+    {
+        return $this->hasMany(Foto::class, 'activo_id');
+    }
+
+    public function fotoPrincipal(): HasOne
+    {
+        return $this->hasOne(Foto::class, 'activo_id')->where('es_principal', true);
+    }
+        /** El custodio es un empleado, no un usuario del sistema. */
+    public function custodio(): BelongsTo
+    {
+        return $this->belongsTo(Empleado::class, 'custodio_id');
+    }
+
+    public function centro(): BelongsTo
+    {
+        return $this->belongsTo(CentroCosto::class, 'centro_costo_id');
+    }
+
 }

@@ -58,7 +58,7 @@ class CentroCosto extends ActivoModel
         return $this->belongsTo(Empleado::class, 'responsable_id');
     }
 
-    public function scopeActivos($query)
+    public function scopeVigentes($query)
     {
         return $query->where('activo', true);
     }

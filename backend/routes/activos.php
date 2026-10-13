@@ -11,6 +11,9 @@ use App\Modules\Activos\Http\Controllers\CustodioController;
 use App\Modules\Activos\Http\Controllers\CierreController;
 use App\Modules\Activos\Http\Controllers\EmpleadoController;
 use App\Modules\Activos\Http\Controllers\CentroCostoController;
+use App\Modules\Activos\Http\Controllers\AlmacenController;
+use App\Modules\Activos\Http\Controllers\FotoController;
+use App\Modules\Activos\Http\Controllers\ConsultaPublicaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -21,14 +24,28 @@ use Illuminate\Support\Facades\Route;
 | Nombres de permiso alineados a la convención modulo.accion del enum.
 | El super-admin pasa por Gate::before y no necesita estos permisos en tabla.
 */
-
+Route::get('consulta/{codigo}', [ConsultaPublicaController::class, 'porCodigo'])
+     ->middleware('throttle:60,1')
+     ->where('codigo', '[A-Za-z0-9\-]+');
 Route::middleware(['auth:sanctum'])->group(function () {
-    /* --------------------------------------- Personal y organización ---- */
+        Route::get('activos/{activo}/fotos',  [FotoController::class, 'index'])
+         ->whereNumber('activo')->middleware('can:activos.ver');
 
+        Route::post('activos/{activo}/fotos', [FotoController::class, 'store'])
+            ->whereNumber('activo')->middleware('can:activos.editar');
+
+        Route::post('fotos/{foto}/principal', [FotoController::class, 'marcarPrincipal'])
+            ->whereNumber('foto')->middleware('can:activos.editar');
+
+        Route::delete('fotos/{foto}',         [FotoController::class, 'destroy'])
+            ->whereNumber('foto');
+    /* --------------------------------------- Personal y organización ---- */
+    Route::get('almacenes', [AlmacenController::class, 'index']);
     Route::middleware('can:activos-config.administrar')->group(function () {
         Route::post('empleados',                   [EmpleadoController::class, 'store']);
         Route::put('empleados/{empleado}',         [EmpleadoController::class, 'update'])->whereNumber('empleado');
         Route::post('empleados/{empleado}/baja',   [EmpleadoController::class, 'darDeBaja'])->whereNumber('empleado');
+        Route::get('empleados/importar/plantilla', [EmpleadoController::class, 'plantilla']);
 
         // ANTES que empleados/{empleado}
         Route::post('empleados/importar/validar',  [EmpleadoController::class, 'validarImportacion']);

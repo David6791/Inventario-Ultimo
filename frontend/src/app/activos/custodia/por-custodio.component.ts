@@ -15,7 +15,13 @@ import { BienDeCustodio } from '../core/models/documento.model';
 import { ESTILOS_CONFIG } from '../core/estilos/configuracion.estilos';
 
 //interface Usuario { id: number; name: string; cargo?: string | null; }
-interface Usuario { id: number; nombre: string; ci?: string | null; cargo?: string | null; }
+interface Usuario {
+  id: number;
+  nombre: string;
+  etiqueta: string;
+  ci: string;
+  cargo: string | null;
+}
 /**
  * Bienes a cargo de una persona.
  *
@@ -49,8 +55,8 @@ interface Usuario { id: number; nombre: string; ci?: string | null; cargo?: stri
 
     <div class="barra no-imprimir">
       <div class="filtro ancho">
-        <p-dropdown [options]="usuarios()" optionLabel="name" optionValue="id"
-                    placeholder="Elija un custodio" [filter]="true" filterBy="name"
+        <p-dropdown [options]="usuarios()" optionLabel="etiqueta" optionValue="id"
+                    placeholder="Elija un custodio" [filter]="true" filterBy="etiqueta"
                     appendTo="body" [(ngModel)]="custodioId" (onChange)="cargar()" />
       </div>
     </div>
@@ -59,7 +65,7 @@ interface Usuario { id: number; nombre: string; ci?: string | null; cargo?: stri
       <div class="cabecera-impresion">
         <h3>Detalle de bienes a cargo</h3>
         <div class="datos-persona">
-          <span><strong>Custodio:</strong> {{ nombreCustodio() }}</span>
+          <span><strong>Custodio:</strong> {{ custodios() }}</span>
           <span><strong>Fecha:</strong> {{ hoy | date: 'dd/MM/yyyy' }}</span>
         </div>
       </div>
@@ -124,7 +130,7 @@ interface Usuario { id: number; nombre: string; ci?: string | null; cargo?: stri
       <div class="firmas" *ngIf="bienes().length">
         <div class="firma">
           <div class="linea"></div>
-          <span>{{ nombreCustodio() }}</span>
+          <span>{{ custodios() }}</span>
           <small>Custodio</small>
         </div>
         <div class="firma">
@@ -201,7 +207,7 @@ export class PorCustodioComponent implements OnInit {
       });
   }
 
-    nombreCustodio(): string {
+    custodios(): string {
     return this.usuarios().find((u) => u.id === this.custodioId)?.nombre ?? '';
   }
 
