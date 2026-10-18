@@ -122,6 +122,53 @@ class RecepcionApiTest extends TestCase
         $this->assertSame('Recepción', $r->json('data.eventos.0.detalle'));
     }
 
+    public function test_peso_del_cliente_es_opcional_e_informativo_y_material_del_lote(): void
+    {
+        $this->como($this->usuario(self::RECEPCION));
+
+        // Sin peso del cliente: vale el de la empresa y no hay diferencia.
+        $this->recibir(['material' => 'ZN-AG-PB'])->assertCreated()
+            ->assertJsonPath('data.material', 'ZN-AG-PB')
+            ->assertJsonPath('data.peso_cliente_kg', '8200.00')
+            ->assertJsonPath('data.diferencia_cliente_kg', '0.00')
+            ->assertJsonPath('data.pesajes_con_peso_cliente', 0);
+
+        // Con peso del cliente: el lote y el bono siguen con el peso de la empresa.
+        $r = $this->recibir([], $this->pesaje(['ticket' => 'T-101', 'peso_cliente_kg' => 8350]))->assertCreated()
+            ->assertJsonPath('data.peso_neto_humedo_kg', '8200.00')
+            ->assertJsonPath('data.peso_cliente_kg', '8350.00')
+            ->assertJsonPath('data.diferencia_cliente_kg', '150.00')
+            ->assertJsonPath('data.pesajes.0.peso_cliente_kg', '8350.00')
+            ->assertJsonPath('data.pesajes.0.bono.monto', '80.00');
+
+        // Un segundo pesaje sin peso del cliente suma su peso de empresa a los dos lados.
+        $id = $r->json('data.id');
+        $this->postJson("/api/cargas/lotes/{$id}/pesajes", $this->pesaje(['ticket' => 'T-102', 'peso_bruto_kg' => 6000, 'tara_kg' => 4000]))
+            ->assertCreated();
+        $this->getJson("/api/cargas/lotes/{$id}")->assertOk()
+            ->assertJsonPath('data.peso_neto_humedo_kg', '10200.00')
+            ->assertJsonPath('data.peso_cliente_kg', '10350.00')
+            ->assertJsonPath('data.pesajes_con_peso_cliente', 1);
+
+        // El peso del cliente no se corrige, como los de la báscula.
+        $pesaje = DB::table('cargas.pesaje')->where('ticket', 'T-101')->value('id');
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        DB::table('cargas.pesaje')->where('id', $pesaje)->update(['peso_cliente_kg' => 8200]);
+    }
+
+    public function test_material_y_peso_del_cliente_invalidos(): void
+    {
+        $this->como($this->usuario(self::RECEPCION));
+
+        $this->recibir(['material' => 'CU'])->assertUnprocessable()->assertJsonValidationErrors('material');
+        $this->recibir([], $this->pesaje(['peso_cliente_kg' => 0]))->assertUnprocessable()
+            ->assertJsonValidationErrors('pesaje.peso_cliente_kg');
+
+        $id = $this->recibir()->json('data.id');
+        $pdf = $this->get("/api/cargas/lotes/{$id}/boleta")->assertOk();
+        $this->assertSame('application/pdf', $pdf->headers->get('Content-Type'));
+    }
+
     public function test_la_serie_decide_que_datos_exige(): void
     {
         $this->como($this->usuario(self::RECEPCION));

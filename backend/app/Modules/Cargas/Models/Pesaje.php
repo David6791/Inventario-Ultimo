@@ -15,7 +15,7 @@ class Pesaje extends CargasModel
     protected $table = 'cargas.pesaje';
 
     protected $fillable = [
-        'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'num_sacos',
+        'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'peso_cliente_kg', 'num_sacos',
         'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por',
     ];
 
@@ -23,6 +23,7 @@ class Pesaje extends CargasModel
         'lote_id'       => 'integer',
         'peso_bruto_kg' => 'decimal:2',
         'tara_kg'       => 'decimal:2',
+        'peso_cliente_kg' => 'decimal:2',
         'peso_neto_kg'  => 'decimal:2',
         'num_sacos'     => 'integer',
         'anulado'       => 'boolean',

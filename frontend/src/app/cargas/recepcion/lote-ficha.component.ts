@@ -64,10 +64,15 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
         <div class="dato"><span class="rotulo">Mina</span><span>{{ l.mina?.nombre ?? '—' }}</span>
           <small class="secundario" *ngIf="l.bocamina">Bocamina {{ l.bocamina.codigo }}</small></div>
         <div class="dato"><span class="rotulo">Municipio</span><span>{{ l.municipio?.nombre ?? '—' }}</span></div>
+        <div class="dato"><span class="rotulo">Material</span><span class="codigo">{{ l.material ?? '—' }}</span></div>
         <div class="dato"><span class="rotulo">Guía</span><span class="codigo">{{ l.guia_transporte ?? '—' }}</span></div>
         <div class="dato grande"><span class="rotulo">Peso neto húmedo</span>
           <span class="monto">{{ kg(l.peso_neto_humedo_kg) }} kg</span>
           <small class="secundario">{{ l.num_pesajes }} pesaje(s){{ l.num_sacos ? ' · ' + l.num_sacos + ' sacos' : '' }}</small></div>
+        <div class="dato grande" *ngIf="l.pesajes_con_peso_cliente"><span class="rotulo">Peso del cliente</span>
+          <span class="monto">{{ kg(l.peso_cliente_kg) }} kg</span>
+          <small [class.alerta]="alerta(l)" class="secundario">Diferencia {{ +l.diferencia_cliente_kg > 0 ? '+' : '' }}{{ kg(l.diferencia_cliente_kg) }} kg
+            ({{ pct(l) }} %) · vale el de la empresa</small></div>
         <div class="dato grande"><span class="rotulo">Bono de transporte</span>
           <span class="monto">Bs {{ kg(+l.bonos_pagados + +l.bonos_por_pagar) }}</span>
           <small class="secundario" *ngIf="l.bonos_pendientes">Bs {{ kg(l.bonos_por_pagar) }} por pagar en caja</small>
@@ -84,6 +89,7 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
             <th style="width: 7rem" class="derecha">Bruto kg</th>
             <th style="width: 7rem" class="derecha">Tara kg</th>
             <th style="width: 8rem" class="derecha">Neto kg</th>
+            <th style="width: 8rem" class="derecha">Cliente kg</th>
             <th style="width: 11rem">Bono</th>
             <th style="width: 4rem"></th>
           </tr>
@@ -103,6 +109,8 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
             <td class="derecha monto">{{ kg(p.peso_bruto_kg) }}</td>
             <td class="derecha monto">{{ kg(p.tara_kg) }}</td>
             <td class="derecha monto fuerte">{{ kg(p.peso_neto_kg) }}</td>
+            <td class="derecha monto">{{ p.peso_cliente_kg === null ? '—' : kg(p.peso_cliente_kg) }}
+              <div class="secundario" *ngIf="p.peso_cliente_kg !== null">{{ +p.peso_cliente_kg - +p.peso_neto_kg > 0 ? '+' : '' }}{{ kg(+p.peso_cliente_kg - +p.peso_neto_kg) }}</div></td>
             <td>
               <ng-container *ngIf="p.bono as b; else sinBono">
                 <span class="monto">Bs {{ kg(b.monto) }}</span>
@@ -121,7 +129,7 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="7"><div class="vacio"><i class="pi pi-truck"></i><div class="titulo-vacio">Sin pesajes todavía</div>
+          <tr><td colspan="8"><div class="vacio"><i class="pi pi-truck"></i><div class="titulo-vacio">Sin pesajes todavía</div>
             <span>Agregue el pesaje de ingreso cuando el camión pase por la báscula.</span></div></td></tr>
         </ng-template>
       </p-table>
@@ -187,6 +195,7 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
     tr.anulado td { color: var(--text-color-secondary, #9ca3af); }
     tr.anulado .monto { text-decoration: line-through; }
     .separada { margin-left: 0.4rem; }
+    .alerta { color: #b45309; font-weight: 600; }
     .pastilla-ok { background: #dcfce7; color: #166534; }
     .bitacora { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
     .bitacora li { display: flex; gap: 1rem; padding: 0.35rem 0; border-top: 1px solid var(--surface-border, #f1f5f9); }
@@ -229,6 +238,17 @@ export class LoteFichaComponent implements OnInit {
   }
 
   kg(v: string | number | null | undefined): string { return formatoDinero(v); }
+
+  /** Diferencia del cliente en % del peso de la empresa. */
+  pct(l: Lote): string {
+    const base = +l.peso_neto_humedo_kg;
+    return base ? `${+l.diferencia_cliente_kg > 0 ? '+' : ''}${formatoDinero(Math.round((+l.diferencia_cliente_kg / base) * 10000) / 100)}` : '—';
+  }
+
+  alerta(l: Lote): boolean {
+    const base = +l.peso_neto_humedo_kg;
+    return !!base && Math.abs(+l.diferencia_cliente_kg / base) > 0.01;
+  }
 
   etiquetaEstado(e: string): string {
     return ({ RECIBIDO: 'Recibido', MUESTREADO: 'Muestreado', ANALIZADO: 'Analizado', LIQUIDADO: 'Liquidado', ANULADO: 'Anulado' } as Record<string, string>)[e] ?? e;

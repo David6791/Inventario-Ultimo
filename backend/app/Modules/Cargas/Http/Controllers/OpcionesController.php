@@ -45,6 +45,7 @@ class OpcionesController extends Controller
             ],
             'marcadores' => $mapa(SerieLote::MARCADORES),
             'estados_lote' => $lista(\App\Modules\Cargas\Models\Lote::ESTADOS),
+            'materiales'   => array_map(fn ($m) => ['valor' => $m, 'etiqueta' => $m], \App\Modules\Cargas\Models\Lote::MATERIALES),
             // Sedes donde el usuario puede recibir (la predeterminada primero).
             'almacenes' => Almacen::query()->where('activo', true)
                 ->when(! $usuario->can('cargas.ver-todos-almacenes'), fn ($q) => $q->whereIn('id', $usuario->almacenesIds()))

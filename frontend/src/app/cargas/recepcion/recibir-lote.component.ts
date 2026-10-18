@@ -106,7 +106,12 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
           </div>
         </ng-container>
 
-        <div class="campo span-6">
+        <div class="campo span-2">
+          <label for="material">Material <span class="opcional">(opcional)</span></label>
+          <p-dropdown inputId="material" formControlName="material" [options]="opciones()?.materiales ?? []" optionLabel="etiqueta"
+                      optionValue="valor" placeholder="Elementos que trae" [showClear]="true" appendTo="body" [style]="{ width: '100%' }" />
+        </div>
+        <div class="campo span-4">
           <label for="obs">Observaciones <span class="opcional">(opcional)</span></label>
           <textarea id="obs" pInputTextarea formControlName="observaciones" rows="2" maxlength="1000"></textarea>
         </div>
@@ -170,6 +175,7 @@ export class RecibirLoteComponent implements OnInit {
     mina_id: [null as number | null],
     bocamina_id: [null as number | null],
     guia_transporte: [null as string | null],
+    material: [null as string | null],
     observaciones: [null as string | null],
   });
   readonly pesaje = grupoPesaje(this.fb);
@@ -221,7 +227,7 @@ export class RecibirLoteComponent implements OnInit {
     const datos: DatosRecepcion = {
       serie_id: v.serie_id!, almacen_id: v.almacen_id!,
       productor_id: this.serie()?.origen === 'COMPRA' ? this.productor()?.id ?? null : null,
-      mina_id: v.mina_id, bocamina_id: v.bocamina_id, guia_transporte: v.guia_transporte, observaciones: v.observaciones,
+      mina_id: v.mina_id, bocamina_id: v.bocamina_id, guia_transporte: v.guia_transporte, material: v.material, observaciones: v.observaciones,
       pesaje: this.conPesaje ? (this.pesaje.getRawValue() as DatosPesaje) : null,
     };
 

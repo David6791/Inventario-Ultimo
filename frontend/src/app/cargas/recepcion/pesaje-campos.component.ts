@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -21,6 +21,7 @@ export function grupoPesaje(fb: FormBuilder): FormGroup {
     ticket: ['', [Validators.required, Validators.maxLength(30)]],
     peso_bruto_kg: [null as number | null, [Validators.required, Validators.min(0.01)]],
     tara_kg: [null as number | null, [Validators.required, Validators.min(0)]],
+    peso_cliente_kg: [null as number | null, [Validators.min(0.01)]],
     num_sacos: [null as number | null],
     placa: [null as string | null],
     chofer_nombre: ['' as string | null, [Validators.required, Validators.maxLength(150)]],
@@ -71,6 +72,18 @@ export function recordarBascula(valor: string | null | undefined): void {
       </div>
 
       <div class="campo span-2">
+        <label for="cliente">Peso del cliente (kg) <span class="opcional">(opcional)</span></label>
+        <p-inputNumber inputId="cliente" formControlName="peso_cliente_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
+      </div>
+      <div class="campo span-4 diferencia">
+        <ng-container *ngIf="diferencia() as d; else sinCliente">
+          <span [class.error]="d.alerta">Diferencia con la báscula: <strong class="codigo">{{ d.kg > 0 ? '+' : '' }}{{ fmt(d.kg) }} kg</strong>
+            ({{ d.kg > 0 ? '+' : '' }}{{ fmt(d.pct) }} %). Vale el peso de la empresa.</span>
+        </ng-container>
+        <ng-template #sinCliente><small class="secundario">Si el productor declara su propio peso, anótelo para comparar. Si no, cuenta solo el de la empresa.</small></ng-template>
+      </div>
+
+      <div class="campo span-2">
         <label for="placa">Placa</label>
         <input id="placa" pInputText formControlName="placa" maxlength="15" placeholder="1234ABC" class="codigo" />
       </div>
@@ -99,10 +112,12 @@ export function recordarBascula(valor: string | null | undefined): void {
     .campo label { font-size: 0.8rem; font-weight: 550; }
     .campo :is(input, .p-inputnumber) { width: 100%; }
     :host ::ng-deep .campo .p-inputnumber input { width: 100%; }
-    .span-1 { grid-column: span 1; } .span-2 { grid-column: span 2; } .span-3 { grid-column: span 3; } .span-6 { grid-column: span 6; }
-    @media (max-width: 720px) { .campos { grid-template-columns: repeat(2, 1fr); } .span-1, .span-2, .span-3 { grid-column: span 1; } .span-6 { grid-column: span 2; } }
+    .span-1 { grid-column: span 1; } .span-2 { grid-column: span 2; } .span-3 { grid-column: span 3; } .span-4 { grid-column: span 4; } .span-6 { grid-column: span 6; }
+    @media (max-width: 720px) { .campos { grid-template-columns: repeat(2, 1fr); } .span-1, .span-2, .span-3 { grid-column: span 1; } .span-4, .span-6 { grid-column: span 2; } }
     .neto { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 1.25rem; font-weight: 700; padding: 0.35rem 0; }
     .error { color: #b91c1c; }
+    .diferencia { justify-content: flex-end; padding-bottom: 0.55rem; font-size: 0.88rem; }
+    .secundario { color: var(--text-color-secondary, #6b7280); }
     .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
     .codigo { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
     .bono { display: flex; gap: 0.6rem; align-items: center; padding: 0.6rem 0.9rem; border-radius: 8px;
@@ -118,9 +133,20 @@ export class PesajeCamposComponent implements OnInit {
 
   readonly neto = signal<number | null>(null);
   readonly bono = signal<BonoCalculado | null>(null);
+  readonly cliente = signal<number | null>(null);
+  /** Diferencia del peso declarado por el cliente con el neto de la báscula; alerta sobre 1 %. */
+  readonly diferencia = computed(() => {
+    const n = this.neto(), c = this.cliente();
+    if (n === null || n <= 0 || c === null || c <= 0) return null;
+    const kg = Math.round((c - n) * 100) / 100;
+    const pct = Math.round((kg / n) * 10000) / 100;
+    return { kg, pct, alerta: Math.abs(pct) > 1 };
+  });
   readonly fmt = formatoDinero;
 
   ngOnInit(): void {
+    this.grupo().get('peso_cliente_kg')!.valueChanges.pipe(takeUntilDestroyed(this.destruir))
+      .subscribe((v) => this.cliente.set(v ?? null));
     this.grupo().valueChanges.pipe(
       map((v) => (v.peso_bruto_kg != null && v.tara_kg != null ? Math.round((v.peso_bruto_kg - v.tara_kg) * 100) / 100 : null)),
       distinctUntilChanged(),

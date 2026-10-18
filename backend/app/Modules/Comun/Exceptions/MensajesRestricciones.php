@@ -59,6 +59,8 @@ final class MensajesRestricciones
         'ck_lote_anulado'                => 'Para anular el lote indique quién lo anula, cuándo y un motivo de al menos 10 caracteres.',
         'fk_lote_bocamina_de_la_mina'    => 'La bocamina elegida no pertenece a esa mina.',
         'ck_pesaje_pesos'                => 'El peso bruto debe ser mayor que la tara, y la tara no puede ser negativa.',
+        'ck_pesaje_peso_cliente'         => 'El peso del cliente debe ser mayor que cero.',
+        'ck_lote_material'               => 'El material debe ser ZN, AG, PB o una de sus combinaciones.',
         'ck_pesaje_anulado'              => 'Para anular el pesaje indique el motivo.',
         'uq_pesaje_ticket'               => 'Ese ticket de báscula ya está registrado.',
         'ck_btt_rango'                   => 'En un tramo de bono, el peso hasta debe ser mayor que el peso desde.',

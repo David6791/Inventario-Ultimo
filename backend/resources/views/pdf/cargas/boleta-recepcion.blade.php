@@ -45,6 +45,7 @@
   $ingresos = $lote->pesajes->where('tipo', 'INGRESO');
   $vigentes = $ingresos->where('anulado', false);
   $chofer = $vigentes->first()?->chofer_nombre;
+  $conCliente = $ingresos->whereNotNull('peso_cliente_kg')->isNotEmpty();
 @endphp
 
 @foreach (['Original — empresa', 'Copia — productor'] as $tanto)
@@ -85,6 +86,9 @@
         <table class="datos">
           <tr><td class="rotulo">Mina</td><td class="valor">{{ $lote->mina?->nombre ?? '—' }}@if ($lote->bocamina) · bocamina {{ $lote->bocamina->codigo }}@endif</td></tr>
           <tr><td class="rotulo">Municipio</td><td class="valor">{{ $lote->municipio?->nombre ?? '—' }}</td></tr>
+          @if ($lote->material)
+            <tr><td class="rotulo">Material</td><td class="valor">{{ $lote->material }}</td></tr>
+          @endif
           <tr><td class="rotulo">Guía</td><td class="valor">{{ $lote->guia_transporte ?? '—' }}</td></tr>
           <tr><td class="rotulo">Observ.</td><td class="valor">{{ $lote->observaciones ?: '—' }}</td></tr>
         </table>
@@ -96,7 +100,7 @@
     <thead>
       <tr>
         <th>Ticket</th><th>Báscula</th><th>Placa</th><th>Chofer</th>
-        <th class="num">Sacos</th><th class="num">Bruto kg</th><th class="num">Tara kg</th><th class="num">Neto kg</th><th class="num">Bono</th>
+        <th class="num">Sacos</th><th class="num">Bruto kg</th><th class="num">Tara kg</th><th class="num">Neto kg</th>@if ($conCliente)<th class="num">Cliente kg</th>@endif<th class="num">Bono</th>
       </tr>
     </thead>
     <tbody>
@@ -110,16 +114,18 @@
           <td class="num">{{ $kg($p->peso_bruto_kg) }}</td>
           <td class="num">{{ $kg($p->tara_kg) }}</td>
           <td class="num">{{ $kg($p->peso_neto_kg) }}</td>
+          @if ($conCliente)<td class="num">{{ $p->peso_cliente_kg !== null ? $kg($p->peso_cliente_kg) : '—' }}</td>@endif
           <td class="num">{{ $p->bono && $p->bono->estado !== 'ANULADO' ? ($p->bono->moneda === 'USD' ? 'US$' : 'Bs') . ' ' . $kg($p->bono->monto) . ($p->bono->estado === 'PAGADO' ? ' ✓' : '') : '—' }}</td>
         </tr>
       @empty
-        <tr><td colspan="9">Sin pesajes registrados todavía.</td></tr>
+        <tr><td colspan="{{ $conCliente ? 10 : 9 }}">Sin pesajes registrados todavía.</td></tr>
       @endforelse
       <tr class="total">
         <td colspan="4">Total ({{ $vigentes->count() }} pesaje{{ $vigentes->count() === 1 ? '' : 's' }})</td>
         <td class="num">{{ $resumen['num_sacos'] ?? '' }}</td>
         <td></td><td></td>
         <td class="num">{{ $kg($resumen['peso_neto_humedo_kg'] ?? 0) }}</td>
+        @if ($conCliente)<td class="num">{{ $kg($resumen['peso_cliente_kg'] ?? 0) }}</td>@endif
         <td></td>
       </tr>
     </tbody>
@@ -127,6 +133,10 @@
   <div class="nota">
     Pesos húmedos. El peso seco y las leyes se determinan en laboratorio con la muestra del lote; el productor
     recibe su porción de muestra precintada. ✓ = bono pagado.
+    @if ($conCliente)
+      Vale el peso de la báscula de la empresa; el del cliente es el que él declaró
+      (diferencia {{ (float) $resumen['diferencia_cliente_kg'] > 0 ? '+' : '' }}{{ $kg($resumen['diferencia_cliente_kg']) }} kg).
+    @endif
   </div>
 
   <table class="firmas">

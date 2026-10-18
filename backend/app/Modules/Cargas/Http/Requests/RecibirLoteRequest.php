@@ -39,6 +39,7 @@ class RecibirLoteRequest extends PesajeRequest
             'mina_id'         => ['nullable', 'integer', Rule::exists(Mina::class, 'id')->where('activa', true)],
             'bocamina_id'     => ['nullable', 'integer', Rule::exists(Bocamina::class, 'id')->where('activa', true)],
             'guia_transporte' => ['nullable', 'string', 'max:40'],
+            'material'        => ['nullable', \Illuminate\Validation\Rule::in(\App\Modules\Cargas\Models\Lote::MATERIALES)],
             'observaciones'   => ['nullable', 'string', 'max:1000'],
             'pesaje'          => ['nullable', 'array'],
             ...self::reglas('pesaje.', false),

@@ -47,6 +47,7 @@ class PesajeRequest extends CatalogoRequest
             "{$p}ticket"        => [$req, 'string', 'max:30'],
             "{$p}peso_bruto_kg" => [$obligatorio ? 'required' : 'nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
             "{$p}tara_kg"       => [$req, 'numeric', 'min:0', "lt:{$p}peso_bruto_kg", 'decimal:0,2'],
+            "{$p}peso_cliente_kg" => ['nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
             "{$p}num_sacos"     => ['nullable', 'integer', 'min:0', 'max:100000'],
             "{$p}placa"         => ['nullable', 'string', 'max:15'],
             "{$p}chofer_nombre" => ["required_if:{$p}tipo,INGRESO", 'nullable', 'string', 'max:150'],
@@ -63,6 +64,7 @@ class PesajeRequest extends CatalogoRequest
             "{$p}ticket.required_with"      => 'Indique el número de ticket de la báscula.',
             "{$p}bascula.required_with"     => 'Indique la báscula.',
             "{$p}tara_kg.required_with"     => 'Indique la tara.',
+            "{$p}peso_cliente_kg.gt"        => 'El peso del cliente debe ser mayor que cero; déjelo vacío si no lo declaró.',
         ];
     }
 

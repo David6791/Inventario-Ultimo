@@ -108,6 +108,9 @@ class LoteController extends Controller
         $pesos = collect(DB::table('cargas.v_lote_resumen')->whereIn('lote_id', $ids)
             ->get(['lote_id', 'num_pesajes', 'num_sacos', 'peso_neto_humedo_kg']))->keyBy('lote_id');
 
+        $cliente = collect(DB::table('cargas.v_lote_peso_cliente')->whereIn('lote_id', $ids)
+            ->get(['lote_id', 'peso_cliente_kg', 'diferencia_kg', 'pesajes_con_peso_cliente']))->keyBy('lote_id');
+
         $bonos = collect(DB::select(
             "select p.lote_id,
                     count(*) filter (where b.estado = 'PENDIENTE') as bonos_pendientes,
@@ -123,6 +126,10 @@ class LoteController extends Controller
             'num_pesajes'         => (int) ($pesos[$id]->num_pesajes ?? 0),
             'num_sacos'           => $pesos[$id]->num_sacos ?? null,
             'peso_neto_humedo_kg' => $pesos[$id]->peso_neto_humedo_kg ?? '0',
+            // Peso que declara el cliente (donde no declaró, cuenta el de la empresa) y la diferencia.
+            'peso_cliente_kg'     => $cliente[$id]->peso_cliente_kg ?? '0',
+            'diferencia_cliente_kg' => $cliente[$id]->diferencia_kg ?? '0',
+            'pesajes_con_peso_cliente' => (int) ($cliente[$id]->pesajes_con_peso_cliente ?? 0),
             'bonos_pendientes'    => (int) ($bonos[$id]->bonos_pendientes ?? 0),
             'bonos_por_pagar'     => $bonos[$id]->bonos_por_pagar ?? '0',
             'bonos_pagados'       => $bonos[$id]->bonos_pagados ?? '0',

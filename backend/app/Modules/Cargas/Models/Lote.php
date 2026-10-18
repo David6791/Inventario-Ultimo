@@ -19,8 +19,11 @@ class Lote extends CargasModel
 
     protected $fillable = [
         'serie_id', 'almacen_id', 'fecha_recepcion', 'productor_id', 'mina_id', 'bocamina_id',
-        'guia_transporte', 'observaciones', 'registrado_por',
+        'guia_transporte', 'material', 'observaciones', 'registrado_por',
     ];
+
+    /** Elementos que trae el mineral, como en el sistema anterior. */
+    public const MATERIALES = ['ZN', 'AG', 'PB', 'ZN-AG', 'PB-AG', 'ZN-PB', 'ZN-AG-PB'];
 
     protected $casts = [
         'serie_id'          => 'integer',

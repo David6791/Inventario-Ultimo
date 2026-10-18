@@ -29,6 +29,7 @@ export interface Opciones {
   reinicios: Opcion[];
   marcadores: Opcion[];
   estados_lote: Opcion[];
+  materiales: Opcion[];
   almacenes: { id: number; codigo: string; nombre: string }[];
   almacen_predeterminado: number | null;
 }
@@ -234,6 +235,7 @@ export interface Pesaje {
   peso_bruto_kg: string;
   tara_kg: string;
   peso_neto_kg: string;
+  peso_cliente_kg: string | null;
   num_sacos: number | null;
   placa: string | null;
   chofer_nombre: string | null;
@@ -248,6 +250,10 @@ export interface ResumenLote {
   num_pesajes: number;
   num_sacos: number | null;
   peso_neto_humedo_kg: string;
+  /** Peso que declara el cliente; donde no declaró cuenta el de la empresa. */
+  peso_cliente_kg: string;
+  diferencia_cliente_kg: string;
+  pesajes_con_peso_cliente: number;
   bonos_pendientes: number;
   bonos_por_pagar: string;
   bonos_pagados: string;
@@ -270,6 +276,7 @@ export interface Lote extends ResumenLote {
   bocamina?: { id: number; codigo: string; nombre: string | null } | null;
   municipio?: { id: number; nombre: string } | null;
   guia_transporte: string | null;
+  material: string | null;
   estado: EstadoLote;
   observaciones: string | null;
   registrado_por: Usuario | number;
@@ -286,6 +293,7 @@ export interface DatosPesaje {
   ticket: string;
   peso_bruto_kg: number | null;
   tara_kg: number | null;
+  peso_cliente_kg?: number | null;
   num_sacos: number | null;
   placa: string | null;
   chofer_nombre: string | null;
@@ -299,6 +307,7 @@ export interface DatosRecepcion {
   mina_id: number | null;
   bocamina_id: number | null;
   guia_transporte: string | null;
+  material: string | null;
   observaciones: string | null;
   pesaje: DatosPesaje | null;
 }
