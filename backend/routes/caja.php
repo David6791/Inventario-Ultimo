@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('opciones', [CajaController::class, 'opciones']);
         Route::get('conceptos', [ConceptoController::class, 'index']);
         Route::get('personas',            [PersonaController::class, 'index']);
+        Route::get('personas/coincidencias', [PersonaController::class, 'coincidencias']);
         Route::get('personas/{persona}',  [PersonaController::class, 'show'])->whereNumber('persona');
 
         Route::get('cajas',                   [CajaController::class, 'index']);
@@ -41,6 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('conceptos/{concepto}',    [ConceptoController::class, 'update'])->whereNumber('concepto');
     Route::put('cajas/{caja}/cajeros',    [CajaController::class, 'cajerosActualizar'])->whereNumber('caja');
     Route::put('personas/{persona}',      [PersonaController::class, 'update'])->whereNumber('persona');
+    Route::post('personas/{persona}/unificar', [PersonaController::class, 'unificar'])->whereNumber('persona');
 
     // --- Operación ------------------------------------------------------------
     Route::post('cajas/{caja}/sesiones',             [SesionController::class, 'store'])->whereNumber('caja');

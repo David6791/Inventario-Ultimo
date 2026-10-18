@@ -247,7 +247,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <p-autoComplete inputId="persona" [(ngModel)]="personaTexto" [ngModelOptions]="{ standalone: true }"
                           [suggestions]="sugerencias()" (completeMethod)="buscarPersona($event.query)"
                           (ngModelChange)="escribirPersona($event)" field="nombre" [minLength]="2" [delay]="250"
-                          [forceSelection]="false" appendTo="body" placeholder="Nombre o CI" [inputStyle]="{ width: '100%' }"
+                          [forceSelection]="false" appendTo="body" placeholder="Nombre o CI" (onBlur)="revisarPersona()" [inputStyle]="{ width: '100%' }"
                           styleClass="w-full">
             <ng-template let-p pTemplate="item">
               <div class="sugerencia"><span>{{ p.nombre }}</span><span class="secundario">{{ p.ci ? 'CI ' + p.ci : 'sin CI' }}</span></div>
@@ -258,7 +258,25 @@ import { ESTILOS_CAJA } from '../core/estilos';
         </div>
         <div class="campo span-2">
           <label for="ci">CI o NIT <span class="opcional">(opcional)</span></label>
-          <input id="ci" pInputText formControlName="persona_ci" maxlength="15" />
+          <input id="ci" pInputText formControlName="persona_ci" maxlength="15" (blur)="revisarPersona()" />
+        </div>
+
+        <div class="campo span-6" *ngIf="!form.value.persona_id && (parecidas().length || ciAjeno())">
+          <div class="nota nota-aviso">
+            <i class="pi pi-exclamation-triangle"></i>
+            <div class="aviso-persona">
+              <ng-container *ngIf="ciAjeno() as p">
+                <span>El CI {{ p.ci }} ya está registrado a nombre de <strong>{{ p.nombre }}</strong>:
+                      el movimiento quedará a su nombre.</span>
+                <p-button label="Usar a {{ p.nombre }}" size="small" [text]="true" (onClick)="usarPersona(p)" />
+              </ng-container>
+              <ng-container *ngFor="let p of parecidas()">
+                <span>Ya está registrado <strong>{{ p.nombre }}</strong> {{ p.ci ? 'con CI ' + p.ci : 'sin CI' }}.
+                      Si es la misma persona, elíjala para no duplicarla.</span>
+                <p-button label="Es la misma persona" size="small" [text]="true" (onClick)="usarPersona(p)" />
+              </ng-container>
+            </div>
+          </div>
         </div>
 
         <div class="campo span-6">
@@ -336,6 +354,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
     tr.anulado .monto { text-decoration: line-through; }
     .persona { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
     .persona:hover { color: var(--primary-color, #2563eb); }
+    .aviso-persona { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; font-size: 0.85rem; }
     .sugerencia { display: flex; justify-content: space-between; gap: 1rem; width: 100%; }
     :host ::ng-deep .w-full, :host ::ng-deep .w-full input { width: 100%; }
     .alerta { color: #b91c1c !important; font-weight: 600; }
@@ -368,6 +387,10 @@ export class CajaOperacionComponent implements OnInit {
 
   readonly simbolo = simbolo;
   readonly sugerencias = signal<PersonaCorta[]>([]);
+  /** Mismo nombre con otro CI (o sin CI): posible duplicado. */
+  readonly parecidas = signal<PersonaCorta[]>([]);
+  /** El CI escrito ya es de otra persona. */
+  readonly ciAjeno = signal<PersonaCorta | null>(null);
   /** Lo que muestra el autocompletado: texto escrito o la persona elegida. */
   personaTexto: string | PersonaCorta | null = null;
   readonly opcionesMoneda = [
@@ -497,6 +520,8 @@ export class CajaOperacionComponent implements OnInit {
     this.form.reset({ moneda: 'BOB', forma_pago: 'EFECTIVO' });
     this.form.get('persona_ci')!.enable();
     this.personaTexto = null;
+    this.parecidas.set([]);
+    this.ciAjeno.set(null);
     this.movimientoVisible = true;
 
     // Se vuelven a pedir los conceptos: pudieron crearse después de abrir la pantalla.
@@ -524,11 +549,33 @@ export class CajaOperacionComponent implements OnInit {
     if (valor && typeof valor === 'object') {
       this.form.patchValue({ persona_id: valor.id, persona_nombre: valor.nombre, persona_ci: valor.ci });
       ci.disable();
+      this.parecidas.set([]);
+      this.ciAjeno.set(null);
     } else {
       if (this.form.value.persona_id) ci.setValue(null);
       this.form.patchValue({ persona_id: null, persona_nombre: (valor ?? '').toString() });
       ci.enable();
     }
+  }
+
+  /** Antes de guardar una persona nueva, mira si ya existe con otro CI o si el CI es de otra. */
+  revisarPersona(): void {
+    const v = this.form.getRawValue();
+    if (v.persona_id || !v.persona_nombre?.trim()) {
+      this.parecidas.set([]); this.ciAjeno.set(null);
+      return;
+    }
+    this.servicio.coincidencias(v.persona_nombre, v.persona_ci).subscribe({
+      next: (r) => { this.parecidas.set(r.mismo_nombre); this.ciAjeno.set(r.mismo_ci); },
+      error: () => { this.parecidas.set([]); this.ciAjeno.set(null); },
+    });
+  }
+
+  usarPersona(p: PersonaCorta): void {
+    this.personaTexto = p;
+    this.escribirPersona(p);
+    this.parecidas.set([]);
+    this.ciAjeno.set(null);
   }
 
   registrar(): void {

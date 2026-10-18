@@ -63,6 +63,18 @@ export class CajaService {
       .pipe(map((r) => r.data));
   }
 
+  /** ¿Ese nombre ya existe con otro CI, o ese CI es de otra persona? */
+  coincidencias(nombre: string, ci: string | null): Observable<{ mismo_nombre: PersonaCorta[]; mismo_ci: PersonaCorta | null }> {
+    return this.http.get<Respuesta<{ mismo_nombre: PersonaCorta[]; mismo_ci: PersonaCorta | null }>>(
+      `${this.base}/personas/coincidencias`, { params: { nombre, ci: ci ?? '' } }).pipe(map((r) => r.data));
+  }
+
+  /** Pasa los movimientos de una persona duplicada a la que se conserva. */
+  unificar(origenId: number, destinoId: number, motivo: string | null): Observable<Respuesta<Persona>> {
+    return this.http.post<Respuesta<Persona>>(`${this.base}/personas/${origenId}/unificar`,
+      { destino_id: destinoId, motivo });
+  }
+
   persona(id: number): Observable<PersonaDetalle> {
     return this.http.get<Respuesta<PersonaDetalle>>(`${this.base}/personas/${id}`).pipe(map((r) => r.data));
   }

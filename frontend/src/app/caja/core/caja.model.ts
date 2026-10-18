@@ -97,6 +97,8 @@ export interface Persona extends PersonaCorta {
   observaciones: string | null;
   activo: boolean;
   movimientos: number;
+  /** Otras personas registradas con el mismo nombre: posible duplicado. */
+  homonimos: number;
   totales: TotalPersona[];
 }
 

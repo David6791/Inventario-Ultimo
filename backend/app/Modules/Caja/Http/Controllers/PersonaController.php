@@ -4,6 +4,7 @@ namespace App\Modules\Caja\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Caja\Http\Requests\PersonaRequest;
+use App\Modules\Caja\Http\Requests\UnificarPersonaRequest;
 use App\Modules\Caja\Models\Persona;
 use App\Modules\Comun\Support\Transaccion;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,10 @@ class PersonaController extends Controller
         $consulta = Persona::query()
             ->buscar($request->query('buscar'))
             ->withCount(['movimientos as movimientos' => fn ($q) => $q->where('estado', 'VIGENTE')])
-            ->orderBy('nombre');
+            ->addSelect(['homonimos' => DB::table('caja.v_persona_homonimos as h')
+                ->whereColumn('h.id', 'caja.persona.id')->select('h.homonimos')])
+            ->orderBy('nombre')
+            ->orderBy('id');
 
         if ($request->filled('limite')) {
             return response()->json([
@@ -37,6 +41,47 @@ class PersonaController extends Controller
         $pagina->getCollection()->transform(fn (Persona $p) => [...$p->toArray(), 'totales' => $resumen[$p->id] ?? []]);
 
         return response()->json($pagina);
+    }
+
+    /**
+     * Antes de registrar: ¿ese nombre ya existe con otro CI, o ese CI ya es de
+     * otra persona? Así se evita duplicar a alguien por un CI mal digitado.
+     */
+    public function coincidencias(Request $request): JsonResponse
+    {
+        $nombre = mb_strtoupper(preg_replace('/\s+/u', ' ', trim((string) $request->query('nombre'))));
+        $ci = mb_strtoupper(trim((string) $request->query('ci')));
+
+        $mismoNombre = $nombre === '' ? collect() : Persona::query()
+            ->whereRaw('caja.normalizar_nombre(nombre) = ?', [$nombre])
+            ->when($ci !== '', fn ($q) => $q->where(fn ($w) => $w->whereNull('ci')->orWhere('ci', '<>', $ci)))
+            ->where('activo', true)
+            ->orderBy('id')
+            ->get(['id', 'nombre', 'ci']);
+
+        $mismoCi = $ci === '' ? null : Persona::where('ci', $ci)->first(['id', 'nombre', 'ci']);
+
+        return response()->json(['data' => [
+            'mismo_nombre' => $mismoNombre,
+            'mismo_ci'     => $mismoCi && $mismoCi->nombre !== $nombre ? $mismoCi : null,
+        ]]);
+    }
+
+    /** Pasa los movimientos de esta persona a otra y la elimina del registro. */
+    public function unificar(UnificarPersonaRequest $request, Persona $persona): JsonResponse
+    {
+        $destino = Persona::findOrFail($request->integer('destino_id'));
+
+        $movidos = Transaccion::delUsuarioActual(fn () => DB::selectOne(
+            'select caja.unificar_personas(?, ?, ?, ?) as n',
+            [$persona->id, $destino->id, $request->user()->id, $request->input('motivo')]
+        )->n);
+
+        return response()->json([
+            'data'    => $destino->refresh(),
+            'mensaje' => "Unificado: {$movidos} movimiento(s) de {$persona->nombre}"
+                . ($persona->ci ? " (CI {$persona->ci})" : '') . " pasaron a {$destino->nombre}.",
+        ]);
     }
 
     public function show(Persona $persona): JsonResponse

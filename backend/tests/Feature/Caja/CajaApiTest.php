@@ -493,4 +493,53 @@ class CajaApiTest extends TestCase
         $this->putJson("/api/caja/conceptos/{$gastos->id}", ['codigo' => 'GASTOS_MENORES', 'nombre' => $gastos->nombre, 'tipo' => 'INGRESO'])
             ->assertStatus(422)->assertJsonValidationErrors('tipo');
     }
+
+    public function test_avisa_cuando_el_nombre_ya_existe_con_otro_ci(): void
+    {
+        $caja = $this->caja();
+        $this->como($this->usuario(self::CAJERO));
+        $sesion = $this->abrir($caja);
+        $this->movimiento($sesion, 'COMBUSTIBLE', 10, ['persona_nombre' => 'Joaquín Manrique', 'persona_ci' => '6698509']);
+
+        $this->getJson('/api/caja/personas/coincidencias?nombre=joaquín%20manrique&ci=6698508')->assertOk()
+            ->assertJsonPath('data.mismo_nombre.0.ci', '6698509')
+            ->assertJsonPath('data.mismo_ci', null);
+
+        $this->getJson('/api/caja/personas/coincidencias?nombre=Otro&ci=6698509')->assertOk()
+            ->assertJsonCount(0, 'data.mismo_nombre')
+            ->assertJsonPath('data.mismo_ci.nombre', 'JOAQUÍN MANRIQUE');
+    }
+
+    public function test_unificar_pasa_los_movimientos_y_conserva_los_comprobantes(): void
+    {
+        $caja = $this->caja();
+        $this->como($this->usuario(self::CAJERO));
+        $sesion = $this->abrir($caja, ['BOB' => 1000]);
+        $bueno = $this->movimiento($sesion, 'COMBUSTIBLE', 100, ['persona_nombre' => 'Joaquín Manrique', 'persona_ci' => '6698509'])->json('data');
+        $malo = $this->movimiento($sesion, 'COMBUSTIBLE', 30, ['persona_nombre' => 'Joaquín Manrique', 'persona_ci' => '6698508'])->json('data');
+        $this->postJson("/api/caja/movimientos/{$malo['id']}/anular", ['motivo' => 'Prueba de anulado que también se mueve'])->assertOk();
+        $this->movimiento($sesion, 'COMBUSTIBLE', 20, ['persona_nombre' => 'Joaquín Manrique', 'persona_ci' => '6698508']);
+        $this->cerrar($sesion, ['BOB' => 880]);      // también se reasignan movimientos de una sesión cerrada
+
+        $lista = collect($this->getJson('/api/caja/personas?buscar=manrique')->json('data'));
+        $this->assertSame([1, 1], $lista->pluck('homonimos')->all());
+
+        $this->como($this->usuario(self::CAJERO));
+        $this->postJson("/api/caja/personas/{$malo['persona_id']}/unificar", ['destino_id' => $bueno['persona_id']])->assertForbidden();
+
+        $this->como($this->usuario(self::ADMIN));
+        $this->postJson("/api/caja/personas/{$malo['persona_id']}/unificar", ['destino_id' => $malo['persona_id']])
+            ->assertStatus(422)->assertJsonValidationErrors('destino_id');
+        $this->postJson("/api/caja/personas/{$malo['persona_id']}/unificar", ['destino_id' => $bueno['persona_id'], 'motivo' => 'CI mal digitado'])
+            ->assertOk()->assertJsonPath('mensaje', fn ($m) => str_starts_with($m, 'Unificado: 2 movimiento(s)'));
+
+        $this->assertDatabaseMissing('caja.persona', ['id' => $malo['persona_id']]);
+        $this->assertSame(3, DB::table('caja.movimiento')->where('persona_id', $bueno['persona_id'])->count());
+        $this->assertSame('6698508', DB::table('caja.movimiento')->where('id', $malo['id'])->value('persona_ci'));
+        $this->assertSame(1, DB::table('caja.persona_unificacion')->where('destino_id', $bueno['persona_id'])->count());
+
+        // Las reglas de los movimientos siguen activas después de unificar.
+        $this->expectExceptionMessage('no admite movimientos');
+        Transaccion::como(1, fn () => DB::table('caja.movimiento')->where('id', $bueno['id'])->update(['monto' => 1]));
+    }
 }

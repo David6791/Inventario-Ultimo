@@ -7,6 +7,7 @@ import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
+import { AutoCompleteModule } from 'primeng/autocomplete';
 import { InputTextModule } from 'primeng/inputtext';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { ToastModule } from 'primeng/toast';
@@ -14,7 +15,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { mensajeDeError } from '../../cargas/core/errores';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
-import { Persona, PersonaDetalle, TotalPersona } from '../core/caja.model';
+import { Persona, PersonaCorta, PersonaDetalle, TotalPersona } from '../core/caja.model';
 import { CajaService } from '../core/caja.service';
 import { DineroPipe } from '../core/dinero';
 import { ESTILOS_CAJA } from '../core/estilos';
@@ -28,7 +29,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
   selector: 'app-personas-caja',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ReactiveFormsModule, TableModule, ButtonModule, DialogModule, InputTextModule,
+    CommonModule, FormsModule, ReactiveFormsModule, AutoCompleteModule, TableModule, ButtonModule, DialogModule, InputTextModule,
     CheckboxModule, ToastModule, TooltipModule, DineroPipe, TienePermisoDirective,
   ],
   providers: [MessageService],
@@ -61,13 +62,17 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <th style="width: 8rem" class="derecha">Movimientos</th>
           <th style="width: 11rem" class="derecha">Pagado (egresos)</th>
           <th style="width: 11rem" class="derecha">Recibido (ingresos)</th>
-          <th style="width: 6rem"></th>
+          <th style="width: 8rem"></th>
         </tr>
       </ng-template>
       <ng-template pTemplate="body" let-p>
         <tr [class.inactiva]="!p.activo">
           <td>
-            <div>{{ p.nombre }}</div>
+            <div>
+              {{ p.nombre }}
+              <span class="pastilla pastilla-aviso" *ngIf="p.homonimos"
+                    pTooltip="Hay otra persona registrada con el mismo nombre. Si es la misma, unifíquelas.">Posible duplicado</span>
+            </div>
             <div class="secundario" *ngIf="p.telefono">{{ p.telefono }}</div>
           </td>
           <td><span class="codigo" *ngIf="p.ci">{{ p.ci }}</span><span class="guion" *ngIf="!p.ci">—</span></td>
@@ -77,8 +82,12 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <td class="centro">
             <p-button icon="pi pi-list" [text]="true" [rounded]="true" size="small" pTooltip="Ver movimientos"
                       (onClick)="ver(p.id)" />
-            <p-button *appTienePermiso="'caja.administrar'" icon="pi pi-pencil" [text]="true" [rounded]="true"
-                      size="small" pTooltip="Corregir datos" (onClick)="editar(p)" />
+            <ng-container *appTienePermiso="'caja.administrar'">
+              <p-button icon="pi pi-pencil" [text]="true" [rounded]="true" size="small" pTooltip="Corregir datos"
+                        (onClick)="editar(p)" />
+              <p-button icon="pi pi-link" [text]="true" [rounded]="true" size="small" pTooltip="Unificar con otra persona (duplicado)"
+                        (onClick)="pedirUnificar(p)" />
+            </ng-container>
           </td>
         </tr>
       </ng-template>
@@ -139,6 +148,43 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </ng-container>
     </p-dialog>
 
+    <!-- Unificar duplicado -->
+    <p-dialog [(visible)]="unificarVisible" header="Unificar persona duplicada" [modal]="true"
+              [style]="{ width: '38rem' }" [draggable]="false">
+      <ng-container *ngIf="origen() as o">
+        <p class="explicacion">
+          Los <strong>{{ o.movimientos }}</strong> movimiento(s) de <strong>{{ o.nombre }}</strong>
+          ({{ o.ci ? 'CI ' + o.ci : 'sin CI' }}) pasan a la persona que elija, y este registro se elimina.
+          Los comprobantes ya impresos no cambian.
+        </p>
+        <div class="campos">
+          <div class="campo span-6">
+            <label>Se conserva</label>
+            <div class="opciones-destino" *ngIf="candidatos().length">
+              <label *ngFor="let c of candidatos()" class="destino" [class.elegido]="destino()?.id === c.id">
+                <input type="radio" name="destino" [checked]="destino()?.id === c.id" (change)="destino.set(c)" />
+                <span>{{ c.nombre }}</span><span class="secundario">{{ c.ci ? 'CI ' + c.ci : 'sin CI' }}</span>
+              </label>
+            </div>
+            <p-autoComplete [(ngModel)]="destinoTexto" [suggestions]="sugerencias()" (completeMethod)="buscarDestino($event.query)"
+                            (onSelect)="destino.set($event.value)" field="nombre" [minLength]="2" appendTo="body"
+                            placeholder="…o busque otra por nombre o CI" [inputStyle]="{ width: '100%' }" [style]="{ width: '100%' }">
+              <ng-template let-c pTemplate="item">{{ c.nombre }} · {{ c.ci ? 'CI ' + c.ci : 'sin CI' }}</ng-template>
+            </p-autoComplete>
+          </div>
+          <div class="campo span-6">
+            <label for="motivo">Motivo <span class="secundario">(opcional)</span></label>
+            <input id="motivo" pInputText [(ngModel)]="motivo" maxlength="250" placeholder="CI mal digitado" />
+          </div>
+        </div>
+      </ng-container>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="unificarVisible = false" />
+        <p-button label="Unificar" icon="pi pi-link" [loading]="guardando()"
+                  [disabled]="!destino() || destino()!.id === origen()?.id || guardando()" (onClick)="unificar()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Corregir datos -->
     <p-dialog [(visible)]="editorVisible" header="Corregir datos de la persona" [modal]="true"
               [style]="{ width: '34rem' }" [draggable]="false">
@@ -182,6 +228,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
              border: 1px solid var(--surface-border, #e5e7eb); border-radius: 8px; }
     .total .rotulo { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
                      color: var(--text-color-secondary, #6b7280); }
+    .explicacion { font-size: 0.88rem; line-height: 1.5; margin-top: 0; }
+    .opciones-destino { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.5rem; }
+    .destino { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; cursor: pointer;
+               border: 1px solid var(--surface-border, #e5e7eb); border-radius: 6px; font-size: 0.9rem; }
+    .campo .destino input { width: auto; flex: none; margin: 0; }
+    .destino span:first-of-type { flex: 1; }
+    .destino.elegido { border-color: #93c5fd; background: #eff6ff; }
     tr.anulado td { color: var(--text-color-secondary, #9ca3af); }
     tr.anulado .monto { text-decoration: line-through; }
   `],
@@ -206,6 +259,13 @@ export class PersonasCajaComponent implements OnInit {
 
   fichaVisible = false;
   editorVisible = false;
+  unificarVisible = false;
+  motivo = '';
+  destinoTexto: string | PersonaCorta | null = null;
+  readonly origen = signal<Persona | null>(null);
+  readonly destino = signal<PersonaCorta | null>(null);
+  readonly candidatos = signal<PersonaCorta[]>([]);
+  readonly sugerencias = signal<PersonaCorta[]>([]);
 
   readonly form = this.fb.group({
     nombre: ['', [Validators.required, Validators.maxLength(150)]],
@@ -272,6 +332,44 @@ export class PersonasCajaComponent implements OnInit {
       error: (e) => {
         this.guardando.set(false);
         this.toast.add({ severity: 'error', summary: 'No se pudo guardar', detail: mensajeDeError(e), life: 8000 });
+      },
+    });
+  }
+
+  pedirUnificar(p: Persona): void {
+    this.origen.set(p);
+    this.destino.set(null);
+    this.destinoTexto = null;
+    this.motivo = '';
+    this.candidatos.set([]);
+    this.unificarVisible = true;
+    // Los del mismo nombre son los candidatos más probables.
+    this.servicio.coincidencias(p.nombre, p.ci).subscribe((r) => {
+      const otros = r.mismo_nombre.filter((c) => c.id !== p.id);
+      this.candidatos.set(otros);
+      if (otros.length === 1) this.destino.set(otros[0]);
+    });
+  }
+
+  buscarDestino(texto: string): void {
+    this.servicio.buscarPersonas(texto).subscribe((r) => this.sugerencias.set(r.filter((c) => c.id !== this.origen()?.id)));
+  }
+
+  unificar(): void {
+    const o = this.origen();
+    const d = this.destino();
+    if (!o || !d) return;
+    this.guardando.set(true);
+    this.servicio.unificar(o.id, d.id, this.motivo.trim() || null).subscribe({
+      next: (r) => {
+        this.guardando.set(false);
+        this.unificarVisible = false;
+        this.toast.add({ severity: 'success', summary: 'Personas unificadas', detail: r.mensaje, life: 8000 });
+        this.pedir();
+      },
+      error: (e) => {
+        this.guardando.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se unificó', detail: mensajeDeError(e), life: 8000 });
       },
     });
   }
