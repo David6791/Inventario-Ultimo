@@ -6,6 +6,7 @@ use App\Models\Almacen;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -65,9 +66,21 @@ class Caja extends CajaModel
         return $this->exists && $this->sesiones()->exists();
     }
 
+    /** Usuarios asignados: solo ellos abren, registran, anulan y cierran. */
+    public function cajeros(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'caja.caja_cajero', 'caja_id', 'user_id')
+            ->withPivot(['asignado_por', 'asignado_en']);
+    }
+
+    public function esCajero(User $usuario): bool
+    {
+        return $this->exists && $this->cajeros()->whereKey($usuario->id)->exists();
+    }
+
     /**
-     * Cajas de las sedes del usuario. Quien administra cajas o ve todos los
-     * almacenes, las ve todas.
+     * Cajas que el usuario puede consultar: las que tiene asignadas y las de
+     * sus sedes. Quien administra cajas o ve todos los almacenes, las ve todas.
      */
     public function scopeDelAmbitoDe(Builder $query, User $usuario): Builder
     {
@@ -75,11 +88,15 @@ class Caja extends CajaModel
             return $query;
         }
 
-        return $query->whereIn('almacen_id', $usuario->almacenesIds());
+        return $query->where(fn ($q) => $q
+            ->whereIn('almacen_id', $usuario->almacenesIds())
+            ->orWhereHas('cajeros', fn ($c) => $c->whereKey($usuario->id)));
     }
 
     public function esDelAmbitoDe(User $usuario): bool
     {
-        return $usuario->can('caja.administrar') || $usuario->accedeAlmacen($this->almacen_id);
+        return $usuario->can('caja.administrar')
+            || $usuario->accedeAlmacen($this->almacen_id)
+            || $this->esCajero($usuario);
     }
 }

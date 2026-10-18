@@ -482,6 +482,8 @@ END $$;
    --------------------------------------------------------------------- */
 DO $$ BEGIN RAISE NOTICE '--- 10. Caja: apertura y movimientos ---'; END $$;
 INSERT INTO caja.caja (codigo, nombre, almacen_id, maneja_usd) VALUES ('CP', 'Caja Potosí', 1, true);
+-- 08: solo los cajeros asignados operan la caja (el usuario 2 es el supervisor).
+INSERT INTO caja.caja_cajero (caja_id, user_id) SELECT id, 1 FROM caja.caja WHERE codigo = 'CP';
 INSERT INTO caja.concepto (codigo, nombre, tipo) VALUES
     ('PAGO_SERVICIOS', 'Pago de servicios básicos', 'EGRESO');
 DO $$
@@ -499,6 +501,8 @@ BEGIN
         $q$UPDATE caja.caja SET formato_comprobante = '{CAJA}-{N}', reinicio_comprobante = 'MENSUAL' WHERE codigo = 'CP'$q$,
         'debe mostrar el año y el mes');
 
+    PERFORM pg_temp.espera_error(format('INSERT INTO caja.sesion (caja_id, abierta_por) VALUES (%s, 2)', v_caja),
+        'no está asignado como cajero');
     INSERT INTO caja.sesion (caja_id, abierta_por) VALUES (v_caja, 1) RETURNING id INTO v_ses;
     PERFORM pg_temp.afirma((SELECT numero FROM caja.sesion WHERE id = v_ses) = 1, 'primera apertura de la caja CP: sesión 1');
     PERFORM pg_temp.espera_error(format('INSERT INTO caja.sesion (caja_id, abierta_por) VALUES (%s, 1)', v_caja),

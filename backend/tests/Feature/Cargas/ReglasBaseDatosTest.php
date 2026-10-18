@@ -60,6 +60,7 @@ class ReglasBaseDatosTest extends TestCase
     public function test_un_pago_de_anticipo_sin_lote_se_rechaza_con_mensaje_en_espanol(): void
     {
         DB::insert("insert into caja.caja (codigo, nombre, almacen_id) values ('PR', 'Caja de prueba', 1)");
+        DB::insert("insert into caja.caja_cajero (caja_id, user_id) select id, 1 from caja.caja where codigo = 'PR'");
         DB::insert("insert into caja.sesion (caja_id, abierta_por) select id, 1 from caja.caja where codigo = 'PR'");
         DB::insert("insert into caja.sesion_saldo (sesion_id, moneda, saldo_inicial)
                     select s.id, 'BOB', 1000 from caja.sesion s join caja.caja c on c.id = s.caja_id where c.codigo = 'PR'");

@@ -4,6 +4,7 @@ namespace App\Modules\Caja\Http\Requests;
 
 use App\Modules\Caja\Models\Concepto;
 use App\Modules\Caja\Models\Movimiento;
+use App\Modules\Caja\Models\Persona;
 use App\Modules\Comun\Models\Banco;
 use Illuminate\Validation\Rule;
 
@@ -37,7 +38,9 @@ class MovimientoRequest extends FormularioCaja
             'banco_id'       => ['nullable', 'required_unless:forma_pago,EFECTIVO', 'integer',
                                  Rule::exists(Banco::class, 'id')->where('activo', true)],
             'nro_documento'  => ['nullable', 'required_unless:forma_pago,EFECTIVO', 'string', 'max:40'],
-            'persona_nombre' => ['required', 'string', 'max:150'],
+            // Una persona del registro, o nombre (y CI) de una nueva: la base la registra.
+            'persona_id'     => ['nullable', 'integer', Rule::exists(Persona::class, 'id')->where('activo', true)],
+            'persona_nombre' => ['required_without:persona_id', 'nullable', 'string', 'max:150'],
             'persona_ci'     => ['nullable', 'string', 'max:15'],
             'glosa'          => ['required', 'string', 'min:5', 'max:250'],
         ];
@@ -51,7 +54,8 @@ class MovimientoRequest extends FormularioCaja
             'monto.decimal'                  => 'El monto lleva como máximo dos decimales.',
             'banco_id.required_unless'       => 'Indique el banco del cheque o la transferencia.',
             'nro_documento.required_unless'  => 'Indique el número del cheque o de la transferencia.',
-            'persona_nombre.required'        => 'Indique a quién se paga o quién entrega el dinero.',
+            'persona_nombre.required_without' => 'Indique a quién se paga o quién entrega el dinero.',
+            'persona_id.exists'              => 'La persona elegida no existe o está desactivada.',
             'glosa.required'                 => 'Describa el movimiento en la glosa.',
             'glosa.min'                      => 'La glosa es muy corta: describa el movimiento.',
         ];

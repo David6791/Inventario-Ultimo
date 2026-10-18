@@ -80,6 +80,7 @@ const ESTRUCTURA: ItemMenu[] = [
   {
     etiqueta: 'Caja', icono: 'pi pi-wallet', hijos: [
       { etiqueta: 'Mis cajas',  icono: 'pi pi-wallet',   ruta: '/caja/operar',    permiso: 'caja.ver' },
+      { etiqueta: 'Personas',   icono: 'pi pi-users',    ruta: '/caja/personas',  permiso: 'caja.ver' },
       { etiqueta: 'Conceptos',  icono: 'pi pi-list',     ruta: '/caja/conceptos', permiso: 'caja.ver' },
       { etiqueta: 'Cajas',      icono: 'pi pi-cog',      ruta: '/caja/cajas',     permiso: 'caja.administrar' },
     ],

@@ -20,7 +20,7 @@ class MovimientoController extends Controller
 
     private const RELACIONES = [
         'concepto:id,codigo,nombre,tipo,origen', 'banco:id,nombre',
-        'registradoPor:id,name', 'anuladoPor:id,name',
+        'registradoPor:id,name', 'anuladoPor:id,name', 'persona:id,nombre,ci',
     ];
 
     public function __construct(private readonly CajaService $cajas)
@@ -29,7 +29,7 @@ class MovimientoController extends Controller
 
     public function store(MovimientoRequest $request, Sesion $sesion): JsonResponse
     {
-        $this->asegurarAmbito($sesion->caja);
+        $this->asegurarCajero($sesion->caja);
 
         $movimiento = $this->cajas->registrar($sesion, $request->user(), $request->validated());
 
@@ -42,7 +42,7 @@ class MovimientoController extends Controller
 
     public function anular(AnularMovimientoRequest $request, Movimiento $movimiento): JsonResponse
     {
-        $this->asegurarAmbito($movimiento->caja);
+        $this->asegurarCajero($movimiento->caja);
 
         $movimiento = $this->cajas->anular($movimiento, $request->user(), $request->input('motivo'));
 

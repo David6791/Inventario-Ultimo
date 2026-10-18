@@ -39,6 +39,16 @@ class CajaService
         });
     }
 
+    /** Reemplaza la lista de cajeros de la caja. */
+    public function asignarCajeros(Caja $caja, array $usuarios, User $quien): void
+    {
+        Transaccion::como($quien->id, function () use ($caja, $usuarios, $quien) {
+            $caja->cajeros()->sync(
+                collect($usuarios)->mapWithKeys(fn ($id) => [(int) $id => ['asignado_por' => $quien->id]])->all()
+            );
+        });
+    }
+
     /**
      * Cómo saldrá el próximo comprobante con estos datos, sin guardar ni
      * consumir números.

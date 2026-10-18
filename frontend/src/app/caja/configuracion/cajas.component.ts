@@ -1,20 +1,22 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, ElementRef, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
 import { DropdownModule } from 'primeng/dropdown';
 import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { TableModule } from 'primeng/table';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { catchError, debounceTime, of, switchMap } from 'rxjs';
+
 import { mensajeDeError } from '../../cargas/core/errores';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
-import { Caja, DatosCaja, OpcionesCaja, VistaPreviaComprobante } from '../core/caja.model';
+import { Caja, DatosCaja, OpcionesCaja, UsuarioCorto, VistaPreviaComprobante } from '../core/caja.model';
 import { CajaService } from '../core/caja.service';
 import { ESTILOS_CAJA } from '../core/estilos';
 
@@ -26,7 +28,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
   selector: 'app-cajas',
   standalone: true,
   imports: [
-    CommonModule, ReactiveFormsModule, TableModule, ButtonModule, DialogModule, DropdownModule,
+    CommonModule, FormsModule, ReactiveFormsModule, MultiSelectModule, TableModule, ButtonModule, DialogModule, DropdownModule,
     InputTextModule, CheckboxModule, ToastModule, TooltipModule, TienePermisoDirective,
   ],
   providers: [MessageService],
@@ -65,6 +67,11 @@ import { ESTILOS_CAJA } from '../core/estilos';
             <div class="secundario">
               {{ c.almacen?.nombre }}
               <span class="pastilla" *ngIf="c.maneja_usd">Bs y US$</span>
+            </div>
+            <div class="secundario cajeros">
+              <i class="pi pi-user"></i>
+              <ng-container *ngIf="c.cajeros?.length; else sinCajeros">{{ nombres(c.cajeros) }}</ng-container>
+              <ng-template #sinCajeros><span class="sin-cajeros">Sin cajeros asignados: nadie la puede abrir</span></ng-template>
             </div>
           </td>
           <td>
@@ -153,6 +160,15 @@ import { ESTILOS_CAJA } from '../core/estilos';
           </div>
         </div>
 
+        <div class="campo span-6">
+          <label for="cajeros">Cajeros</label>
+          <p-multiSelect inputId="cajeros" [options]="opciones()?.usuarios ?? []" [(ngModel)]="cajerosElegidos"
+                         [ngModelOptions]="{ standalone: true }" optionLabel="name" optionValue="id" display="chip"
+                         placeholder="Elija quiénes la operan" [style]="{ width: '100%' }" [filter]="true" filterBy="name,email" appendTo="body" />
+          <small>Solo ellos abren la caja, registran, anulan y cierran. En la lista salen los usuarios con
+                 permiso para abrir o registrar en caja.</small>
+        </div>
+
         <div class="campo span-6 check-campo">
           <p-checkbox formControlName="activa" [binary]="true" inputId="activa" />
           <label for="activa">Activa (se puede abrir)</label>
@@ -169,6 +185,9 @@ import { ESTILOS_CAJA } from '../core/estilos';
   `,
   styles: [...ESTILOS_CAJA, `
     .proximo { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-weight: 650; font-size: 0.9rem; }
+    .cajeros { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.15rem; }
+    .cajeros i { font-size: 0.7rem; }
+    .sin-cajeros { color: #b45309; }
     .alinear-abajo { align-self: end; padding-bottom: 0.5rem; }
     .marcadores { display: flex; flex-wrap: wrap; gap: 0.35rem; }
     .marcador {
@@ -205,6 +224,7 @@ export class CajasComponent implements OnInit {
   readonly previa = signal<VistaPreviaComprobante | null>(null);
 
   editorVisible = false;
+  cajerosElegidos: number[] = [];
 
   readonly form = this.fb.group({
     codigo: ['', [Validators.required, Validators.maxLength(10)]],
@@ -255,8 +275,13 @@ export class CajasComponent implements OnInit {
     return !c || c.formato_comprobante !== v.formato_comprobante || c.reinicio_comprobante !== v.reinicio_comprobante;
   }
 
+  nombres(usuarios: UsuarioCorto[] | undefined): string {
+    return (usuarios ?? []).map((u) => u.name).join(', ');
+  }
+
   abrir(c: Caja | null): void {
     this.actual.set(c);
+    this.cajerosElegidos = (c?.cajeros ?? []).map((u) => u.id);
     this.previa.set(null);
     const sede = this.opciones()?.almacenes.length === 1 ? this.opciones()!.almacenes[0].id : null;
     this.form.reset(c ? { ...c } as any : {
@@ -288,7 +313,10 @@ export class CajasComponent implements OnInit {
 
   guardar(): void {
     this.guardando.set(true);
-    this.servicio.guardar(this.form.getRawValue() as DatosCaja, this.actual()?.id).subscribe({
+    // Primero la caja (puede ser nueva y no tener id); después sus cajeros.
+    this.servicio.guardar(this.form.getRawValue() as DatosCaja, this.actual()?.id).pipe(
+      switchMap((c) => this.servicio.guardarCajeros(c.id, this.cajerosElegidos).pipe(switchMap(() => of(c)))),
+    ).subscribe({
       next: (c) => {
         this.guardando.set(false);
         this.editorVisible = false;

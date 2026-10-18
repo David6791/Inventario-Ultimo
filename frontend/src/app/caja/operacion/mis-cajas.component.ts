@@ -44,7 +44,10 @@ import { ESTILOS_CAJA } from '../core/estilos';
           </span>
         </div>
         <div class="nombre">{{ c.nombre }}</div>
-        <div class="secundario">{{ c.almacen?.nombre }}</div>
+        <div class="secundario">
+          {{ c.almacen?.nombre }} ·
+          <span [class.mia]="c.soy_cajero">{{ c.soy_cajero ? 'Usted es cajero' : 'Solo consulta' }}</span>
+        </div>
 
         <div class="saldos" *ngIf="c.sesion_abierta as s">
           <div *ngFor="let saldo of s.saldos" class="saldo">
@@ -54,7 +57,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <div class="secundario">Abrió {{ s.abierta_por }} · {{ s.abierta_en | date: 'dd/MM HH:mm' }}</div>
         </div>
         <div class="saldos" *ngIf="!c.sesion_abierta">
-          <span class="secundario">Ábrala para registrar movimientos.</span>
+          <span class="secundario">{{ c.soy_cajero ? 'Ábrala para registrar movimientos.' : 'Está cerrada.' }}</span>
         </div>
         <i class="pi pi-angle-right flecha"></i>
       </a>
@@ -82,6 +85,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
     .saldo { display: flex; flex-direction: column; }
     .saldo .rotulo { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-color-secondary, #6b7280); }
     .monto.grande { font-size: 1.35rem; font-weight: 700; }
+    .mia { color: #15803d; font-weight: 600; }
     .flecha { position: absolute; right: 1rem; bottom: 1rem; color: var(--text-color-secondary, #9ca3af); }
     .vacio { grid-column: 1 / -1; }
   `],

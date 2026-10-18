@@ -9,6 +9,8 @@ export interface AlmacenCorto { id: number; codigo: string; nombre: string; }
 
 export interface OpcionesCaja {
   almacenes: AlmacenCorto[];
+  /** Candidatos a cajero (solo llega a quien administra cajas). */
+  usuarios: { id: number; name: string; email: string }[];
   bancos: { id: number; nombre: string }[];
   monedas: Opcion<Moneda>[];
   formas_pago: Opcion<FormaPago>[];
@@ -58,6 +60,8 @@ export interface Movimiento {
   forma_pago: FormaPago;
   banco?: { id: number; nombre: string } | null;
   nro_documento: string | null;
+  persona_id: number | null;
+  persona?: PersonaCorta | null;
   persona_nombre: string;
   persona_ci: string | null;
   glosa: string;
@@ -78,6 +82,30 @@ export interface SesionAbierta {
   movimientos?: Movimiento[];
 }
 
+export interface PersonaCorta { id: number; nombre: string; ci: string | null; }
+
+export interface TotalPersona {
+  moneda: Moneda;
+  movimientos: number;
+  total_ingresos: string;
+  total_egresos: string;
+  ultimo_movimiento: string | null;
+}
+
+export interface Persona extends PersonaCorta {
+  telefono: string | null;
+  observaciones: string | null;
+  activo: boolean;
+  movimientos: number;
+  totales: TotalPersona[];
+}
+
+export interface PersonaDetalle extends Omit<Persona, 'movimientos'> {
+  movimientos: (Movimiento & { caja?: { id: number; codigo: string; nombre: string } })[];
+}
+
+export interface Pagina<T> { data: T[]; total: number; current_page: number; per_page: number; }
+
 export interface Caja {
   id: number;
   codigo: string;
@@ -90,6 +118,9 @@ export interface Caja {
   activa: boolean;
   tiene_sesiones?: boolean;
   proximo_numero?: string | null;
+  cajeros?: UsuarioCorto[];
+  /** Si el usuario que mira está asignado: solo entonces opera la caja. */
+  soy_cajero?: boolean;
   sesion_abierta: SesionAbierta | null;
 }
 
@@ -117,7 +148,8 @@ export interface DatosMovimiento {
   forma_pago: FormaPago;
   banco_id: number | null;
   nro_documento: string | null;
-  persona_nombre: string;
+  persona_id: number | null;
+  persona_nombre: string | null;
   persona_ci: string | null;
   glosa: string;
 }

@@ -7,6 +7,7 @@ import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { DropdownModule } from 'primeng/dropdown';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { AutoCompleteModule } from 'primeng/autocomplete';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputTextareaModule } from 'primeng/inputtextarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
@@ -17,7 +18,7 @@ import { mensajeDeError } from '../../cargas/core/errores';
 import { PermisosService } from '../../core/services/permisos.service';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import {
-  CajaOperacion, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, SaldoSesion, TipoMovimiento, UsuarioCorto,
+  CajaOperacion, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, PersonaCorta, SaldoSesion, TipoMovimiento, UsuarioCorto,
 } from '../core/caja.model';
 import { CajaService } from '../core/caja.service';
 import { DineroPipe, formatoDinero, simbolo } from '../core/dinero';
@@ -35,7 +36,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
   selector: 'app-caja-operacion',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, DropdownModule,
+    CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, DialogModule, DropdownModule,
     InputNumberModule, InputTextModule, InputTextareaModule, SelectButtonModule, TableModule, ToastModule,
     TooltipModule, DineroPipe, TienePermisoDirective,
   ],
@@ -54,7 +55,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
           </p>
           <p class="subtitulo" *ngIf="!c.sesion_abierta">Caja cerrada · {{ c.almacen?.nombre }}</p>
         </div>
-        <div class="acciones" *ngIf="c.sesion_abierta">
+        <div class="acciones" *ngIf="c.sesion_abierta && c.soy_cajero">
           <ng-container *appTienePermiso="'caja.registrar'">
             <p-button label="Ingreso" icon="pi pi-arrow-down-left" severity="success" [outlined]="true"
                       (onClick)="nuevoMovimiento('INGRESO')" />
@@ -64,8 +65,14 @@ import { ESTILOS_CAJA } from '../core/estilos';
         </div>
       </header>
 
+      <div class="nota nota-neutra nota-encabezado" *ngIf="!c.soy_cajero">
+        <i class="pi pi-eye"></i>
+        <span>Solo consulta: no está asignado como cajero de esta caja.
+              Cajeros: {{ nombresCajeros() || 'ninguno todavía' }}.</span>
+      </div>
+
       <!-- ===================== Caja cerrada: apertura ===================== -->
-      <section class="apertura" *ngIf="!c.sesion_abierta">
+      <section class="apertura" *ngIf="!c.sesion_abierta && c.soy_cajero">
         <div class="icono"><i class="pi pi-lock"></i></div>
         <div class="contenido">
           <h3>Abrir la caja</h3>
@@ -151,7 +158,9 @@ import { ESTILOS_CAJA } from '../core/estilos';
                 <div class="secundario">{{ m.glosa }}</div>
               </td>
               <td>
-                <div>{{ m.persona_nombre }}</div>
+                <a *ngIf="m.persona_id; else sinFicha" class="persona" [routerLink]="['/caja/personas']"
+                   [queryParams]="{ ver: m.persona_id }">{{ m.persona_nombre }}</a>
+                <ng-template #sinFicha><div>{{ m.persona_nombre }}</div></ng-template>
                 <div class="secundario" *ngIf="m.persona_ci">CI {{ m.persona_ci }}</div>
               </td>
               <td>
@@ -166,7 +175,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
               <td class="centro">
                 <p-button icon="pi pi-print" [text]="true" [rounded]="true" size="small" pTooltip="Imprimir comprobante"
                           (onClick)="imprimir(m)" />
-                <ng-container *ngIf="m.estado === 'VIGENTE' && m.concepto?.origen === 'MANUAL'">
+                <ng-container *ngIf="m.estado === 'VIGENTE' && m.concepto?.origen === 'MANUAL' && c.soy_cajero">
                   <p-button *appTienePermiso="'caja.anular'" icon="pi pi-ban" [text]="true" [rounded]="true" size="small"
                             severity="danger" pTooltip="Anular" (onClick)="pedirAnulacion(m)" />
                 </ng-container>
@@ -235,10 +244,20 @@ import { ESTILOS_CAJA } from '../core/estilos';
 
         <div class="campo span-4">
           <label for="persona">{{ tipoNuevo() === 'INGRESO' ? 'Recibido de' : 'Pagado a' }}</label>
-          <input id="persona" pInputText formControlName="persona_nombre" maxlength="150" />
+          <p-autoComplete inputId="persona" [(ngModel)]="personaTexto" [ngModelOptions]="{ standalone: true }"
+                          [suggestions]="sugerencias()" (completeMethod)="buscarPersona($event.query)"
+                          (ngModelChange)="escribirPersona($event)" field="nombre" [minLength]="2" [delay]="250"
+                          [forceSelection]="false" appendTo="body" placeholder="Nombre o CI" [inputStyle]="{ width: '100%' }"
+                          styleClass="w-full">
+            <ng-template let-p pTemplate="item">
+              <div class="sugerencia"><span>{{ p.nombre }}</span><span class="secundario">{{ p.ci ? 'CI ' + p.ci : 'sin CI' }}</span></div>
+            </ng-template>
+          </p-autoComplete>
+          <small *ngIf="form.value.persona_id">Del registro de personas.</small>
+          <small *ngIf="!form.value.persona_id && form.value.persona_nombre">Persona nueva: se agrega al registro al guardar.</small>
         </div>
         <div class="campo span-2">
-          <label for="ci">CI <span class="opcional">(opcional)</span></label>
+          <label for="ci">CI o NIT <span class="opcional">(opcional)</span></label>
           <input id="ci" pInputText formControlName="persona_ci" maxlength="15" />
         </div>
 
@@ -315,6 +334,10 @@ import { ESTILOS_CAJA } from '../core/estilos';
     .titulo-tabla { font-weight: 600; font-size: 0.95rem; }
     tr.anulado td { color: var(--text-color-secondary, #9ca3af); }
     tr.anulado .monto { text-decoration: line-through; }
+    .persona { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+    .persona:hover { color: var(--primary-color, #2563eb); }
+    .sugerencia { display: flex; justify-content: space-between; gap: 1rem; width: 100%; }
+    :host ::ng-deep .w-full, :host ::ng-deep .w-full input { width: 100%; }
     .alerta { color: #b91c1c !important; font-weight: 600; }
     .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
     .explicacion { font-size: 0.88rem; line-height: 1.5; margin-top: 0; }
@@ -344,6 +367,9 @@ export class CajaOperacionComponent implements OnInit {
   saldoInicial: Partial<Record<Moneda, number | null>> = {};
 
   readonly simbolo = simbolo;
+  readonly sugerencias = signal<PersonaCorta[]>([]);
+  /** Lo que muestra el autocompletado: texto escrito o la persona elegida. */
+  personaTexto: string | PersonaCorta | null = null;
   readonly opcionesMoneda = [
     { valor: 'BOB', etiqueta: 'Bolivianos' },
     { valor: 'USD', etiqueta: 'Dólares' },
@@ -358,6 +384,7 @@ export class CajaOperacionComponent implements OnInit {
     forma_pago: ['EFECTIVO', Validators.required],
     banco_id: [null as number | null],
     nro_documento: [null as string | null],
+    persona_id: [null as number | null],
     persona_nombre: ['', [Validators.required, Validators.maxLength(150)]],
     persona_ci: [null as string | null],
     glosa: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(250)]],
@@ -468,6 +495,8 @@ export class CajaOperacionComponent implements OnInit {
   nuevoMovimiento(tipo: TipoMovimiento): void {
     this.tipoNuevo.set(tipo);
     this.form.reset({ moneda: 'BOB', forma_pago: 'EFECTIVO' });
+    this.form.get('persona_ci')!.enable();
+    this.personaTexto = null;
     this.movimientoVisible = true;
 
     // Se vuelven a pedir los conceptos: pudieron crearse después de abrir la pantalla.
@@ -476,6 +505,30 @@ export class CajaOperacionComponent implements OnInit {
       const conceptos = this.conceptosDelTipo();
       if (conceptos.length === 1) this.form.patchValue({ concepto_id: conceptos[0].id });
     });
+  }
+
+  nombresCajeros(): string {
+    return (this.caja()?.cajeros ?? []).map((u) => u.name).join(', ');
+  }
+
+  buscarPersona(texto: string): void {
+    this.servicio.buscarPersonas(texto).subscribe({
+      next: (p) => this.sugerencias.set(p),
+      error: () => this.sugerencias.set([]),
+    });
+  }
+
+  /** Elegida de la lista: queda vinculada. Escrita a mano: será una persona nueva (o la del mismo CI). */
+  escribirPersona(valor: string | PersonaCorta | null): void {
+    const ci = this.form.get('persona_ci')!;
+    if (valor && typeof valor === 'object') {
+      this.form.patchValue({ persona_id: valor.id, persona_nombre: valor.nombre, persona_ci: valor.ci });
+      ci.disable();
+    } else {
+      if (this.form.value.persona_id) ci.setValue(null);
+      this.form.patchValue({ persona_id: null, persona_nombre: (valor ?? '').toString() });
+      ci.enable();
+    }
   }
 
   registrar(): void {

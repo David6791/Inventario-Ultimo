@@ -36,11 +36,22 @@ class CajaApiTest extends TestCase
 
     // ------------------------------------------------------------- Ayudas
 
-    private function usuario(array $permisos, array $almacenes = [1]): User
+    /**
+     * Usuario con esos permisos. Si puede operar caja (abrir, registrar o
+     * anular), queda asignado como cajero de las cajas que ya existen, salvo
+     * que se indiquen otras en $cajeroDe.
+     */
+    private function usuario(array $permisos, array $almacenes = [1], ?array $cajeroDe = null): User
     {
         $usuario = User::factory()->create();
         $usuario->givePermissionTo($permisos);
         $usuario->almacenes()->sync($almacenes);
+
+        $opera = array_intersect($permisos, ['caja.abrir', 'caja.registrar', 'caja.anular']) !== [];
+        $cajas = $cajeroDe ?? ($opera ? Caja::pluck('id')->all() : []);
+        foreach ($cajas as $caja) {
+            DB::table('caja.caja_cajero')->insert(['caja_id' => $caja instanceof Caja ? $caja->id : $caja, 'user_id' => $usuario->id]);
+        }
 
         return $usuario;
     }
@@ -164,17 +175,114 @@ class CajaApiTest extends TestCase
         ])->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'tiene saldo en dólares'));
     }
 
-    public function test_el_cajero_solo_ve_y_opera_las_cajas_de_su_sede(): void
+    public function test_el_cajero_solo_ve_las_cajas_de_su_sede_o_las_que_tiene_asignadas(): void
     {
-        $this->caja('PTS', 1);
+        $potosi = $this->caja('PTS', 1);
         $porco = $this->caja('PRC', 2);
-        $this->como($this->usuario(self::CAJERO, [1]));
+        $oruro = $this->caja('ORU', 2);
+        $this->como($this->usuario(self::CAJERO, [1], [$potosi, $oruro]));
 
-        $codigos = collect($this->getJson('/api/caja/cajas')->assertOk()->json('data'))->pluck('codigo')->all();
-        $this->assertSame(['PTS'], $codigos);
+        $cajas = collect($this->getJson('/api/caja/cajas')->assertOk()->json('data'));
+        $this->assertSame(['ORU', 'PTS'], $cajas->pluck('codigo')->sort()->values()->all());
+        $this->assertTrue($cajas->firstWhere('codigo', 'ORU')['soy_cajero']);
 
         $this->getJson("/api/caja/cajas/{$porco->id}")->assertForbidden();
         $this->postJson("/api/caja/cajas/{$porco->id}/sesiones", ['saldo_inicial' => ['BOB' => 10]])->assertForbidden();
+    }
+
+    // ------------------------------------------------------------- Cajeros
+
+    public function test_solo_los_cajeros_asignados_operan_la_caja(): void
+    {
+        $caja = $this->caja();
+        $titular = $this->usuario(self::CAJERO, [1], [$caja]);
+        $otro = $this->usuario(self::CAJERO, [1], []);     // misma sede y permisos, sin asignar
+
+        $this->como($otro);
+        $this->getJson("/api/caja/cajas/{$caja->id}")->assertOk()->assertJsonPath('data.soy_cajero', false);
+        $this->postJson("/api/caja/cajas/{$caja->id}/sesiones", ['saldo_inicial' => ['BOB' => 10]])
+            ->assertForbidden()->assertJsonPath('message', fn ($m) => str_contains($m, 'No está asignado como cajero de la caja PTS'));
+
+        $this->como($titular);
+        $sesion = $this->abrir($caja);
+        $id = $this->movimiento($sesion, 'GASTOS_MENORES', 10)->assertCreated()->json('data.id');
+
+        $this->como($otro);
+        $this->movimiento($sesion, 'GASTOS_MENORES', 10)->assertForbidden();
+        $this->postJson("/api/caja/movimientos/{$id}/anular", ['motivo' => 'Se registró en la caja equivocada'])->assertForbidden();
+
+        // La base también lo exige, aunque se salte la API.
+        $this->expectExceptionMessage('no está asignado como cajero de la caja PTS');
+        Transaccion::como($otro->id, fn () => DB::table('caja.sesion')->where('id', $sesion)->update([
+            'estado' => 'CERRADA', 'cerrada_por' => $otro->id, 'cerrada_en' => now(),
+        ]));
+    }
+
+    public function test_el_administrador_asigna_los_cajeros(): void
+    {
+        $caja = $this->caja();
+        $ana = $this->usuario(self::CAJERO, [1], []);
+        $beto = $this->usuario(self::CAJERO, [1], []);
+        $this->como($this->usuario(self::ADMIN));
+
+        $opciones = collect($this->getJson('/api/caja/opciones')->assertOk()->json('data.usuarios'))->pluck('id');
+        $this->assertTrue($opciones->contains($ana->id) && $opciones->contains($beto->id));
+
+        $this->putJson("/api/caja/cajas/{$caja->id}/cajeros", ['usuarios' => [$ana->id, $beto->id]])
+            ->assertOk()->assertJsonCount(2, 'data');
+        $this->putJson("/api/caja/cajas/{$caja->id}/cajeros", ['usuarios' => [$beto->id]])->assertOk();
+
+        $this->assertSame([$beto->id], DB::table('caja.caja_cajero')->where('caja_id', $caja->id)->pluck('user_id')->all());
+
+        $this->como($ana);
+        $this->putJson("/api/caja/cajas/{$caja->id}/cajeros", ['usuarios' => [$ana->id]])->assertForbidden();
+    }
+
+    // ------------------------------------------------------------ Personas
+
+    public function test_cada_movimiento_queda_en_el_registro_de_personas(): void
+    {
+        $caja = $this->caja();
+        $this->como($this->usuario(self::CAJERO));
+        $sesion = $this->abrir($caja, ['BOB' => 1000]);
+
+        // Persona nueva: la registra la base. Con el mismo CI, es la misma persona.
+        $p1 = $this->movimiento($sesion, 'COMBUSTIBLE', 100, ['persona_nombre' => 'juan  pérez', 'persona_ci' => '4123456'])
+            ->assertCreated()->json('data.persona_id');
+        $p2 = $this->movimiento($sesion, 'COMBUSTIBLE', 50, ['persona_nombre' => 'Juan Perez M.', 'persona_ci' => '4123456'])
+            ->assertCreated()->assertJsonPath('data.persona_nombre', 'JUAN PÉREZ')->json('data.persona_id');
+        $this->assertSame($p1, $p2);
+
+        // Elegida del registro: no hace falta escribir el nombre.
+        $this->movimiento($sesion, 'REPOSICION_FONDOS', 20, ['persona_id' => $p1, 'persona_nombre' => null])
+            ->assertCreated()->assertJsonPath('data.persona_ci', '4123456');
+
+        // Sin CI, se reconoce por el nombre.
+        $sinCi = $this->movimiento($sesion, 'GASTOS_MENORES', 5, ['persona_nombre' => 'Librería Central'])->json('data.persona_id');
+        $this->assertSame($sinCi, $this->movimiento($sesion, 'GASTOS_MENORES', 5, ['persona_nombre' => 'LIBRERÍA  central'])->json('data.persona_id'));
+
+        $this->getJson('/api/caja/personas?buscar=perez')->assertOk()
+            ->assertJsonPath('data.0.nombre', 'JUAN PÉREZ')
+            ->assertJsonPath('data.0.movimientos', 3)
+            ->assertJsonPath('data.0.totales.0.total_egresos', '150.00')
+            ->assertJsonPath('data.0.totales.0.total_ingresos', '20.00');
+
+        $this->getJson("/api/caja/personas/{$p1}")->assertOk()->assertJsonCount(3, 'data.movimientos');
+        $this->getJson('/api/caja/personas?buscar=libreria&limite=5')->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    public function test_corregir_una_persona_no_cambia_los_comprobantes_emitidos(): void
+    {
+        $caja = $this->caja();
+        $this->como($this->usuario(self::CAJERO));
+        $sesion = $this->abrir($caja);
+        $mov = $this->movimiento($sesion, 'COMBUSTIBLE', 10, ['persona_nombre' => 'Surtidor Porko'])->json('data');
+
+        $this->como($this->usuario(self::ADMIN));
+        $this->putJson("/api/caja/personas/{$mov['persona_id']}", ['nombre' => 'Surtidor Porco', 'ci' => '1020304015'])
+            ->assertOk()->assertJsonPath('data.nombre', 'SURTIDOR PORCO');
+
+        $this->assertSame('SURTIDOR PORKO', DB::table('caja.movimiento')->where('id', $mov['id'])->value('persona_nombre'));
     }
 
     // ------------------------------------------------------------ Apertura

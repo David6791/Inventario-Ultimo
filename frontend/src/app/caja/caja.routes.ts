@@ -30,5 +30,11 @@ export const CAJA_ROUTES: Routes = [
     canMatch: [conPermiso('caja.ver')],
     loadComponent: () => import('./configuracion/conceptos.component').then((m) => m.ConceptosCajaComponent),
   },
+  {
+    path: 'personas',
+    title: 'Personas',
+    canMatch: [conPermiso('caja.ver')],
+    loadComponent: () => import('./configuracion/personas.component').then((m) => m.PersonasCajaComponent),
+  },
   { path: '', redirectTo: 'operar', pathMatch: 'full' },
 ];

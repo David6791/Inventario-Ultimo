@@ -32,7 +32,7 @@ class SesionController extends Controller
 
     public function store(AbrirSesionRequest $request, Caja $caja): JsonResponse
     {
-        $this->asegurarAmbito($caja);
+        $this->asegurarCajero($caja);
 
         $sesion = $this->cajas->abrir($caja, $request->user(), $request->input('saldo_inicial', []));
 

@@ -3,6 +3,7 @@
 use App\Modules\Caja\Http\Controllers\CajaController;
 use App\Modules\Caja\Http\Controllers\ConceptoController;
 use App\Modules\Caja\Http\Controllers\MovimientoController;
+use App\Modules\Caja\Http\Controllers\PersonaController;
 use App\Modules\Caja\Http\Controllers\SesionController;
 use Illuminate\Support\Facades\Route;
 
@@ -21,6 +22,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:caja.ver')->group(function () {
         Route::get('opciones', [CajaController::class, 'opciones']);
         Route::get('conceptos', [ConceptoController::class, 'index']);
+        Route::get('personas',            [PersonaController::class, 'index']);
+        Route::get('personas/{persona}',  [PersonaController::class, 'show'])->whereNumber('persona');
 
         Route::get('cajas',                   [CajaController::class, 'index']);
         Route::get('cajas/{caja}',            [CajaController::class, 'show'])->whereNumber('caja');
@@ -36,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('cajas/{caja}',            [CajaController::class, 'update'])->whereNumber('caja');
     Route::post('conceptos',              [ConceptoController::class, 'store']);
     Route::put('conceptos/{concepto}',    [ConceptoController::class, 'update'])->whereNumber('concepto');
+    Route::put('cajas/{caja}/cajeros',    [CajaController::class, 'cajerosActualizar'])->whereNumber('caja');
+    Route::put('personas/{persona}',      [PersonaController::class, 'update'])->whereNumber('persona');
 
     // --- Operación ------------------------------------------------------------
     Route::post('cajas/{caja}/sesiones',             [SesionController::class, 'store'])->whereNumber('caja');

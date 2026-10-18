@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
-  Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento,
-  OpcionesCaja, SaldoSesion, SesionAbierta, VistaPreviaComprobante,
+  Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, Pagina,
+  Persona, PersonaCorta, PersonaDetalle, SaldoSesion, SesionAbierta, UsuarioCorto, VistaPreviaComprobante,
 } from './caja.model';
 
 interface Respuesta<T> { data: T; mensaje?: string; }
@@ -44,6 +44,31 @@ export class CajaService {
     return this.http
       .post<Respuesta<VistaPreviaComprobante>>(`${this.base}/cajas/vista-previa`, datos)
       .pipe(map((r) => r.data));
+  }
+
+  /** Reemplaza la lista de cajeros asignados a la caja. */
+  guardarCajeros(cajaId: number, usuarios: number[]): Observable<UsuarioCorto[]> {
+    return this.http.put<Respuesta<UsuarioCorto[]>>(`${this.base}/cajas/${cajaId}/cajeros`, { usuarios })
+      .pipe(map((r) => r.data));
+  }
+
+  // ---------------------------------------------------------- Personas
+  personas(buscar: string, pagina = 1): Observable<Pagina<Persona>> {
+    return this.http.get<Pagina<Persona>>(`${this.base}/personas`, { params: { buscar, page: pagina } });
+  }
+
+  /** Autocompletado: pocas personas activas que coinciden por nombre o CI. */
+  buscarPersonas(texto: string): Observable<PersonaCorta[]> {
+    return this.http.get<Respuesta<PersonaCorta[]>>(`${this.base}/personas`, { params: { buscar: texto, limite: 10 } })
+      .pipe(map((r) => r.data));
+  }
+
+  persona(id: number): Observable<PersonaDetalle> {
+    return this.http.get<Respuesta<PersonaDetalle>>(`${this.base}/personas/${id}`).pipe(map((r) => r.data));
+  }
+
+  guardarPersona(id: number, datos: Partial<Persona>): Observable<Persona> {
+    return this.http.put<Respuesta<Persona>>(`${this.base}/personas/${id}`, datos).pipe(map((r) => r.data));
   }
 
   // --------------------------------------------------------- Conceptos

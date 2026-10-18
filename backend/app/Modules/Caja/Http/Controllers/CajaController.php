@@ -3,7 +3,10 @@
 namespace App\Modules\Caja\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Enums\Permisos;
 use App\Models\Almacen;
+use App\Models\User;
+use App\Modules\Caja\Http\Requests\CajerosRequest;
 use App\Modules\Caja\Http\Requests\CajaRequest;
 use App\Modules\Caja\Http\Requests\VistaPreviaCajaRequest;
 use App\Modules\Caja\Models\Caja;
@@ -30,15 +33,17 @@ class CajaController extends Controller
     {
         $cajas = Caja::query()
             ->delAmbitoDe($request->user())
-            ->with(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name'])
+            ->with(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name'])
             ->orderByDesc('activa')
             ->orderBy('codigo')
             ->get()
-            ->map(function (Caja $caja) {
+            ->map(function (Caja $caja) use ($request) {
                 $sesion = $caja->sesionAbierta;
 
                 return [
                     ...$caja->toArray(),
+                    'cajeros'         => $this->cajeros($caja),
+                    'soy_cajero'      => $caja->cajeros->contains('id', $request->user()->id),
                     'tiene_sesiones'  => $caja->tieneSesiones(),
                     'proximo_numero'  => $this->cajas->vistaPrevia($caja->only(['codigo', 'formato_comprobante', 'reinicio_comprobante']), $caja)['numero'],
                     'sesion_abierta'  => $sesion ? [
@@ -55,11 +60,11 @@ class CajaController extends Controller
     }
 
     /** Vista de operación de una caja. */
-    public function show(Caja $caja): JsonResponse
+    public function show(Request $request, Caja $caja): JsonResponse
     {
         $this->asegurarAmbito($caja);
 
-        $caja->load(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name']);
+        $caja->load(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name']);
         $sesion = $caja->sesionAbierta;
 
         $ultima = $caja->sesiones()
@@ -70,6 +75,8 @@ class CajaController extends Controller
 
         return response()->json(['data' => [
             ...$caja->toArray(),
+            'cajeros'         => $this->cajeros($caja),
+            'soy_cajero'      => $caja->cajeros->contains('id', $request->user()->id),
             'saldos_arranque' => $this->cajas->saldosDeArranque($caja),
             'ultima_cerrada'  => $ultima ? [
                 'id'          => $ultima->id,
@@ -86,7 +93,7 @@ class CajaController extends Controller
                 'saldos'      => $this->cajas->resumen($sesion),
                 'movimientos' => $sesion->movimientos()
                     ->with(['concepto:id,codigo,nombre,tipo,origen', 'banco:id,nombre',
-                            'registradoPor:id,name', 'anuladoPor:id,name'])
+                            'registradoPor:id,name', 'anuladoPor:id,name', 'persona:id,nombre,ci'])
                     ->orderByDesc('id')
                     ->get(),
             ] : null,
@@ -105,6 +112,17 @@ class CajaController extends Controller
         $caja = $this->cajas->actualizarCaja($caja, $request->validated());
 
         return response()->json(['data' => $caja->load('almacen:id,codigo,nombre')]);
+    }
+
+    /** Cajeros asignados: solo ellos operan la caja. Reemplaza la lista completa. */
+    public function cajerosActualizar(CajerosRequest $request, Caja $caja): JsonResponse
+    {
+        $this->cajas->asignarCajeros($caja, $request->input('usuarios', []), $request->user());
+
+        return response()->json([
+            'data'    => $this->cajeros($caja->load('cajeros:id,name')),
+            'mensaje' => "Cajeros de la caja {$caja->codigo} actualizados.",
+        ]);
     }
 
     /** Vista previa en vivo del formato del comprobante. Nunca guarda ni consume números. */
@@ -131,8 +149,20 @@ class CajaController extends Controller
             ->orderBy('nombre')
             ->get(['id', 'codigo', 'nombre']);
 
+        // Para asignar cajeros: usuarios activos que pueden abrir o registrar en caja.
+        $usuarios = $usuario->can('caja.administrar')
+            ? User::query()
+                ->where('activo', true)
+                ->where(fn ($q) => $q
+                    ->where(fn ($p) => $p->permission(['caja.abrir', 'caja.registrar']))
+                    ->orWhereHas('roles', fn ($r) => $r->where('name', Permisos::SUPER_ADMIN)))
+                ->orderBy('name')
+                ->get(['id', 'name', 'email'])
+            : [];
+
         return response()->json(['data' => [
             'almacenes'   => $almacenes,
+            'usuarios'    => $usuarios,
             'bancos'      => Banco::activos()->orderBy('nombre')->get(['id', 'nombre']),
             'monedas'     => [['valor' => 'BOB', 'etiqueta' => 'Bolivianos (Bs)'], ['valor' => 'USD', 'etiqueta' => 'Dólares (US$)']],
             'formas_pago' => array_map(fn ($f) => ['valor' => $f, 'etiqueta' => ucfirst(mb_strtolower($f))], Movimiento::FORMAS_PAGO),
@@ -150,5 +180,14 @@ class CajaController extends Controller
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre', 'tipo']),
         ]]);
+    }
+
+    private function cajeros(Caja $caja): array
+    {
+        return $caja->cajeros
+            ->sortBy('name')
+            ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name])
+            ->values()
+            ->all();
     }
 }
