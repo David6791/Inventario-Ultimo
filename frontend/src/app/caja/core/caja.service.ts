@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map, shareReplay } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento,
@@ -14,10 +14,14 @@ export class CajaService {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiUrl}/caja`;
 
-  /** Listas cerradas; se piden una vez por sesión del navegador. */
-  readonly opciones$: Observable<OpcionesCaja> = this.http
-    .get<Respuesta<OpcionesCaja>>(`${this.base}/opciones`)
-    .pipe(map((r) => r.data), shareReplay({ bufferSize: 1, refCount: false }));
+  /**
+   * Listas para los formularios. Se piden cada vez que se abre la pantalla
+   * (no se guardan en memoria): así un concepto o un banco recién creado
+   * aparece sin tener que recargar el navegador.
+   */
+  opciones(): Observable<OpcionesCaja> {
+    return this.http.get<Respuesta<OpcionesCaja>>(`${this.base}/opciones`).pipe(map((r) => r.data));
+  }
 
   // ------------------------------------------------------------ Cajas
   listar(): Observable<Caja[]> {

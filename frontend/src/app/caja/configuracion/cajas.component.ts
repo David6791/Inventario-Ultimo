@@ -217,7 +217,7 @@ export class CajasComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.servicio.opciones$.subscribe((o) => this.opciones.set(o));
+    this.servicio.opciones().subscribe((o) => this.opciones.set(o));
     this.cargar();
 
     this.form.valueChanges.pipe(

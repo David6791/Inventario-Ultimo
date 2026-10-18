@@ -193,7 +193,12 @@ import { ESTILOS_CAJA } from '../core/estilos';
         <div class="campo span-6">
           <label for="concepto">Concepto</label>
           <p-dropdown inputId="concepto" formControlName="concepto_id" [options]="conceptosDelTipo()" optionLabel="nombre"
-                      optionValue="id" placeholder="Seleccione" [filter]="true" filterBy="nombre" appendTo="body" />
+                      optionValue="id" placeholder="Seleccione" [filter]="true" filterBy="nombre" appendTo="body"
+                      emptyMessage="No hay conceptos" />
+          <small *ngIf="opciones() && !conceptosDelTipo().length" class="alerta">
+            No hay conceptos de {{ tipoNuevo() === 'INGRESO' ? 'ingreso' : 'egreso' }} activos.
+            Créelos en Caja → Conceptos.
+          </small>
         </div>
 
         <div class="campo span-3">
@@ -384,7 +389,7 @@ export class CajaOperacionComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.servicio.opciones$.subscribe((o) => this.opciones.set(o));
+    this.servicio.opciones().subscribe((o) => this.opciones.set(o));
     this.form.valueChanges.subscribe(() => this.valores.set(this.form.getRawValue()));
 
     // Banco y número solo cuando no es efectivo.
@@ -463,9 +468,14 @@ export class CajaOperacionComponent implements OnInit {
   nuevoMovimiento(tipo: TipoMovimiento): void {
     this.tipoNuevo.set(tipo);
     this.form.reset({ moneda: 'BOB', forma_pago: 'EFECTIVO' });
-    const conceptos = this.conceptosDelTipo();
-    if (conceptos.length === 1) this.form.patchValue({ concepto_id: conceptos[0].id });
     this.movimientoVisible = true;
+
+    // Se vuelven a pedir los conceptos: pudieron crearse después de abrir la pantalla.
+    this.servicio.opciones().subscribe((o) => {
+      this.opciones.set(o);
+      const conceptos = this.conceptosDelTipo();
+      if (conceptos.length === 1) this.form.patchValue({ concepto_id: conceptos[0].id });
+    });
   }
 
   registrar(): void {
