@@ -132,4 +132,14 @@ INSERT INTO caja.concepto (codigo, nombre, tipo, origen) VALUES
     ('REPOSICION_FONDOS',   'Reposición de fondos a caja',         'INGRESO', 'MANUAL')
 ON CONFLICT (codigo) DO NOTHING;
 
+-- Conceptos manuales de arranque (sprint 2). El administrador los cambia o
+-- agrega otros desde Caja → Conceptos.
+INSERT INTO caja.concepto (codigo, nombre, tipo, origen) VALUES
+    ('DEPOSITO_BANCARIO',   'Depósito de efectivo en banco',       'EGRESO',  'MANUAL'),
+    ('SERVICIOS_BASICOS',   'Servicios básicos (luz, agua, internet)', 'EGRESO', 'MANUAL'),
+    ('COMBUSTIBLE',         'Compra de combustible',               'EGRESO',  'MANUAL'),
+    ('GASTOS_MENORES',      'Gastos menores de oficina',           'EGRESO',  'MANUAL'),
+    ('OTROS_INGRESOS',      'Otros ingresos a caja',               'INGRESO', 'MANUAL')
+ON CONFLICT DO NOTHING;   -- sin columna: tampoco choca si ya crearon uno con el mismo nombre
+
 COMMIT;

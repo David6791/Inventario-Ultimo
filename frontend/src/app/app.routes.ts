@@ -379,6 +379,10 @@ export const routes: Routes = [
         path: 'cargas',
         loadChildren: () => import('./cargas/cargas.routes').then(m => m.CARGAS_ROUTES),
       },
+      {
+        path: 'caja',
+        loadChildren: () => import('./caja/caja.routes').then(m => m.CAJA_ROUTES),
+      },
     ],
   },
 

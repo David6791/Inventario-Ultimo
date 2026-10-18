@@ -97,6 +97,10 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // La hora de la sesión de PostgreSQL: now() en la base (fecha de los
+            // comprobantes de caja, apertura de sesión) debe ser la hora de
+            // Bolivia, igual que la de PHP, sin depender de cómo se instaló el servidor.
+            'timezone' => env('DB_TIMEZONE', 'America/La_Paz'),
         ],
 
         'sqlsrv' => [

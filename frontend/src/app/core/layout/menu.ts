@@ -78,6 +78,13 @@ const ESTRUCTURA: ItemMenu[] = [
     ],
   },
   {
+    etiqueta: 'Caja', icono: 'pi pi-wallet', hijos: [
+      { etiqueta: 'Mis cajas',  icono: 'pi pi-wallet',   ruta: '/caja/operar',    permiso: 'caja.ver' },
+      { etiqueta: 'Conceptos',  icono: 'pi pi-list',     ruta: '/caja/conceptos', permiso: 'caja.ver' },
+      { etiqueta: 'Cajas',      icono: 'pi pi-cog',      ruta: '/caja/cajas',     permiso: 'caja.administrar' },
+    ],
+  },
+  {
     etiqueta: 'Manejo de cargas', icono: 'pi pi-truck', hijos: [
       { etiqueta: 'Productores',         icono: 'pi pi-users',      ruta: '/cargas/productores',  permiso: 'cargas.ver' },
       { etiqueta: 'Cooperativas',        icono: 'pi pi-sitemap',    ruta: '/cargas/cooperativas', permiso: 'cargas.ver' },
