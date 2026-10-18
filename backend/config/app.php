@@ -16,6 +16,12 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+    | Razón social que sale en el encabezado de comprobantes, reportes de caja
+    | y boletas de recepción (EMPRESA_NOMBRE en el .env).
+    */
+    'empresa' => env('EMPRESA_NOMBRE', 'Exportadora MACGYCASUCHOS'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------

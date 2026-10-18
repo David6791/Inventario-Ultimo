@@ -128,7 +128,7 @@ class SesionController extends Controller
             'saldos'       => $this->cajas->resumen($sesion),
             'porConcepto'  => collect($this->cajas->porConcepto($sesion)),
             'movimientos'  => $movimientos,
-            'institucion'  => config('app.name'),
+            'institucion'  => config('app.empresa'),
         ])->setPaper('letter')->stream("caja-{$sesion->caja->codigo}-sesion-{$sesion->numero}.pdf");
     }
 }

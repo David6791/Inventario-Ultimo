@@ -10,6 +10,30 @@ import { conPermiso } from '../core/guards/permisos.guard';
  */
 export const CARGAS_ROUTES: Routes = [
   {
+    path: 'lotes/recibir',
+    title: 'Recibir lote',
+    canMatch: [conPermiso('cargas.recibir')],
+    loadComponent: () => import('./recepcion/recibir-lote.component').then((m) => m.RecibirLoteComponent),
+  },
+  {
+    path: 'lotes/:id',
+    title: 'Lote',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./recepcion/lote-ficha.component').then((m) => m.LoteFichaComponent),
+  },
+  {
+    path: 'lotes',
+    title: 'Lotes',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./recepcion/lotes.component').then((m) => m.LotesComponent),
+  },
+  {
+    path: 'bono',
+    title: 'Bono de transporte',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./recepcion/bono-tramos.component').then((m) => m.BonoTramosComponent),
+  },
+  {
     path: 'productores/importar',
     title: 'Importar productores',
     canMatch: [conPermiso('cargas.catalogos')],
@@ -71,5 +95,5 @@ export const CARGAS_ROUTES: Routes = [
     canMatch: [conPermiso('cargas.ver')],
     loadComponent: () => import('./estado/estado.component').then((m) => m.EstadoCargasComponent),
   },
-  { path: '', redirectTo: 'productores', pathMatch: 'full' },
+  { path: '', redirectTo: 'lotes', pathMatch: 'full' },
 ];

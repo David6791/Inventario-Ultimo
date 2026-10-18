@@ -1,6 +1,9 @@
 <?php
 
 use App\Modules\Cargas\Http\Controllers\BancoController;
+use App\Modules\Cargas\Http\Controllers\BonoController;
+use App\Modules\Cargas\Http\Controllers\LoteController;
+use App\Modules\Cargas\Http\Controllers\PesajeController;
 use App\Modules\Cargas\Http\Controllers\CooperativaController;
 use App\Modules\Cargas\Http\Controllers\ElementoController;
 use App\Modules\Cargas\Http\Controllers\EstadoController;
@@ -43,6 +46,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('lineas',                  [LineaProductoController::class, 'index']);
 
         Route::get('series',                  [SerieLoteController::class, 'index']);
+
+        Route::get('lotes',                    [LoteController::class, 'index']);
+        Route::get('lotes/{lote}',             [LoteController::class, 'show'])->whereNumber('lote');
+        Route::get('lotes/{lote}/boleta',      [LoteController::class, 'boleta'])->whereNumber('lote');
+        Route::get('bono-tramos',              [BonoController::class, 'tramos']);
+        Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
         Route::get('series/{serie}',          [SerieLoteController::class, 'show'])->whereNumber('serie');
     });
 
@@ -98,4 +107,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('series',                   [SerieLoteController::class, 'store']);
     Route::put('series/{serie}',            [SerieLoteController::class, 'update'])->whereNumber('serie');
     Route::put('series/{serie}/contador',   [SerieLoteController::class, 'contador'])->whereNumber('serie');
+
+    // --- Recepción (cargas.recibir / cargas.anular-lote / cargas.configurar-bono) --
+    Route::post('lotes',                        [LoteController::class, 'store']);
+    Route::post('lotes/{lote}/anular',          [LoteController::class, 'anular'])->whereNumber('lote');
+    Route::post('lotes/{lote}/pesajes',         [PesajeController::class, 'store'])->whereNumber('lote');
+    Route::post('pesajes/{pesaje}/anular',      [PesajeController::class, 'anular'])->whereNumber('pesaje');
+    Route::post('bono-tramos',                  [BonoController::class, 'publicar']);
+
+    // --- Pago de bonos por caja (caja.pagar-bono) ---------------------------
+    Route::get('bonos/pendientes',              [BonoController::class, 'pendientes'])->middleware('can:caja.pagar-bono');
+    Route::post('bonos/{bono}/pagar',           [BonoController::class, 'pagar'])->whereNumber('bono');
 });

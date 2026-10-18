@@ -1,0 +1,78 @@
+<?php
+
+namespace App\Modules\Cargas\Http\Requests;
+
+use App\Modules\Cargas\Models\Pesaje;
+use Illuminate\Validation\Rule;
+
+/**
+ * Pesaje de báscula. En un pesaje de ingreso el chofer es obligatorio: es
+ * quien cobra el bono y firma la boleta.
+ */
+class PesajeRequest extends CatalogoRequest
+{
+    protected string $permiso = 'cargas.recibir';
+
+    /** Prefijo de los campos: «pesaje.» cuando viene dentro de la recepción del lote. */
+    protected string $prefijo = '';
+
+    protected function prepareForValidation(): void
+    {
+        $this->limpiarPesaje($this->prefijo);
+    }
+
+    protected function limpiarPesaje(string $p): void
+    {
+        $datos = $p === '' ? $this->all() : (array) $this->input(rtrim($p, '.'), []);
+        if (! $datos) {
+            return;
+        }
+        // Ticket, placa y CI sin espacios; báscula y chofer con un solo espacio. Todo en mayúsculas.
+        foreach (['ticket' => '', 'placa' => '', 'chofer_ci' => '', 'bascula' => ' ', 'chofer_nombre' => ' '] as $c => $sep) {
+            if (isset($datos[$c]) && is_string($datos[$c])) {
+                $datos[$c] = mb_strtoupper(preg_replace('/\s+/u', $sep, trim($datos[$c]))) ?: null;
+            }
+        }
+        $datos['tipo'] = $datos['tipo'] ?? 'INGRESO';
+        $p === '' ? $this->merge($datos) : $this->merge([rtrim($p, '.') => $datos]);
+    }
+
+    public static function reglas(string $p = '', bool $obligatorio = true): array
+    {
+        $req = $obligatorio ? 'required' : "required_with:{$p}peso_bruto_kg";
+
+        return [
+            "{$p}tipo"          => ['nullable', Rule::in(Pesaje::TIPOS)],
+            "{$p}bascula"       => [$req, 'string', 'max:40'],
+            "{$p}ticket"        => [$req, 'string', 'max:30'],
+            "{$p}peso_bruto_kg" => [$obligatorio ? 'required' : 'nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
+            "{$p}tara_kg"       => [$req, 'numeric', 'min:0', "lt:{$p}peso_bruto_kg", 'decimal:0,2'],
+            "{$p}num_sacos"     => ['nullable', 'integer', 'min:0', 'max:100000'],
+            "{$p}placa"         => ['nullable', 'string', 'max:15'],
+            "{$p}chofer_nombre" => ["required_if:{$p}tipo,INGRESO", 'nullable', 'string', 'max:150'],
+            "{$p}chofer_ci"     => ['nullable', 'string', 'max:15'],
+        ];
+    }
+
+    public static function mensajes(string $p = ''): array
+    {
+        return [
+            "{$p}tara_kg.lt"                => 'La tara debe ser menor que el peso bruto.',
+            "{$p}chofer_nombre.required_if" => 'Indique el chofer: firma la boleta y cobra el bono.',
+            "{$p}ticket.required"           => 'Indique el número de ticket de la báscula.',
+            "{$p}ticket.required_with"      => 'Indique el número de ticket de la báscula.',
+            "{$p}bascula.required_with"     => 'Indique la báscula.',
+            "{$p}tara_kg.required_with"     => 'Indique la tara.',
+        ];
+    }
+
+    public function rules(): array
+    {
+        return self::reglas();
+    }
+
+    public function messages(): array
+    {
+        return self::mensajes();
+    }
+}

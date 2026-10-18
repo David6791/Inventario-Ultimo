@@ -30,7 +30,7 @@ class LibroCajaController extends Controller
     {
         $libro = new LibroCaja($request->validated(), $request->user());
 
-        return Pdf::loadView('pdf.caja.libro', ['libro' => $libro, 'institucion' => config('app.name')])
+        return Pdf::loadView('pdf.caja.libro', ['libro' => $libro, 'institucion' => config('app.empresa')])
             ->setPaper('letter', 'landscape')
             ->stream('libro-de-caja.pdf');
     }
@@ -40,6 +40,6 @@ class LibroCajaController extends Controller
         $libro = new LibroCaja($request->validated(), $request->user());
         $nombre = 'libro-de-caja-' . $request->input('desde') . '-a-' . $request->input('hasta') . '.xlsx';
 
-        return Excel::download(new LibroCajaExport($libro, config('app.name')), $nombre);
+        return Excel::download(new LibroCajaExport($libro, config('app.empresa')), $nombre);
     }
 }

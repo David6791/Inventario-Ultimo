@@ -63,7 +63,7 @@ class MovimientoController extends Controller
         return Pdf::loadView('pdf.caja.comprobante', [
             'mov'         => $movimiento,
             'enLetras'    => MontoEnLetras::convertir($movimiento->monto, $movimiento->moneda),
-            'institucion' => config('app.name'),
+            'institucion' => config('app.empresa'),
         ])->setPaper('letter')->stream("{$movimiento->numero}.pdf");
     }
 }

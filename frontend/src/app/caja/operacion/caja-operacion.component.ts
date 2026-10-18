@@ -15,6 +15,8 @@ import { TableModule } from 'primeng/table';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { mensajeDeError } from '../../cargas/core/errores';
+import { BonoPendiente } from '../../cargas/core/models/cargas.model';
+import { RecepcionService } from '../../cargas/core/services/recepcion.service';
 import { PermisosService } from '../../core/services/permisos.service';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import {
@@ -63,6 +65,10 @@ import { ESTILOS_CAJA } from '../core/estilos';
                       [outlined]="true" [routerLink]="['/caja/operar', c.id, 'cierre']" />
           </ng-container>
           <ng-container *ngIf="c.soy_cajero && !deOtroDia()">
+          <ng-container *appTienePermiso="'caja.pagar-bono'">
+            <p-button label="Bonos por pagar" icon="pi pi-truck" severity="secondary" [outlined]="true" (onClick)="abrirBonos()"
+                      [badge]="bonos().length ? '' + bonos().length : ''" badgeClass="p-badge-warning" />
+          </ng-container>
           <ng-container *appTienePermiso="'caja.registrar'">
             <p-button label="Ingreso" icon="pi pi-arrow-down-left" severity="success" [outlined]="true"
                       (onClick)="nuevoMovimiento('INGRESO')" />
@@ -333,6 +339,31 @@ import { ESTILOS_CAJA } from '../core/estilos';
                   [disabled]="motivo.trim().length < 10 || anulando()" (onClick)="anular()" />
       </ng-template>
     </p-dialog>
+
+    <!-- Bonos de transporte por pagar (lotes recibidos en la sede de esta caja) -->
+    <p-dialog [(visible)]="bonosVisible" header="Bonos de transporte por pagar" [modal]="true" [style]="{ width: '50rem' }"
+              [draggable]="false">
+      <p class="explicacion">Se paga en efectivo al chofer del pesaje. El comprobante sale a su nombre y el bono queda pagado en el lote.</p>
+      <p-table [value]="bonos()" dataKey="id" styleClass="p-datatable-sm tabla">
+        <ng-template pTemplate="header">
+          <tr><th style="width: 10rem">Lote</th><th>Chofer</th><th style="width: 9rem">Pesaje</th>
+              <th class="derecha" style="width: 8rem">Bono</th><th style="width: 7rem"></th></tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-b>
+          <tr>
+            <td><span class="codigo">{{ b.pesaje.lote.codigo }}</span><div class="secundario">{{ b.pesaje.lote.productor?.nombre ?? 'Producción propia' }}</div></td>
+            <td>{{ b.beneficiario_nombre }}<div class="secundario">{{ b.beneficiario_ci ? 'CI ' + b.beneficiario_ci : 'Sin CI' }}</div></td>
+            <td><span class="codigo">{{ b.pesaje.ticket }}</span><div class="secundario">{{ b.pesaje.placa ?? 'Sin placa' }} · {{ b.pesaje.peso_neto_kg | dinero }} kg</div></td>
+            <td class="derecha monto">{{ b.monto | dinero: b.moneda }}</td>
+            <td><p-button label="Pagar" size="small" icon="pi pi-check" [loading]="pagando() === b.id" [disabled]="pagando() !== null"
+                          (onClick)="pagarBono(b)" /></td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="5"><div class="vacio"><i class="pi pi-check-circle"></i><div class="titulo-vacio">No hay bonos por pagar en esta sede</div></div></td></tr>
+        </ng-template>
+      </p-table>
+    </p-dialog>
   `,
   styles: [...ESTILOS_CAJA, `
     .volver { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; margin-bottom: 0.6rem;
@@ -386,6 +417,11 @@ export class CajaOperacionComponent implements OnInit {
   private readonly permisos = inject(PermisosService);
   private readonly fb = inject(FormBuilder);
   private readonly toast = inject(MessageService);
+  private readonly recepcion = inject(RecepcionService);
+
+  readonly bonos = signal<BonoPendiente[]>([]);
+  readonly pagando = signal<number | null>(null);
+  bonosVisible = false;
 
   readonly caja = signal<CajaOperacion | null>(null);
   readonly opciones = signal<OpcionesCaja | null>(null);
@@ -479,12 +515,42 @@ export class CajaOperacionComponent implements OnInit {
     this.servicio.ver(Number(this.id())).subscribe({
       next: (c) => {
         this.caja.set(c);
+        this.cargarBonos();
         this.saldoInicial = {};
         for (const m of (c.maneja_usd ? ['BOB', 'USD'] : ['BOB']) as Moneda[]) {
           if (c.saldos_arranque[m] === null || c.saldos_arranque[m] === undefined) this.saldoInicial[m] = null;
         }
       },
       error: (e) => this.toast.add({ severity: 'error', summary: 'No se pudo cargar la caja', detail: mensajeDeError(e), life: 10000 }),
+    });
+  }
+
+  cargarBonos(): void {
+    const c = this.caja();
+    if (!c?.sesion_abierta || !c.soy_cajero || !this.permisos.can('caja.pagar-bono')) { this.bonos.set([]); return; }
+    this.recepcion.bonosPendientes(c.id).subscribe({ next: (b) => this.bonos.set(b), error: () => this.bonos.set([]) });
+  }
+
+  abrirBonos(): void {
+    this.cargarBonos();
+    this.bonosVisible = true;
+  }
+
+  pagarBono(b: BonoPendiente): void {
+    const c = this.caja();
+    if (!c) return;
+    this.pagando.set(b.id);
+    this.recepcion.pagarBono(b.id, c.id).subscribe({
+      next: (r) => {
+        this.pagando.set(null);
+        this.ultimo.set(r.data as unknown as Movimiento);
+        this.toast.add({ severity: 'success', summary: r.mensaje, detail: 'Imprima el comprobante para que lo firme el chofer.', life: 8000 });
+        this.cargar();
+      },
+      error: (e) => {
+        this.pagando.set(null);
+        this.toast.add({ severity: 'error', summary: 'No se pagó el bono', detail: mensajeDeError(e), life: 9000 });
+      },
     });
   }
 

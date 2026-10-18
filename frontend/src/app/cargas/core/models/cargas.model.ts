@@ -28,6 +28,9 @@ export interface Opciones {
   origenes: Opcion[];
   reinicios: Opcion[];
   marcadores: Opcion[];
+  estados_lote: Opcion[];
+  almacenes: { id: number; codigo: string; nombre: string }[];
+  almacen_predeterminado: number | null;
 }
 
 export type TipoProductor = 'COOPERATIVISTA' | 'PARTICULAR' | 'EMPRESA' | 'INGENIO';
@@ -198,4 +201,127 @@ export interface ResultadoProductores {
   actualizados: number;
   cooperativas_creadas: number;
   mensaje: string;
+}
+
+// ------------------------------------------------------------ Recepción (sprint 4)
+
+export type EstadoLote = 'RECIBIDO' | 'MUESTREADO' | 'ANALIZADO' | 'LIQUIDADO' | 'ANULADO';
+export type EstadoBono = 'PENDIENTE' | 'PAGADO' | 'ANULADO';
+
+export interface Usuario { id: number; name: string; }
+
+export interface Bono {
+  id: number;
+  pesaje_id: number;
+  tramo_id: number;
+  beneficiario_nombre: string;
+  beneficiario_ci: string | null;
+  monto: string;
+  moneda: 'BOB' | 'USD';
+  estado: EstadoBono;
+  movimiento_caja_id: number | null;
+  movimiento?: { id: number; numero: string; caja_id: number; fecha: string } | null;
+  motivo_anulacion: string | null;
+}
+
+export interface Pesaje {
+  id: number;
+  lote_id: number;
+  tipo: 'INGRESO' | 'CONTROL';
+  bascula: string;
+  ticket: string;
+  fecha: string;
+  peso_bruto_kg: string;
+  tara_kg: string;
+  peso_neto_kg: string;
+  num_sacos: number | null;
+  placa: string | null;
+  chofer_nombre: string | null;
+  chofer_ci: string | null;
+  anulado: boolean;
+  motivo_anulacion: string | null;
+  registrado_por: Usuario | number;
+  bono?: Bono | null;
+}
+
+export interface ResumenLote {
+  num_pesajes: number;
+  num_sacos: number | null;
+  peso_neto_humedo_kg: string;
+  bonos_pendientes: number;
+  bonos_por_pagar: string;
+  bonos_pagados: string;
+}
+
+export interface Lote extends ResumenLote {
+  id: number;
+  codigo: string;
+  serie_id: number;
+  serie?: { id: number; prefijo: string; nombre: string };
+  linea?: { id: number; codigo: string; nombre: string; forma?: string };
+  origen: 'COMPRA' | 'PROPIA';
+  almacen_id: number;
+  almacen?: { id: number; nombre: string };
+  fecha_recepcion: string;
+  productor_id: number | null;
+  productor?: { id: number; nombre: string; ci: string | null; nit: string | null; nim?: string | null; tipo?: string } | null;
+  cooperativa?: { id: number; nombre: string } | null;
+  mina?: { id: number; nombre: string; propia?: boolean } | null;
+  bocamina?: { id: number; codigo: string; nombre: string | null } | null;
+  municipio?: { id: number; nombre: string } | null;
+  guia_transporte: string | null;
+  estado: EstadoLote;
+  observaciones: string | null;
+  registrado_por: Usuario | number;
+  anulado_por: Usuario | number | null;
+  anulado_en: string | null;
+  motivo_anulacion: string | null;
+  pesajes?: Pesaje[];
+  eventos?: { id: number; estado_anterior: string | null; estado_nuevo: string; ocurrido_en: string; detalle: string | null; usuario?: Usuario }[];
+}
+
+export interface DatosPesaje {
+  tipo?: 'INGRESO' | 'CONTROL';
+  bascula: string;
+  ticket: string;
+  peso_bruto_kg: number | null;
+  tara_kg: number | null;
+  num_sacos: number | null;
+  placa: string | null;
+  chofer_nombre: string | null;
+  chofer_ci: string | null;
+}
+
+export interface DatosRecepcion {
+  serie_id: number;
+  almacen_id: number;
+  productor_id: number | null;
+  mina_id: number | null;
+  bocamina_id: number | null;
+  guia_transporte: string | null;
+  observaciones: string | null;
+  pesaje: DatosPesaje | null;
+}
+
+export interface Tramo {
+  id?: number;
+  tipo_vehiculo: string;
+  peso_desde_kg: string | number;
+  peso_hasta_kg: string | number | null;
+  monto: string | number;
+  moneda?: string;
+}
+
+export interface TablaTramos {
+  vigente_desde: string;
+  vigente_hasta: string | null;
+  estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR';
+  tramos: Tramo[];
+}
+
+export interface BonoCalculado { tramo_id: number; tipo_vehiculo: string; monto: string; moneda: string; }
+
+export interface BonoPendiente extends Bono {
+  pesaje: { id: number; lote_id: number; ticket: string; placa: string | null; peso_neto_kg: string; fecha: string;
+            lote: { id: number; codigo: string; productor?: { id: number; nombre: string } | null } };
 }

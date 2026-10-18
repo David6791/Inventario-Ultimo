@@ -9,7 +9,9 @@ use App\Modules\Cargas\Models\LineaProductoElemento;
 use App\Modules\Cargas\Models\Municipio;
 use App\Modules\Cargas\Models\Productor;
 use App\Modules\Cargas\Models\SerieLote;
+use App\Models\Almacen;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * Listas cerradas para los desplegables. Salen de las constantes de los
@@ -17,8 +19,9 @@ use Illuminate\Http\JsonResponse;
  */
 class OpcionesController extends Controller
 {
-    public function __invoke(): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
+        $usuario = $request->user();
         $lista = fn (array $valores) => array_map(fn ($v) => ['valor' => $v, 'etiqueta' => $this->etiqueta($v)], $valores);
         $mapa  = fn (array $pares) => array_map(fn ($v, $e) => ['valor' => $v, 'etiqueta' => $e], array_keys($pares), $pares);
 
@@ -41,6 +44,12 @@ class OpcionesController extends Controller
                 ['valor' => 'DIARIO',  'etiqueta' => 'Cada día'],
             ],
             'marcadores' => $mapa(SerieLote::MARCADORES),
+            'estados_lote' => $lista(\App\Modules\Cargas\Models\Lote::ESTADOS),
+            // Sedes donde el usuario puede recibir (la predeterminada primero).
+            'almacenes' => Almacen::query()->where('activo', true)
+                ->when(! $usuario->can('cargas.ver-todos-almacenes'), fn ($q) => $q->whereIn('id', $usuario->almacenesIds()))
+                ->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
+            'almacen_predeterminado' => $usuario->almacenPredeterminado()?->id,
         ]]);
     }
 
