@@ -11,5 +11,14 @@ export function mensajeDeError(e: unknown, porDefecto = 'Revise los datos.'): st
   const error = (e as HttpErrorResponse)?.error;
   const campos = error?.errors as Record<string, string[]> | undefined;
   const primero = campos ? Object.values(campos)[0]?.[0] : undefined;
-  return primero ?? error?.message ?? error?.mensaje ?? porDefecto;
+  const estado = (e as HttpErrorResponse)?.status;
+  // Sin mensaje útil del servidor, al menos decir qué pasó.
+  const porEstado: Record<number, string> = {
+    0: 'El servidor no responde. Revise que el backend esté levantado.',
+    403: 'Su usuario no tiene permiso para esto. Pida un rol de cargas (por ejemplo «Jefe de Compras de Mineral»).',
+    404: 'El servidor no conoce esta ruta: el backend no tiene la última versión del módulo de cargas.',
+    500: 'Error interno del servidor. Revise storage/logs/laravel.log.',
+  };
+  if (estado === 403 || estado === 404 || estado === 0) return porEstado[estado];
+  return primero ?? error?.message ?? error?.mensaje ?? porEstado[estado] ?? porDefecto;
 }

@@ -173,7 +173,10 @@ export class CooperativasComponent implements OnInit {
     this.cargando.set(true);
     this.servicio.listarCooperativas().subscribe({
       next: (c) => { this.cooperativas.set(c); this.cargando.set(false); },
-      error: () => this.cargando.set(false),
+      error: (e) => {
+        this.cargando.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se pudo cargar la lista', detail: mensajeDeError(e), life: 10000 });
+      },
     });
   }
 
