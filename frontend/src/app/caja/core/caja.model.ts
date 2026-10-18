@@ -17,6 +17,7 @@ export interface OpcionesCaja {
   tipos: Opcion<TipoMovimiento>[];
   reinicios: Opcion<Reinicio>[];
   marcadores: { marcador: string; descripcion: string }[];
+  denominaciones: Record<Moneda, number[]>;
   conceptos: { id: number; codigo: string; nombre: string; tipo: TipoMovimiento }[];
 }
 
@@ -154,4 +155,78 @@ export interface DatosMovimiento {
   persona_nombre: string | null;
   persona_ci: string | null;
   glosa: string;
+}
+
+// ------------------------------------------------------------ Cierre (sprint 3)
+
+export type EstadoSesion = 'ABIERTA' | 'CERRADA' | 'VALIDADA';
+
+export interface CorteArqueo { moneda: Moneda; denominacion: string; cantidad: number; subtotal: string; }
+
+export interface PorConcepto {
+  moneda: Moneda; tipo: TipoMovimiento; concepto_codigo: string; concepto: string;
+  movimientos: number; total: string; efectivo: string; otras_formas: string;
+}
+
+export interface SesionDetalle {
+  id: number;
+  numero: number;
+  estado: EstadoSesion;
+  caja: { id: number; codigo: string; nombre: string };
+  caja_id: number;
+  abierta_en: string;
+  cerrada_en: string | null;
+  validada_en: string | null;
+  abierta_por: UsuarioCorto | number;
+  cerrada_por: UsuarioCorto | number | null;
+  validada_por: UsuarioCorto | number | null;
+  observaciones: string | null;
+  saldos: SaldoSesion[];
+  arqueo: CorteArqueo[];
+  por_concepto: PorConcepto[];
+  denominaciones: Record<Moneda, number[]>;
+  movimientos: Movimiento[];
+}
+
+export interface SesionFila {
+  id: number;
+  numero: number;
+  estado: EstadoSesion;
+  caja: { id: number; codigo: string; nombre: string };
+  abierta_en: string;
+  cerrada_en: string | null;
+  validada_en: string | null;
+  abierta_por: UsuarioCorto | number;
+  cerrada_por: UsuarioCorto | number | null;
+  validada_por: UsuarioCorto | number | null;
+  observaciones: string | null;
+  saldos: { moneda: Moneda; saldo_inicial: string; saldo_esperado: string | null; saldo_contado: string | null; diferencia: string | null }[];
+}
+
+export interface DatosCierre {
+  monedas: Partial<Record<Moneda, { arqueo?: { denominacion: number; cantidad: number }[]; contado?: number | null }>>;
+  observaciones: string | null;
+}
+
+export interface FiltrosLibro {
+  desde: string;
+  hasta: string;
+  caja_id?: number | null;
+  concepto_id?: number | null;
+  moneda?: Moneda;
+  incluir_anulados?: boolean;
+}
+
+export interface LibroCaja {
+  titulo: string;
+  totales: {
+    moneda: Moneda; movimientos: number; ingresos_efectivo: number; egresos_efectivo: number;
+    ingresos_otras: number; egresos_otras: number; neto_efectivo: number;
+  };
+  por_concepto: { tipo: TipoMovimiento; concepto: string; movimientos: number; efectivo: number; otras: number; total: number }[];
+  movimientos: {
+    id: number; fecha: string; numero: string; caja: string; sesion: number; tipo: TipoMovimiento; concepto: string;
+    persona: string; persona_ci: string | null; forma_pago: FormaPago; banco: string | null; documento: string | null;
+    glosa: string; monto: string; estado: 'VIGENTE' | 'ANULADO';
+  }[];
 }

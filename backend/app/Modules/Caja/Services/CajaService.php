@@ -3,6 +3,7 @@
 namespace App\Modules\Caja\Services;
 
 use App\Models\User;
+use App\Modules\Caja\Models\Arqueo;
 use App\Modules\Caja\Models\Caja;
 use App\Modules\Caja\Models\Movimiento;
 use App\Modules\Caja\Models\Sesion;
@@ -172,6 +173,76 @@ class CajaService
 
             return $movimiento->refresh();
         });
+    }
+
+    // -------------------------------------------------------------- Cierre
+
+    /**
+     * Cierra la sesión con lo contado. Por cada moneda llega el arqueo por
+     * corte (opcional) o el total contado; con arqueo, lo contado es su suma.
+     * La base calcula lo esperado y, si no coincide, exige la explicación en
+     * observaciones.
+     *
+     * @param  array<string, array{arqueo?: array<array{denominacion: float, cantidad: int}>, contado?: float|string|null}>  $monedas
+     */
+    public function cerrar(Sesion $sesion, User $cajero, array $monedas, ?string $observaciones): Sesion
+    {
+        return Transaccion::como($cajero->id, function () use ($sesion, $cajero, $monedas, $observaciones) {
+            // Un cierre que falló pudo dejar arqueo: se vuelve a contar desde cero.
+            Arqueo::where('sesion_id', $sesion->id)->delete();
+
+            foreach ($sesion->saldos as $saldo) {
+                $datos = $monedas[$saldo->moneda] ?? [];
+                $cortes = collect($datos['arqueo'] ?? [])->filter(fn ($c) => (int) ($c['cantidad'] ?? 0) > 0);
+
+                foreach ($cortes as $corte) {
+                    Arqueo::create([
+                        'sesion_id'    => $sesion->id,
+                        'moneda'       => $saldo->moneda,
+                        'denominacion' => $corte['denominacion'],
+                        'cantidad'     => (int) $corte['cantidad'],
+                    ]);
+                }
+
+                $contado = $cortes->isNotEmpty()
+                    ? round($cortes->sum(fn ($c) => round($c['denominacion'] * $c['cantidad'], 2)), 2)
+                    : ($datos['contado'] ?? null);
+
+                $saldo->forceFill(['saldo_contado' => $contado])->save();
+            }
+
+            $sesion->forceFill([
+                'estado'        => Sesion::CERRADA,
+                'cerrada_por'   => $cajero->id,
+                'cerrada_en'    => now(),
+                'observaciones' => $observaciones,
+            ])->save();
+
+            return $sesion->refresh();
+        });
+    }
+
+    /** Un supervisor (otra persona) revisa y valida el cierre. */
+    public function validar(Sesion $sesion, User $supervisor): Sesion
+    {
+        return Transaccion::como($supervisor->id, function () use ($sesion, $supervisor) {
+            $sesion->forceFill([
+                'estado'       => Sesion::VALIDADA,
+                'validada_por' => $supervisor->id,
+                'validada_en'  => now(),
+            ])->save();
+
+            return $sesion->refresh();
+        });
+    }
+
+    /** Totales por concepto (caja.v_sesion_conceptos) para el reporte. */
+    public function porConcepto(Sesion $sesion): array
+    {
+        return collect(DB::select(
+            'select * from caja.v_sesion_conceptos where sesion_id = ? order by moneda, tipo desc, total desc',
+            [$sesion->id]
+        ))->map(fn ($f) => (array) $f)->all();
     }
 
     // ------------------------------------------------------------ Lectura

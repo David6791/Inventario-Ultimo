@@ -173,6 +173,7 @@ class CajaController extends Controller
                 ['valor' => 'MENSUAL', 'etiqueta' => 'Cada mes'],
                 ['valor' => 'DIARIO',  'etiqueta' => 'Cada día'],
             ],
+            'denominaciones' => \App\Modules\Caja\Models\Sesion::DENOMINACIONES,
             'marcadores'  => collect(Caja::MARCADORES)->map(fn ($d, $m) => ['marcador' => $m, 'descripcion' => $d])->values(),
             'conceptos'   => Concepto::query()
                 ->where('origen', Concepto::MANUAL)

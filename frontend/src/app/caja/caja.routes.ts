@@ -19,6 +19,24 @@ export const CAJA_ROUTES: Routes = [
     loadComponent: () => import('./operacion/caja-operacion.component').then((m) => m.CajaOperacionComponent),
   },
   {
+    path: 'operar/:id/cierre',
+    title: 'Cerrar caja',
+    canMatch: [conPermiso('caja.cerrar')],
+    loadComponent: () => import('./operacion/cierre-caja.component').then((m) => m.CierreCajaComponent),
+  },
+  {
+    path: 'cierres',
+    title: 'Cierres de caja',
+    canMatch: [conPermiso('caja.ver')],
+    loadComponent: () => import('./reportes/cierres.component').then((m) => m.CierresCajaComponent),
+  },
+  {
+    path: 'libro',
+    title: 'Libro de caja',
+    canMatch: [conPermiso('caja.reportes')],
+    loadComponent: () => import('./reportes/libro-caja.component').then((m) => m.LibroCajaComponent),
+  },
+  {
     path: 'cajas',
     title: 'Cajas',
     canMatch: [conPermiso('caja.administrar')],

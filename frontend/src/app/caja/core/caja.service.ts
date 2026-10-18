@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import {
   Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, Pagina,
   Persona, PersonaCorta, PersonaDetalle, SaldoSesion, SesionAbierta, UsuarioCorto, VistaPreviaComprobante,
+  DatosCierre, FiltrosLibro, LibroCaja, SesionDetalle, SesionFila,
 } from './caja.model';
 
 interface Respuesta<T> { data: T; mensaje?: string; }
@@ -112,5 +113,43 @@ export class CajaService {
 
   comprobante(movimientoId: number): Observable<Blob> {
     return this.http.get(`${this.base}/movimientos/${movimientoId}/comprobante`, { responseType: 'blob' });
+  }
+
+  // ------------------------------------------------------------ Cierre
+  sesion(id: number): Observable<SesionDetalle> {
+    return this.http.get<Respuesta<SesionDetalle>>(`${this.base}/sesiones/${id}`).pipe(map((r) => r.data));
+  }
+
+  cerrar(sesionId: number, datos: DatosCierre): Observable<Respuesta<SesionDetalle>> {
+    return this.http.post<Respuesta<SesionDetalle>>(`${this.base}/sesiones/${sesionId}/cerrar`, datos);
+  }
+
+  validar(sesionId: number): Observable<Respuesta<SesionFila>> {
+    return this.http.post<Respuesta<SesionFila>>(`${this.base}/sesiones/${sesionId}/validar`, {});
+  }
+
+  sesiones(filtros: Record<string, string | number>, pagina = 1): Observable<Pagina<SesionFila>> {
+    return this.http.get<Pagina<SesionFila>>(`${this.base}/sesiones`, { params: { ...filtros, page: pagina } });
+  }
+
+  reporteSesion(sesionId: number): Observable<Blob> {
+    return this.http.get(`${this.base}/sesiones/${sesionId}/reporte`, { responseType: 'blob' });
+  }
+
+  // ------------------------------------------------------- Libro de caja
+  libro(filtros: FiltrosLibro): Observable<LibroCaja> {
+    return this.http.get<Respuesta<LibroCaja>>(`${this.base}/libro`, { params: this.parametros(filtros) }).pipe(map((r) => r.data));
+  }
+
+  libroArchivo(filtros: FiltrosLibro, formato: 'pdf' | 'excel'): Observable<Blob> {
+    return this.http.get(`${this.base}/libro/${formato}`, { params: this.parametros(filtros), responseType: 'blob' });
+  }
+
+  private parametros(f: FiltrosLibro): Record<string, string> {
+    const p: Record<string, string> = { desde: f.desde, hasta: f.hasta, moneda: f.moneda ?? 'BOB' };
+    if (f.caja_id) p['caja_id'] = String(f.caja_id);
+    if (f.concepto_id) p['concepto_id'] = String(f.concepto_id);
+    if (f.incluir_anulados) p['incluir_anulados'] = '1';
+    return p;
   }
 }

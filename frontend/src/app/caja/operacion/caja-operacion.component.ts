@@ -21,6 +21,7 @@ import {
   CajaOperacion, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, PersonaCorta, SaldoSesion, TipoMovimiento, UsuarioCorto,
 } from '../core/caja.model';
 import { CajaService } from '../core/caja.service';
+import { abrirPdf } from '../core/archivos';
 import { DineroPipe, formatoDinero, simbolo } from '../core/dinero';
 import { ESTILOS_CAJA } from '../core/estilos';
 
@@ -55,15 +56,28 @@ import { ESTILOS_CAJA } from '../core/estilos';
           </p>
           <p class="subtitulo" *ngIf="!c.sesion_abierta">Caja cerrada · {{ c.almacen?.nombre }}</p>
         </div>
-        <div class="acciones" *ngIf="c.sesion_abierta && c.soy_cajero">
+        <div class="acciones" *ngIf="c.sesion_abierta as s">
+          <p-button label="Reporte del día" icon="pi pi-file-pdf" [text]="true" (onClick)="reporte(s.id)" />
+          <ng-container *ngIf="c.soy_cajero">
+            <p-button *appTienePermiso="'caja.cerrar'" label="Cerrar caja" icon="pi pi-lock" severity="secondary"
+                      [outlined]="true" [routerLink]="['/caja/operar', c.id, 'cierre']" />
+          </ng-container>
+          <ng-container *ngIf="c.soy_cajero && !deOtroDia()">
           <ng-container *appTienePermiso="'caja.registrar'">
             <p-button label="Ingreso" icon="pi pi-arrow-down-left" severity="success" [outlined]="true"
                       (onClick)="nuevoMovimiento('INGRESO')" />
             <p-button label="Egreso" icon="pi pi-arrow-up-right" severity="danger" [outlined]="true"
                       (onClick)="nuevoMovimiento('EGRESO')" />
           </ng-container>
+          </ng-container>
         </div>
       </header>
+
+      <div class="nota nota-aviso nota-encabezado" *ngIf="deOtroDia()">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>Esta sesión se abrió el {{ c.sesion_abierta?.abierta_en | date: 'dd/MM/yyyy' }} y la caja se cierra a diario:
+              ciérrela con su arqueo y abra la de hoy para seguir registrando.</span>
+      </div>
 
       <div class="nota nota-neutra nota-encabezado" *ngIf="!c.soy_cajero">
         <i class="pi pi-eye"></i>
@@ -77,7 +91,9 @@ import { ESTILOS_CAJA } from '../core/estilos';
         <div class="contenido">
           <h3>Abrir la caja</h3>
           <p *ngIf="c.ultima_cerrada as u" class="secundario">
-            Último cierre: sesión {{ u.numero }}, {{ u.cerrada_en | date: 'dd/MM/yyyy HH:mm' }} por {{ u.cerrada_por }}.
+            Último cierre: sesión {{ u.numero }}, {{ u.cerrada_en | date: 'dd/MM/yyyy HH:mm' }} por {{ u.cerrada_por }}
+            ({{ u.estado === 'VALIDADA' ? 'validado' : 'pendiente de validación' }}) ·
+            <a href="" (click)="$event.preventDefault(); reporte(u.id)">ver reporte</a>.
           </p>
 
           <div class="monedas">
@@ -529,6 +545,22 @@ export class CajaOperacionComponent implements OnInit {
       this.opciones.set(o);
       const conceptos = this.conceptosDelTipo();
       if (conceptos.length === 1) this.form.patchValue({ concepto_id: conceptos[0].id });
+    });
+  }
+
+  /** La sesión abierta es de un día anterior: hay que cerrarla antes de registrar. */
+  deOtroDia(): boolean {
+    const abierta = this.caja()?.sesion_abierta?.abierta_en;
+    if (!abierta) return false;
+    const d = new Date(abierta);
+    const hoy = new Date();
+    return d.getFullYear() !== hoy.getFullYear() || d.getMonth() !== hoy.getMonth() || d.getDate() !== hoy.getDate();
+  }
+
+  reporte(sesionId: number): void {
+    this.servicio.reporteSesion(sesionId).subscribe({
+      next: abrirPdf,
+      error: () => this.toast.add({ severity: 'error', summary: 'No se pudo generar el reporte' }),
     });
   }
 

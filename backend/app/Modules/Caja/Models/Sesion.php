@@ -28,6 +28,12 @@ class Sesion extends CajaModel
     public const CERRADA = 'CERRADA';
     public const VALIDADA = 'VALIDADA';
 
+    /** Cortes para el arqueo (billetes y monedas en circulación). */
+    public const DENOMINACIONES = [
+        'BOB' => [200, 100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1],
+        'USD' => [100, 50, 20, 10, 5, 2, 1],
+    ];
+
     public function caja(): BelongsTo
     {
         return $this->belongsTo(Caja::class, 'caja_id');
@@ -46,6 +52,16 @@ class Sesion extends CajaModel
     public function abiertaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'abierta_por');
+    }
+
+    public function arqueo(): HasMany
+    {
+        return $this->hasMany(Arqueo::class, 'sesion_id')->orderBy('moneda')->orderByDesc('denominacion');
+    }
+
+    public function validadaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'validada_por');
     }
 
     public function cerradaPor(): BelongsTo

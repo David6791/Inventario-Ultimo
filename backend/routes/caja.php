@@ -2,6 +2,7 @@
 
 use App\Modules\Caja\Http\Controllers\CajaController;
 use App\Modules\Caja\Http\Controllers\ConceptoController;
+use App\Modules\Caja\Http\Controllers\LibroCajaController;
 use App\Modules\Caja\Http\Controllers\MovimientoController;
 use App\Modules\Caja\Http\Controllers\PersonaController;
 use App\Modules\Caja\Http\Controllers\SesionController;
@@ -29,10 +30,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('cajas',                   [CajaController::class, 'index']);
         Route::get('cajas/{caja}',            [CajaController::class, 'show'])->whereNumber('caja');
         Route::get('cajas/{caja}/sesiones',   [SesionController::class, 'index'])->whereNumber('caja');
+        Route::get('sesiones',                [SesionController::class, 'lista']);
         Route::get('sesiones/{sesion}',       [SesionController::class, 'show'])->whereNumber('sesion');
+        Route::get('sesiones/{sesion}/reporte', [SesionController::class, 'reporte'])->whereNumber('sesion');
         Route::get('movimientos/{movimiento}/comprobante', [MovimientoController::class, 'comprobante'])
             ->whereNumber('movimiento');
     });
+
+    // --- Reportes (caja.reportes, en LibroCajaRequest) ----------------------
+    Route::get('libro',        [LibroCajaController::class, 'index']);
+    Route::get('libro/pdf',    [LibroCajaController::class, 'pdf']);
+    Route::get('libro/excel',  [LibroCajaController::class, 'excel']);
 
     // --- Administración (caja.administrar, en cada FormRequest) -------------
     Route::post('cajas/vista-previa',     [CajaController::class, 'vistaPrevia']);
@@ -47,5 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- Operación ------------------------------------------------------------
     Route::post('cajas/{caja}/sesiones',             [SesionController::class, 'store'])->whereNumber('caja');
     Route::post('sesiones/{sesion}/movimientos',     [MovimientoController::class, 'store'])->whereNumber('sesion');
+    Route::post('sesiones/{sesion}/cerrar',          [SesionController::class, 'cerrar'])->whereNumber('sesion');
+    Route::post('sesiones/{sesion}/validar',         [SesionController::class, 'validar'])->whereNumber('sesion');
     Route::post('movimientos/{movimiento}/anular',   [MovimientoController::class, 'anular'])->whereNumber('movimiento');
 });
