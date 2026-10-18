@@ -276,7 +276,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </ng-template>
     </p-dialog>
   `,
-  styles: [ESTILOS_CAJA, `
+  styles: [...ESTILOS_CAJA, `
     .volver { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; margin-bottom: 0.6rem;
               color: var(--text-color-secondary, #6b7280); text-decoration: none; }
     .volver:hover { color: var(--primary-color, #2563eb); }

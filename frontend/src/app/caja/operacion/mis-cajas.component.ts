@@ -66,7 +66,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </div>
     </div>
   `,
-  styles: [ESTILOS_CAJA, `
+  styles: [...ESTILOS_CAJA, `
     .grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 1rem; }
     .tarjeta {
       position: relative; display: flex; flex-direction: column; gap: 0.2rem; padding: 1rem 1.1rem;

@@ -167,7 +167,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </ng-template>
     </p-dialog>
   `,
-  styles: [ESTILOS_CAJA, `
+  styles: [...ESTILOS_CAJA, `
     .proximo { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-weight: 650; font-size: 0.9rem; }
     .alinear-abajo { align-self: end; padding-bottom: 0.5rem; }
     .marcadores { display: flex; flex-wrap: wrap; gap: 0.35rem; }

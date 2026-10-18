@@ -124,7 +124,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </ng-template>
     </p-dialog>
   `,
-  styles: [ESTILOS_CAJA, `
+  styles: [...ESTILOS_CAJA, `
     .candado { color: var(--text-color-secondary, #9ca3af); font-size: 0.85rem; }
   `],
 })
