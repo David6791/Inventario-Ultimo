@@ -28,6 +28,12 @@ export const CARGAS_ROUTES: Routes = [
     loadComponent: () => import('./recepcion/lotes.component').then((m) => m.LotesComponent),
   },
   {
+    path: 'laboratorio',
+    title: 'Laboratorio',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./laboratorio/laboratorio.component').then((m) => m.LaboratorioComponent),
+  },
+  {
     path: 'bono',
     title: 'Bono de transporte',
     canMatch: [conPermiso('cargas.ver')],

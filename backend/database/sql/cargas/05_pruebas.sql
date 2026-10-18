@@ -478,6 +478,65 @@ BEGIN
 END $$;
 
 /* ---------------------------------------------------------------------
+   9b. Laboratorio: reglas de 14_laboratorio.sql
+   --------------------------------------------------------------------- */
+DO $$ BEGIN RAISE NOTICE '--- 9b. Laboratorio: reabrir, criterios, dirimencia ---'; END $$;
+DO $$
+DECLARE
+    v_lote bigint := (SELECT id FROM cargas.lote WHERE codigo = 'CZP-202610-0001');
+    v_mue  bigint := (SELECT id FROM cargas.muestra WHERE codigo = 'CZP-202610-0001-M1');
+    e_ag bigint := (SELECT id FROM cargas.elemento WHERE codigo = 'AG');
+    e_zn bigint := (SELECT id FROM cargas.elemento WHERE codigo = 'ZN');
+    e_sn bigint := (SELECT id FROM cargas.elemento WHERE codigo = 'SN');
+    lab_p bigint := (SELECT id FROM cargas.laboratorio WHERE nombre = 'Laboratorio propio');
+    a_emp bigint := (SELECT id FROM cargas.analisis WHERE numero_certificado = 'E-100');
+    a_dir bigint := (SELECT id FROM cargas.analisis WHERE numero_certificado = 'D-300');
+BEGIN
+    PERFORM pg_temp.espera_error(format(
+        'INSERT INTO cargas.analisis (muestra_id, laboratorio_id, tipo, numero_certificado, registrado_por) VALUES (%s, %s, ''EMPRESA'', ''E-900'', 1)', v_mue, lab_p),
+        'con el lote MUESTREADO');
+
+    PERFORM set_config('cargas.detalle_evento', 'Corrección de la ley de zinc', true);
+    UPDATE cargas.lote SET estado = 'MUESTREADO' WHERE id = v_lote;
+    PERFORM set_config('cargas.detalle_evento', '', true);
+    PERFORM pg_temp.afirma((SELECT detalle FROM cargas.lote_evento WHERE lote_id = v_lote ORDER BY id DESC LIMIT 1)
+                           = 'Corrección de la ley de zinc', 'reabrir: el motivo queda en la bitácora');
+
+    PERFORM pg_temp.espera_error(format(
+        'UPDATE cargas.lote_ley SET criterio = ''PROMEDIO'' WHERE lote_id = %s AND elemento_id = %s', v_lote, e_ag),
+        'excede el split limit');
+    UPDATE cargas.lote_ley SET criterio = 'EMPRESA', valor = 999 WHERE lote_id = v_lote AND elemento_id = e_zn;
+    PERFORM pg_temp.afirma((SELECT valor FROM cargas.lote_ley WHERE lote_id = v_lote AND elemento_id = e_zn) = 18.50,
+                           'criterio EMPRESA: la base pone el valor de la empresa (18,50), no el digitado');
+    PERFORM pg_temp.afirma((SELECT count(*) FROM cargas.lote_ley_historial WHERE lote_id = v_lote AND accion = 'CAMBIADA') = 1,
+                           'la ley anterior de zinc queda en el historial');
+
+    PERFORM pg_temp.espera_error(format(
+        'INSERT INTO cargas.analisis (muestra_id, laboratorio_id, tipo, numero_certificado, registrado_por) VALUES (%s, %s, ''DIRIMENTE'', ''D-301'', 1)', v_mue, lab_p),
+        'distinto al de la empresa');
+    PERFORM pg_temp.espera_error(format(
+        'INSERT INTO cargas.analisis_resultado (analisis_id, elemento_id, valor) VALUES (%s, %s, 1)', a_emp, e_sn),
+        'no es de la línea');
+    PERFORM pg_temp.espera_error(format(
+        'UPDATE cargas.analisis_resultado SET valor = 11 WHERE analisis_id = %s AND elemento_id = %s', a_emp, e_ag),
+        'no se corrigen');
+
+    UPDATE cargas.analisis SET anulado = true, motivo_anulacion = 'Certificado con error de transcripción' WHERE id = a_dir;
+    PERFORM pg_temp.afirma(NOT EXISTS (SELECT 1 FROM cargas.lote_ley WHERE lote_id = v_lote AND elemento_id = e_ag),
+                           'anular el dirimente quita la ley de plata que dependía de él');
+    PERFORM pg_temp.espera_error(
+        $q$UPDATE cargas.lote SET estado = 'ANALIZADO' WHERE codigo = 'CZP-202610-0001'$q$, 'Falta la ley final de: AG');
+    PERFORM pg_temp.espera_error(format(
+        'INSERT INTO cargas.lote_ley (lote_id, elemento_id, valor, criterio, determinado_por) VALUES (%s, %s, 10.6, ''ACUERDO'', 1)', v_lote, e_ag),
+        'se explica en la observación');
+    INSERT INTO cargas.lote_ley (lote_id, elemento_id, valor, criterio, observacion, determinado_por)
+    VALUES (v_lote, e_ag, 10.60, 'ACUERDO', 'Acuerdo con el productor por acta 12', 1);
+
+    UPDATE cargas.lote SET estado = 'ANALIZADO' WHERE id = v_lote;
+    PERFORM pg_temp.afirma(true, 'vuelve a ANALIZADO con la plata por acuerdo');
+END $$;
+
+/* ---------------------------------------------------------------------
    10. Caja: apertura y movimientos
    --------------------------------------------------------------------- */
 DO $$ BEGIN RAISE NOTICE '--- 10. Caja: apertura y movimientos ---'; END $$;

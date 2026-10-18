@@ -19,13 +19,14 @@ import { ESTILOS_CARGAS } from '../core/estilos';
 import { DatosPesaje, Lote, Pesaje } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
+import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.component';
 
 /** Ficha del lote: datos de recepción, pesajes con su bono, bitácora, boleta y anulación. */
 @Component({
   selector: 'app-lote-ficha',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, InputTextareaModule,
-            SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent],
+            SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent, LoteLaboratorioComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -139,6 +140,8 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
             <span>Agregue el pesaje de ingreso cuando el camión pase por la báscula.</span></div></td></tr>
         </ng-template>
       </p-table>
+
+      <app-lote-laboratorio *ngIf="l.estado !== 'ANULADO' || l.num_pesajes" [lote]="l" (cambio)="cargar()" />
 
       <h3 class="titulo-seccion">Bitácora</h3>
       <ul class="bitacora">

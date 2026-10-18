@@ -59,6 +59,21 @@ class Lote extends CargasModel
         return $this->hasMany(Pesaje::class, 'lote_id')->orderBy('fecha')->orderBy('id');
     }
 
+    public function muestras(): HasMany
+    {
+        return $this->hasMany(Muestra::class, 'lote_id')->orderBy('id');
+    }
+
+    public function leyes(): HasMany
+    {
+        return $this->hasMany(LoteLey::class, 'lote_id');
+    }
+
+    public function lecturasEstimadas(): HasMany
+    {
+        return $this->hasMany(LecturaEstimada::class, 'lote_id');
+    }
+
     public function eventos(): HasMany
     {
         return $this->hasMany(LoteEvento::class, 'lote_id')->orderBy('ocurrido_en')->orderBy('id');

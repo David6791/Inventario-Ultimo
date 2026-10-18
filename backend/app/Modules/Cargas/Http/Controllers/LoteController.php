@@ -130,7 +130,8 @@ class LoteController extends Controller
         }
 
         $pesos = collect(DB::table('cargas.v_lote_resumen')->whereIn('lote_id', $ids)
-            ->get(['lote_id', 'num_pesajes', 'num_sacos', 'peso_neto_humedo_kg']))->keyBy('lote_id');
+            ->get(['lote_id', 'num_pesajes', 'num_sacos', 'peso_neto_humedo_kg', 'humedad_pct', 'peso_neto_seco_kg',
+                    'ley_zn', 'ley_pb', 'ley_ag']))->keyBy('lote_id');
 
         $cliente = collect(DB::table('cargas.v_lote_peso_cliente')->whereIn('lote_id', $ids)
             ->get(['lote_id', 'peso_cliente_kg', 'diferencia_kg', 'pesajes_con_peso_cliente']))->keyBy('lote_id');
@@ -150,6 +151,12 @@ class LoteController extends Controller
             'num_pesajes'         => (int) ($pesos[$id]->num_pesajes ?? 0),
             'num_sacos'           => $pesos[$id]->num_sacos ?? null,
             'peso_neto_humedo_kg' => $pesos[$id]->peso_neto_humedo_kg ?? '0',
+            // Ley final (con el lote ANALIZADO o en análisis): humedad, peso seco y leyes principales.
+            'humedad_pct'         => $pesos[$id]->humedad_pct ?? null,
+            'peso_neto_seco_kg'   => $pesos[$id]->peso_neto_seco_kg ?? null,
+            'ley_zn'              => $pesos[$id]->ley_zn ?? null,
+            'ley_pb'              => $pesos[$id]->ley_pb ?? null,
+            'ley_ag'              => $pesos[$id]->ley_ag ?? null,
             // Peso que declara el cliente (donde no declaró, cuenta el de la empresa) y la diferencia.
             'peso_cliente_kg'     => $cliente[$id]->peso_cliente_kg ?? '0',
             'diferencia_cliente_kg' => $cliente[$id]->diferencia_kg ?? '0',

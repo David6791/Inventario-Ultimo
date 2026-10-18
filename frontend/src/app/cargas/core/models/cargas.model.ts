@@ -254,6 +254,11 @@ export interface ResumenLote {
   peso_cliente_kg: string;
   diferencia_cliente_kg: string;
   pesajes_con_peso_cliente: number;
+  humedad_pct?: string | null;
+  peso_neto_seco_kg?: string | null;
+  ley_zn?: string | null;
+  ley_pb?: string | null;
+  ley_ag?: string | null;
   bonos_pendientes: number;
   bonos_por_pagar: string;
   bonos_pagados: string;
@@ -335,4 +340,75 @@ export interface BonoCalculado { tramo_id: number; tipo_vehiculo: string; monto:
 export interface BonoPendiente extends Bono {
   pesaje: { id: number; lote_id: number; ticket: string; placa: string | null; peso_neto_kg: string; fecha: string;
             lote: { id: number; codigo: string; productor?: { id: number; nombre: string } | null } };
+}
+
+// ---------------------------------------------------------- Laboratorio (sprint 5)
+
+export type TipoAnalisis = 'EMPRESA' | 'PRODUCTOR' | 'DIRIMENTE';
+export type CriterioLey = 'PROMEDIO' | 'EMPRESA' | 'DIRIMENTE' | 'ACUERDO';
+
+export interface ElementoLote {
+  id: number; codigo: string; nombre: string; unidad_ley: string;
+  rol: 'PAGABLE' | 'PENALIZABLE' | 'INFORMATIVO' | 'HUMEDAD';
+  split_limit: string | null;
+  requerido: boolean;
+}
+
+export interface Porcion { id: number; destino: 'EMPRESA' | 'PRODUCTOR' | 'TESTIGO'; precinto: string | null; entregada_a: string | null; }
+
+export interface Analisis {
+  id: number; muestra_id: number; tipo: TipoAnalisis;
+  laboratorio_id: number; laboratorio?: { id: number; nombre: string };
+  numero_certificado: string | null; fecha_emision: string | null;
+  anulado: boolean; motivo_anulacion: string | null; con_certificado: boolean;
+  registrado_por: Usuario | number; created_at: string;
+  resultados: { id: number; elemento_id: number; valor: string; elemento?: { id: number; codigo: string; unidad_ley: string } }[];
+}
+
+export interface Muestra {
+  id: number; lote_id: number; codigo: string; tipo: 'PRINCIPAL' | 'REMUESTREO'; fecha: string;
+  metodo: string | null; peso_g: string | null; observaciones: string | null;
+  registrado_por: Usuario | number; porciones: Porcion[]; analisis: Analisis[];
+}
+
+export interface Ensaye {
+  elemento_id: number; elemento: string; unidad_ley: string; muestra: string;
+  ley_empresa: string | null; ley_productor: string | null; ley_dirimente: string | null;
+  diferencia: string | null; split_limit: string | null; excede_split_limit: boolean; promedio: string | null;
+}
+
+export interface LeyFinal {
+  id: number; elemento_id: number; valor: string; criterio: CriterioLey; observacion: string | null;
+  determinado_en: string; determinado_por: Usuario | number;
+  elemento?: { id: number; codigo: string; nombre: string; unidad_ley: string };
+}
+
+export interface HistorialLey {
+  id: number; elemento: string; valor: string; criterio: CriterioLey; accion: 'CAMBIADA' | 'QUITADA';
+  cambiado_en: string; cambiado_por_nombre: string | null; observacion: string | null;
+}
+
+export interface LaboratorioLote {
+  estado: EstadoLote;
+  elementos: ElementoLote[];
+  muestras: Muestra[];
+  ensayes: Ensaye[];
+  leyes: LeyFinal[];
+  historial: HistorialLey[];
+  lecturas: { id: number; elemento_id: number; valor: string; metodo: string | null; elemento?: { codigo: string; unidad_ley: string } }[];
+  laboratorios: { id: number; nombre: string; propio: boolean }[];
+  criterio_sugerido: 'PROMEDIO' | 'EMPRESA';
+  humedad_pct: string | null;
+  peso_neto_seco_kg: string | null;
+}
+
+export interface FilaBandeja {
+  lote_id: number; codigo: string; estado: EstadoLote; fecha_recepcion: string; muestra: string | null;
+  con_empresa: boolean; con_productor: boolean; con_dirimente: boolean; requiere_dirimencia: boolean;
+  leyes_requeridas: number; leyes_fijadas: number; productor: string | null; linea: string | null; material: string | null;
+}
+
+export interface DatosMuestra {
+  metodo: string | null; peso_g: number | null; observaciones: string | null;
+  porciones: { destino: Porcion['destino']; precinto: string; entregada_a?: string | null }[];
 }

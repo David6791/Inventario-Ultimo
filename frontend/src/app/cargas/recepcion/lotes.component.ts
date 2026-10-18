@@ -60,6 +60,7 @@ import { SeriesService } from '../core/services/series.service';
           <th>Productor u origen</th>
           <th style="width: 12rem">Mina</th>
           <th style="width: 9rem" class="derecha">Neto húmedo kg</th>
+          <th style="width: 14rem">Ley final</th>
           <th style="width: 8rem" class="derecha">Bono por pagar</th>
           <th style="width: 8rem">Estado</th>
         </tr>
@@ -71,17 +72,24 @@ import { SeriesService } from '../core/services/series.service';
           <td>{{ l.productor?.nombre ?? 'Producción propia' }}<div class="secundario">{{ l.cooperativa?.nombre }}</div></td>
           <td>{{ l.mina?.nombre ?? '—' }}<div class="secundario" *ngIf="l.bocamina">Bocamina {{ l.bocamina.codigo }}</div></td>
           <td class="derecha monto">{{ kg(l.peso_neto_humedo_kg) }}<div class="secundario">{{ l.num_pesajes }} pesaje(s)</div></td>
+          <td class="leyes"><ng-container *ngIf="l.humedad_pct !== null && l.humedad_pct !== undefined; else sinLey">
+            <span *ngIf="l.ley_zn">Zn {{ ley(l.ley_zn) }}</span> <span *ngIf="l.ley_pb">Pb {{ ley(l.ley_pb) }}</span>
+            <span *ngIf="l.ley_ag">Ag {{ ley(l.ley_ag) }}</span>
+            <div class="secundario">H₂O {{ ley(l.humedad_pct) }} % · seco {{ kg(l.peso_neto_seco_kg!) }}</div></ng-container>
+            <ng-template #sinLey><span class="secundario">—</span></ng-template></td>
           <td class="derecha monto">{{ +l.bonos_por_pagar ? 'Bs ' + kg(l.bonos_por_pagar) : '—' }}</td>
           <td><span class="pastilla" [class.pastilla-acento]="l.estado === 'RECIBIDO'" [class.pastilla-aviso]="l.estado === 'ANULADO'">{{ etiqueta(l.estado) }}</span></td>
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="7"><div class="vacio"><i class="pi pi-truck"></i><div class="titulo-vacio">No hay lotes con esos filtros</div></div></td></tr>
+        <tr><td colspan="8"><div class="vacio"><i class="pi pi-truck"></i><div class="titulo-vacio">No hay lotes con esos filtros</div></div></td></tr>
       </ng-template>
     </p-table>
   `,
   styles: [ESTILOS_CARGAS, `
     .fila { cursor: pointer; }
+    .leyes { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.82rem; }
+    .leyes span { margin-right: 0.4rem; }
     .monto { font-family: ui-monospace, 'SF Mono', Menlo, monospace; white-space: nowrap; }
   `],
 })
@@ -130,5 +138,6 @@ export class LotesComponent implements OnInit {
 
   abrir(l: Lote): void { this.router.navigate(['/cargas/lotes', l.id]); }
   kg(v: string | number): string { return formatoDinero(v); }
+  ley(v: string | number): string { return Number(v).toLocaleString('es-BO', { maximumFractionDigits: 3 }); }
   etiqueta(e: string): string { return this.opciones()?.estados_lote?.find((x) => x.valor === e)?.etiqueta ?? e; }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Cargas\Http\Controllers\AnalisisController;
 use App\Modules\Cargas\Http\Controllers\BancoController;
 use App\Modules\Cargas\Http\Controllers\BonoController;
 use App\Modules\Cargas\Http\Controllers\LoteController;
@@ -57,6 +58,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('lotes/{lote}',             [LoteController::class, 'show'])->whereNumber('lote');
         Route::get('lotes/{lote}/boleta',      [LoteController::class, 'boleta'])->whereNumber('lote');
         Route::get('lotes/{lote}/rotulo',      [LoteController::class, 'rotulo'])->whereNumber('lote');
+        Route::get('lotes/{lote}/laboratorio', [AnalisisController::class, 'show'])->whereNumber('lote');
+        Route::get('laboratorio/bandeja',      [AnalisisController::class, 'bandeja']);
+        Route::get('muestras/{muestra}/etiquetas', [AnalisisController::class, 'etiquetas'])->whereNumber('muestra');
+        Route::get('analisis/{analisis}/certificado', [AnalisisController::class, 'certificado'])->whereNumber('analisis');
         Route::get('bono-tramos',              [BonoController::class, 'tramos']);
         Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
         Route::get('series/{serie}',          [SerieLoteController::class, 'show'])->whereNumber('serie');
@@ -120,6 +125,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('lotes/{lote}/anular',          [LoteController::class, 'anular'])->whereNumber('lote');
     Route::post('lotes/{lote}/pesajes',         [PesajeController::class, 'store'])->whereNumber('lote');
     Route::post('pesajes/{pesaje}/anular',      [PesajeController::class, 'anular'])->whereNumber('pesaje');
+    Route::put('lotes/{lote}/lectura-estimada', [AnalisisController::class, 'lecturaEstimada'])->whereNumber('lote');
+
+    // --- Laboratorio (permisos en cada FormRequest o en el controlador) -----
+    Route::post('lotes/{lote}/muestras',              [AnalisisController::class, 'registrarMuestra'])->whereNumber('lote');
+    Route::post('muestras/{muestra}/analisis',        [AnalisisController::class, 'registrarAnalisis'])->whereNumber('muestra');
+    Route::post('analisis/{analisis}/certificado',    [AnalisisController::class, 'adjuntarCertificado'])->whereNumber('analisis');
+    Route::post('analisis/{analisis}/anular',         [AnalisisController::class, 'anularAnalisis'])->whereNumber('analisis');
+    Route::put('lotes/{lote}/leyes/{elemento}',       [AnalisisController::class, 'fijarLey'])->whereNumber(['lote', 'elemento']);
+    Route::delete('lotes/{lote}/leyes/{elemento}',    [AnalisisController::class, 'quitarLey'])->whereNumber(['lote', 'elemento']);
+    Route::post('lotes/{lote}/cerrar-analisis',       [AnalisisController::class, 'cerrar'])->whereNumber('lote');
+    Route::post('lotes/{lote}/reabrir',               [AnalisisController::class, 'reabrir'])->whereNumber('lote');
     Route::post('bono-tramos',                  [BonoController::class, 'publicar']);
 
     // --- Pago de bonos por caja (caja.pagar-bono) ---------------------------
