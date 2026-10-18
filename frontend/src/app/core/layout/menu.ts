@@ -77,6 +77,19 @@ const ESTRUCTURA: ItemMenu[] = [
       { etiqueta: 'Cierre mensual', icono: 'pi pi-calculator',ruta: '/activos/valuacion', permiso: 'activos-valuacion.ver' },
     ],
   },
+  {
+    etiqueta: 'Manejo de cargas', icono: 'pi pi-truck', hijos: [
+      { etiqueta: 'Productores',         icono: 'pi pi-users',      ruta: '/cargas/productores',  permiso: 'cargas.ver' },
+      { etiqueta: 'Cooperativas',        icono: 'pi pi-sitemap',    ruta: '/cargas/cooperativas', permiso: 'cargas.ver' },
+      { etiqueta: 'Minas y bocaminas',   icono: 'pi pi-map',        ruta: '/cargas/minas',        permiso: 'cargas.ver' },
+      { etiqueta: 'Municipios',          icono: 'pi pi-map-marker', ruta: '/cargas/municipios',   permiso: 'cargas.ver' },
+      { etiqueta: 'Laboratorios',        icono: 'pi pi-filter',     ruta: '/cargas/laboratorios', permiso: 'cargas.ver' },
+      { etiqueta: 'Bancos',              icono: 'pi pi-building-columns', ruta: '/cargas/bancos', permiso: 'cargas.ver' },
+      { etiqueta: 'Líneas y elementos',  icono: 'pi pi-tags',       ruta: '/cargas/lineas',       permiso: 'cargas.ver' },
+      { etiqueta: 'Series de lote',      icono: 'pi pi-hashtag',    ruta: '/cargas/series',       permiso: 'cargas.ver' },
+      { etiqueta: 'Estado del módulo',   icono: 'pi pi-heart',      ruta: '/cargas/estado',       permiso: 'cargas.ver' },
+    ],
+  },
 ];
 
 export function construirMenu(permisos: PermisosService): Signal<MenuItem[]> {
