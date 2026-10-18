@@ -284,6 +284,8 @@ export interface Lote extends ResumenLote {
   anulado_en: string | null;
   motivo_anulacion: string | null;
   pesajes?: Pesaje[];
+  /** URL pública del QR del rótulo (solo en la ficha). */
+  url_verificacion?: string;
   eventos?: { id: number; estado_anterior: string | null; estado_nuevo: string; ocurrido_en: string; detalle: string | null; usuario?: Usuario }[];
 }
 

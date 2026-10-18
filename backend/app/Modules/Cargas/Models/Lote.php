@@ -25,6 +25,9 @@ class Lote extends CargasModel
     /** Elementos que trae el mineral, como en el sistema anterior. */
     public const MATERIALES = ['ZN', 'AG', 'PB', 'ZN-AG', 'PB-AG', 'ZN-PB', 'ZN-AG-PB'];
 
+    /** El código del QR solo sale en el rótulo y como url_verificacion de la ficha. */
+    protected $hidden = ['codigo_verificacion'];
+
     protected $casts = [
         'serie_id'          => 'integer',
         'linea_producto_id' => 'integer',

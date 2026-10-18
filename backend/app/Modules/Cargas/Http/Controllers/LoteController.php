@@ -8,6 +8,8 @@ use App\Modules\Cargas\Http\Requests\RecibirLoteRequest;
 use App\Modules\Cargas\Models\Lote;
 use App\Modules\Cargas\Services\RecepcionService;
 use App\Modules\Comun\Support\CodigoBarras;
+use App\Modules\Comun\Support\CodigoQr;
+use App\Modules\Cargas\Support\UrlVerificacion;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,6 +87,27 @@ class LoteController extends Controller
         ])->setPaper([0, 0, 612, 396])->stream("boleta-{$lote->codigo}.pdf");   // media carta apaisada
     }
 
+    /**
+     * Rótulo de identificación que se coloca junto a la carga: código grande,
+     * código de barras y un QR para verificar en el teléfono que los datos son
+     * los registrados.
+     */
+    public function rotulo(Request $request, Lote $lote): Response
+    {
+        abort_unless($lote->esDelAmbitoDe($request->user()), 403, 'El lote es de una sede a la que su usuario no tiene acceso.');
+        $url = UrlVerificacion::de($lote);
+
+        return Pdf::loadView('pdf.cargas.rotulo-lote', [
+            'lote'        => $lote->load(['productor:id,nombre', 'cooperativa:id,nombre', 'linea:id,nombre', 'mina:id,nombre',
+                                          'bocamina:id,codigo', 'almacen:id,nombre']),
+            'resumen'     => $this->resumen([$lote->id])[$lote->id] ?? [],
+            'barras'      => CodigoBarras::dataUri($lote->codigo, 1.6, 52),
+            'qr'          => CodigoQr::dataUri($url),
+            'url'         => $url,
+            'institucion' => config('app.empresa'),
+        ])->setPaper('letter', 'landscape')->stream("rotulo-{$lote->codigo}.pdf");
+    }
+
     private function ficha(Lote $lote): array
     {
         $lote->load([
@@ -95,7 +118,8 @@ class LoteController extends Controller
             'eventos.usuario:id,name',
         ]);
 
-        return [...$lote->toArray(), ...($this->resumen([$lote->id])[$lote->id] ?? [])];
+        return [...$lote->toArray(), ...($this->resumen([$lote->id])[$lote->id] ?? []),
+                'url_verificacion' => UrlVerificacion::de($lote)];
     }
 
     /** Pesos y bonos por lote (de cargas.v_lote_resumen y los bonos). */

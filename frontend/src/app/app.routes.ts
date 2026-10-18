@@ -12,6 +12,13 @@ export const routes: Routes = [
         .then((m) => m.ConsultaPublicaComponent),
   },
   {
+    // QR del rótulo de lote: verificación pública, sin sesión.
+    path: 'l/:codigo',
+    title: 'Verificación de lote',
+    loadComponent: () =>
+      import('./cargas/verificacion/verificar-lote.component').then((m) => m.VerificarLoteComponent),
+  },
+  {
     path: 'ingresar',
     loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent),
   },

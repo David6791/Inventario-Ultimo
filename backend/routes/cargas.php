@@ -15,6 +15,7 @@ use App\Modules\Cargas\Http\Controllers\OpcionesController;
 use App\Modules\Cargas\Http\Controllers\ProductorController;
 use App\Modules\Cargas\Http\Controllers\ProductorImportController;
 use App\Modules\Cargas\Http\Controllers\SerieLoteController;
+use App\Modules\Cargas\Http\Controllers\VerificacionLoteController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,6 +27,11 @@ use Illuminate\Support\Facades\Route;
 |   - Leer exige cargas.ver; escribir lo autoriza cada FormRequest
 |     (cargas.catalogos o cargas.series).
 */
+
+// Verificación pública del rótulo (QR): sin sesión, solo con el código aleatorio impreso.
+Route::get('verificar/{codigo}', VerificacionLoteController::class)
+    ->middleware('throttle:30,1')
+    ->where('codigo', '[A-Fa-f0-9]{32}');
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -50,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('lotes',                    [LoteController::class, 'index']);
         Route::get('lotes/{lote}',             [LoteController::class, 'show'])->whereNumber('lote');
         Route::get('lotes/{lote}/boleta',      [LoteController::class, 'boleta'])->whereNumber('lote');
+        Route::get('lotes/{lote}/rotulo',      [LoteController::class, 'rotulo'])->whereNumber('lote');
         Route::get('bono-tramos',              [BonoController::class, 'tramos']);
         Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
         Route::get('series/{serie}',          [SerieLoteController::class, 'show'])->whereNumber('serie');

@@ -169,6 +169,42 @@ class RecepcionApiTest extends TestCase
         $this->assertSame('application/pdf', $pdf->headers->get('Content-Type'));
     }
 
+    public function test_rotulo_con_qr_y_verificacion_publica(): void
+    {
+        $this->como($this->usuario(self::RECEPCION));
+        $r = $this->recibir(['material' => 'ZN-AG-PB'])->assertCreated();
+        $id = $r->json('data.id');
+        $this->assertArrayNotHasKey('codigo_verificacion', $r->json('data'));
+
+        $url = $r->json('data.url_verificacion');
+        $this->assertMatchesRegularExpression('#/l/[0-9a-f]{32}$#', $url);
+        $codigo = substr($url, -32);
+
+        $pdf = $this->get("/api/cargas/lotes/{$id}/rotulo")->assertOk();
+        $this->assertSame('application/pdf', $pdf->headers->get('Content-Type'));
+
+        // Sin sesión: se ve el lote, sin dinero, sin CI y sin el código del QR.
+        $this->app['auth']->forgetGuards();
+        $v = $this->getJson("/api/cargas/verificar/{$codigo}")->assertOk()
+            ->assertJsonPath('data.codigo', $r->json('data.codigo'))
+            ->assertJsonPath('data.estado', 'RECIBIDO')
+            ->assertJsonPath('data.material', 'ZN-AG-PB')
+            ->assertJsonPath('data.peso_neto_kg', '8200.00')
+            ->assertJsonPath('data.pesajes.0.ticket', 'T-100');
+        $json = json_encode($v->json());
+        foreach (['bono', 'monto', 'ci', 'codigo_verificacion', '4567890'] as $nada) {
+            $this->assertStringNotContainsString("\"{$nada}\"", $json);
+        }
+
+        // Un código inventado no lleva a ningún lote; el código del lote tampoco sirve.
+        $this->getJson('/api/cargas/verificar/' . str_repeat('a', 32))->assertNotFound();
+        $this->getJson('/api/cargas/verificar/' . $r->json('data.codigo'))->assertNotFound();
+
+        // El código de verificación no cambia.
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        DB::table('cargas.lote')->where('id', $id)->update(['codigo_verificacion' => str_repeat('b', 32)]);
+    }
+
     public function test_la_serie_decide_que_datos_exige(): void
     {
         $this->como($this->usuario(self::RECEPCION));

@@ -35,6 +35,10 @@ export class RecepcionService {
     return this.http.get(`${this.base}/lotes/${id}/boleta`, { responseType: 'blob' });
   }
 
+  rotulo(id: number): Observable<Blob> {
+    return this.http.get(`${this.base}/lotes/${id}/rotulo`, { responseType: 'blob' });
+  }
+
   agregarPesaje(loteId: number, datos: DatosPesaje): Observable<RespuestaApi<Pesaje> & { mensaje: string }> {
     return this.http.post<RespuestaApi<Pesaje> & { mensaje: string }>(`${this.base}/lotes/${loteId}/pesajes`, datos);
   }

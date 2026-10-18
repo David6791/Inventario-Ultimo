@@ -41,6 +41,8 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
         </div>
         <div class="acciones">
           <p-button label="Boleta" icon="pi pi-print" [outlined]="true" (onClick)="boleta()" />
+          <p-button label="Rótulo" icon="pi pi-qrcode" [outlined]="true" (onClick)="rotulo()"
+                    pTooltip="Identificación con QR para colocar junto a la carga" tooltipPosition="bottom" />
           <ng-container *ngIf="l.estado === 'RECIBIDO'">
             <p-button *appTienePermiso="'cargas.recibir'" label="Agregar pesaje" icon="pi pi-plus" (onClick)="nuevoPesaje()" />
           </ng-container>
@@ -79,6 +81,10 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
           <small class="secundario" *ngIf="!l.bonos_pendientes && +l.bonos_pagados">Pagado</small></div>
       </section>
       <p class="secundario observaciones" *ngIf="l.observaciones">{{ l.observaciones }}</p>
+      <p class="secundario verificacion" *ngIf="l.url_verificacion">
+        <i class="pi pi-qrcode"></i> El QR del rótulo abre
+        <a [href]="l.url_verificacion" target="_blank" rel="noopener">la verificación pública</a>, sin iniciar sesión.
+      </p>
 
       <h3 class="titulo-seccion">Pesajes</h3>
       <p-table [value]="l.pesajes ?? []" dataKey="id" styleClass="p-datatable-sm tabla">
@@ -195,6 +201,7 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
     tr.anulado td { color: var(--text-color-secondary, #9ca3af); }
     tr.anulado .monto { text-decoration: line-through; }
     .separada { margin-left: 0.4rem; }
+    .verificacion { font-size: 0.82rem; margin: 0 0 0.8rem; display: flex; gap: 0.4rem; align-items: center; }
     .alerta { color: #b45309; font-weight: 600; }
     .pastilla-ok { background: #dcfce7; color: #166534; }
     .bitacora { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
@@ -257,6 +264,11 @@ export class LoteFichaComponent implements OnInit {
   boleta(): void {
     const l = this.lote();
     if (l) this.servicio.boleta(l.id).subscribe({ next: abrirPdf, error: () => this.toast.add({ severity: 'error', summary: 'No se pudo generar la boleta' }) });
+  }
+
+  rotulo(): void {
+    const l = this.lote();
+    if (l) this.servicio.rotulo(l.id).subscribe({ next: abrirPdf, error: () => this.toast.add({ severity: 'error', summary: 'No se pudo generar el rótulo' }) });
   }
 
   nuevoPesaje(): void {

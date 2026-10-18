@@ -21,6 +21,9 @@ return [
     */
     'empresa' => env('EMPRESA_NOMBRE', 'Exportadora MACGYCASUCHOS'),
 
+    // Dirección pública para el QR de los rótulos de lote (ver App\Modules\Cargas\Support\UrlVerificacion).
+    'url_verificacion' => env('URL_VERIFICACION'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment
