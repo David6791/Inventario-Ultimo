@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ResolverAlmacen;
 use App\Http\Middleware\VersionPermisos;
+use App\Modules\Comun\Exceptions\ErrorBaseDatos;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -51,4 +52,16 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 403);
             }
         });
+
+        /*
+        | Reglas de negocio que viven en PostgreSQL (triggers, CHECK, EXCLUDE,
+        | UNIQUE) → 422 con el mensaje en español. Lo que no es una regla
+        | (conexión, sintaxis) sigue siendo 500.
+        |
+        | La PDOException hace falta aparte: una regla diferida (por ejemplo, un
+        | egreso de anticipo sin su anticipo) falla al CONFIRMAR la transacción,
+        | y ahí no llega envuelta en QueryException.
+        */
+        $exceptions->render(fn (\Illuminate\Database\QueryException $e, Request $request) => ErrorBaseDatos::responder($e, $request));
+        $exceptions->render(fn (\PDOException $e, Request $request) => ErrorBaseDatos::responder($e, $request));
     })->create();

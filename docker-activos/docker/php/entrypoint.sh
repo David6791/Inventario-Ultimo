@@ -34,6 +34,13 @@ if [ "${MIGRAR_AL_INICIAR}" = "true" ]; then
 fi
 
 if [ "${SEMBRAR_AL_INICIAR}" = "true" ]; then
+    # Estructura: permisos, roles y catálogos de caja y cargas. Todos son
+    # idempotentes y van en este orden (los roles necesitan los permisos).
+    for SEEDER in PermisoSeeder ActivosRolesSeeder CajaCargasRolesSeeder CargasCatalogoSeeder; do
+        echo "==> php artisan db:seed --class=${SEEDER}"
+        php artisan db:seed --class=${SEEDER} --force
+    done
+
     # Solo siembra si el catálogo está vacío, para no duplicar en cada reinicio.
     VACIO=$(php artisan tinker --execute="echo \App\Modules\Activos\Models\Subclase::count();" 2>/dev/null | tr -dc '0-9' || echo "0")
     if [ "${VACIO:-0}" = "0" ]; then

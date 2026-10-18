@@ -43,6 +43,8 @@ final class Permisos
         'activos-inventario'    => ['Inventario de activos',     'pi pi-check-square'],
         'activos-bajas'         => ['Bajas de activos',          'pi pi-trash'],
         'activos-config'        => ['Configuración de activos',  'pi pi-cog'],
+        'caja'                  => ['Caja',                      'pi pi-wallet'],
+        'cargas'                => ['Manejo de cargas',          'pi pi-truck'],
         
     ];
 
@@ -198,6 +200,36 @@ final class Permisos
         // Configuración de activos
         'activos-config.ver'         => 'Consultar clases, ubicaciones y parámetros',
         'activos-config.administrar' => 'Administrar clases, ubicaciones y parámetros',   // [S1]
+
+        // Caja
+        'caja.ver'                   => 'Consultar cajas, sesiones y movimientos de sus sedes',
+        'caja.administrar'           => 'Crear cajas y conceptos, y definir el formato del comprobante',
+        'caja.abrir'                 => 'Abrir la sesión de caja del día',
+        'caja.registrar'             => 'Registrar ingresos y egresos manuales',
+        'caja.anular'                => 'Anular movimientos de la sesión abierta',
+        'caja.cerrar'                => 'Arquear y cerrar la sesión de caja',
+        'caja.validar'               => 'Validar el cierre de caja de otro cajero',
+        'caja.reportes'              => 'Ver y exportar el libro de caja y sus reportes',
+        'caja.pagar-anticipo'        => 'Pagar anticipos de mineral y recibir sus devoluciones',
+        'caja.pagar-bono'            => 'Pagar bonos de transporte a los choferes',
+
+        // Manejo de cargas
+        'cargas.ver'                 => 'Consultar lotes, pesajes, análisis y anticipos',
+        'cargas.ver-todos-almacenes' => 'Ver los lotes de todas las sedes, no solo de los almacenes asignados',
+        'cargas.catalogos'           => 'Administrar productores, cooperativas, minas, laboratorios y demás catálogos',
+        'cargas.series'              => 'Definir las series de lote y el formato de su numeración',
+        'cargas.recibir'             => 'Registrar lotes y pesajes en la recepción',
+        'cargas.anular-lote'         => 'Anular un lote recibido',
+        'cargas.configurar-bono'     => 'Definir los tramos del bono de transporte',
+        'cargas.muestrear'           => 'Registrar muestras, porciones y precintos',
+        'cargas.cargar-analisis'     => 'Cargar los análisis de laboratorio',
+        'cargas.fijar-ley'           => 'Fijar la ley final del lote y resolver la dirimencia',
+        'cargas.precios-editar'      => 'Armar tablas de precio en borrador',
+        'cargas.precios-aprobar'     => 'Aprobar tablas de precio armadas por otra persona',
+        'cargas.cotizaciones'        => 'Registrar las cotizaciones quincenales',
+        'cargas.retenciones'         => 'Definir las tasas de retención y los aportes por cooperativa',
+        'cargas.anticipo-registrar'  => 'Registrar anticipos a productores',
+        'cargas.anticipo-autorizar'  => 'Autorizar anticipos registrados por otra persona',
     ];
 
     /** Nombre del rol con acceso total. Se resuelve vía Gate::before. */

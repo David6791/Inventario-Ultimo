@@ -51,6 +51,10 @@ psql:
 
 fresh:
 	$(COMPOSE) exec app php artisan migrate:fresh --force
+	$(COMPOSE) exec app php artisan db:seed --class=PermisoSeeder --force
+	$(COMPOSE) exec app php artisan db:seed --class=ActivosRolesSeeder --force
+	$(COMPOSE) exec app php artisan db:seed --class=CajaCargasRolesSeeder --force
+	$(COMPOSE) exec app php artisan db:seed --class=CargasCatalogoSeeder --force
 	$(COMPOSE) exec app php artisan db:seed --class=ActivosSeeder --force
 
 url:
