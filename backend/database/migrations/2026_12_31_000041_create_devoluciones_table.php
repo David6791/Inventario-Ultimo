@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('devoluciones')) {
+            return; // base que ya la tenía con el nombre 2026_09_23 (ver 000040)
+        }
+
         Schema::create('devoluciones', function (Blueprint $tabla) {
             $tabla->id();
             $tabla->string('numero', 30)->unique();

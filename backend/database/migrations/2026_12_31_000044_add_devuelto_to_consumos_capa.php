@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('consumos_capa', 'cantidad_devuelta')) {
+            return; // ver 2026_12_31_000040
+        }
+
         Schema::table('consumos_capa', function (Blueprint $tabla) {
             $tabla->decimal('cantidad_devuelta', 14, 4)->default(0)->after('cantidad');
         });

@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('devoluciones_consumo')) {
+            return; // ver 2026_12_31_000040
+        }
+
         // Espejo de consumos_capa. Cada fila restituye cantidad a la capa
         // de la que salio, al costo con que salio. Nunca al costo actual.
         Schema::create('devoluciones_consumo', function (Blueprint $tabla) {
