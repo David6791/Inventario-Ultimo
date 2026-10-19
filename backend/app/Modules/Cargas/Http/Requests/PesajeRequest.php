@@ -34,6 +34,7 @@ class PesajeRequest extends CatalogoRequest
             }
         }
         $datos['tipo'] = $datos['tipo'] ?? 'INGRESO';
+        $datos['peso_cliente_tipo'] = $datos['peso_cliente_tipo'] ?? 'NETO';
         $p === '' ? $this->merge($datos) : $this->merge([rtrim($p, '.') => $datos]);
     }
 
@@ -48,6 +49,7 @@ class PesajeRequest extends CatalogoRequest
             "{$p}peso_bruto_kg" => [$obligatorio ? 'required' : 'nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
             "{$p}tara_kg"       => [$req, 'numeric', 'min:0', "lt:{$p}peso_bruto_kg", 'decimal:0,2'],
             "{$p}peso_cliente_kg" => ['nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
+            "{$p}peso_cliente_tipo" => ['nullable', Rule::in(['NETO', 'BRUTO'])],
             "{$p}num_sacos"     => ['nullable', 'integer', 'min:0', 'max:100000'],
             "{$p}placa"         => ['nullable', 'string', 'max:15'],
             "{$p}chofer_nombre" => ["required_if:{$p}tipo,INGRESO", 'nullable', 'string', 'max:150'],

@@ -114,7 +114,7 @@
           <td class="num">{{ $kg($p->peso_bruto_kg) }}</td>
           <td class="num">{{ $kg($p->tara_kg) }}</td>
           <td class="num">{{ $kg($p->peso_neto_kg) }}</td>
-          @if ($conCliente)<td class="num">{{ $p->peso_cliente_kg !== null ? $kg($p->peso_cliente_kg) : '—' }}</td>@endif
+          @if ($conCliente)<td class="num">@if ($p->peso_cliente_kg === null)—@elseif ($p->peso_cliente_tipo === 'BRUTO'){{ $kg($p->peso_cliente_kg - $p->tara_kg) }}<br><span style="font-size: 5.6pt;">bruto {{ $kg($p->peso_cliente_kg) }}</span>@else{{ $kg($p->peso_cliente_kg) }}@endif</td>@endif
           <td class="num">{{ $p->bono && $p->bono->estado !== 'ANULADO' ? ($p->bono->moneda === 'USD' ? 'US$' : 'Bs') . ' ' . $kg($p->bono->monto) . ($p->bono->estado === 'PAGADO' ? ' ✓' : '') : '—' }}</td>
         </tr>
       @empty

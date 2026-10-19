@@ -15,7 +15,7 @@ class Pesaje extends CargasModel
     protected $table = 'cargas.pesaje';
 
     protected $fillable = [
-        'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'peso_cliente_kg', 'num_sacos',
+        'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'peso_cliente_kg', 'peso_cliente_tipo', 'num_sacos',
         'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por',
     ];
 
@@ -34,6 +34,12 @@ class Pesaje extends CargasModel
 
     public function lote(): BelongsTo { return $this->belongsTo(Lote::class, 'lote_id'); }
     public function registradoPor(): BelongsTo { return $this->belongsTo(User::class, 'registrado_por'); }
+
+    /** Correcciones del peso declarado por el cliente (informativo), con motivo. */
+    public function correccionesCliente(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PesajeClienteCorreccion::class, 'pesaje_id')->orderBy('id');
+    }
 
     public function bono(): HasOne
     {

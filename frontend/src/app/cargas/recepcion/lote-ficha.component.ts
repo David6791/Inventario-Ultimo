@@ -6,6 +6,7 @@ import { MessageService } from 'primeng/api';
 import { Observable } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
+import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextareaModule } from 'primeng/inputtextarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TableModule } from 'primeng/table';
@@ -20,13 +21,14 @@ import { DatosPesaje, Lote, Pesaje } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
 import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.component';
+import { LoteValorComponent } from '../precios/lote-valor.component';
 
 /** Ficha del lote: datos de recepción, pesajes con su bono, bitácora, boleta y anulación. */
 @Component({
   selector: 'app-lote-ficha',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, InputTextareaModule,
-            SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent, LoteLaboratorioComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, InputNumberModule, InputTextareaModule,
+            SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent, LoteLaboratorioComponent, LoteValorComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -116,8 +118,19 @@ import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.compon
             <td class="derecha monto">{{ kg(p.peso_bruto_kg) }}</td>
             <td class="derecha monto">{{ kg(p.tara_kg) }}</td>
             <td class="derecha monto fuerte">{{ kg(p.peso_neto_kg) }}</td>
-            <td class="derecha monto">{{ p.peso_cliente_kg === null ? '—' : kg(p.peso_cliente_kg) }}
-              <div class="secundario" *ngIf="p.peso_cliente_kg !== null">{{ +p.peso_cliente_kg - +p.peso_neto_kg > 0 ? '+' : '' }}{{ kg(+p.peso_cliente_kg - +p.peso_neto_kg) }}</div></td>
+            <td class="derecha monto">
+              <ng-container *ngIf="p.peso_cliente_kg !== null; else sinCliente">
+                {{ kg(netoCliente(p)) }}
+                <div class="secundario" *ngIf="p.peso_cliente_tipo === 'BRUTO'">bruto {{ kg(p.peso_cliente_kg) }}</div>
+                <div class="secundario">{{ netoCliente(p) - +p.peso_neto_kg > 0 ? '+' : '' }}{{ kg(netoCliente(p) - +p.peso_neto_kg) }}</div>
+              </ng-container>
+              <ng-template #sinCliente>—</ng-template>
+              <div *ngIf="!p.anulado && l.estado !== 'ANULADO' && l.estado !== 'LIQUIDADO'">
+                <button *appTienePermiso="'cargas.recibir'" type="button" class="enlace" (click)="pedirCorreccion(p)">
+                  {{ p.peso_cliente_kg === null ? 'Anotar' : 'Corregir' }}</button>
+              </div>
+              <div class="secundario" *ngIf="p.correcciones_cliente?.length" [pTooltip]="historialCliente(p)">
+                <i class="pi pi-history"></i> {{ p.correcciones_cliente!.length }} corrección(es)</div></td>
             <td>
               <ng-container *ngIf="p.bono as b; else sinBono">
                 <span class="monto">Bs {{ kg(b.monto) }}</span>
@@ -142,6 +155,7 @@ import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.compon
       </p-table>
 
       <app-lote-laboratorio *ngIf="l.estado !== 'ANULADO' || l.num_pesajes" [lote]="l" (cambio)="cargar()" />
+      <app-lote-valor *ngIf="l.estado !== 'ANULADO'" [lote]="l" />
 
       <h3 class="titulo-seccion">Bitácora</h3>
       <ul class="bitacora">
@@ -169,6 +183,27 @@ import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.compon
     </p-dialog>
 
     <!-- Anular -->
+    <!-- Corregir peso del cliente -->
+    <p-dialog [(visible)]="correccionVisible" [header]="'Peso del cliente · ticket ' + (aCorregir()?.ticket ?? '')" [modal]="true"
+              [style]="{ width: '32rem' }" [draggable]="false">
+      <p class="explicacion">Es informativo: no cambia el peso del lote, el bono ni la liquidación. La corrección queda registrada con su motivo.
+        Báscula de la empresa: bruto {{ kg(aCorregir()?.peso_bruto_kg) }}, tara {{ kg(aCorregir()?.tara_kg) }}, neto {{ kg(aCorregir()?.peso_neto_kg) }}.</p>
+      <div class="campo">
+        <label>Peso que declaró el cliente (kg) <span class="secundario">vacío si no declaró</span></label>
+        <p-inputNumber [(ngModel)]="correccion.kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
+        <p-selectButton [options]="tiposCliente" [(ngModel)]="correccion.tipo" optionLabel="etiqueta" optionValue="valor" />
+      </div>
+      <div class="campo">
+        <label for="motivo-c">Motivo</label>
+        <textarea id="motivo-c" pInputTextarea rows="2" [(ngModel)]="correccion.motivo" maxlength="250"></textarea>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="correccionVisible = false" />
+        <p-button label="Corregir" icon="pi pi-check" [loading]="guardando()" [disabled]="correccion.motivo.trim().length < 10 || guardando()"
+                  (onClick)="corregir()" />
+      </ng-template>
+    </p-dialog>
+
     <p-dialog [(visible)]="anularVisible" [header]="aAnular() ? 'Anular pesaje ' + aAnular()!.ticket : 'Anular lote ' + lote()?.codigo"
               [modal]="true" [style]="{ width: '32rem' }" [draggable]="false">
       <p class="explicacion" *ngIf="aAnular()">El pesaje no se borra: queda tachado y deja de sumar. Si tenía un bono por pagar, se anula con él.</p>
@@ -205,6 +240,7 @@ import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.compon
     tr.anulado .monto { text-decoration: line-through; }
     .separada { margin-left: 0.4rem; }
     .verificacion { font-size: 0.82rem; margin: 0 0 0.8rem; display: flex; gap: 0.4rem; align-items: center; }
+    .enlace { border: 0; background: none; color: var(--primary-color, #2563eb); cursor: pointer; font-size: 0.78rem; padding: 0; }
     .alerta { color: #b45309; font-weight: 600; }
     .pastilla-ok { background: #dcfce7; color: #166534; }
     .bitacora { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
@@ -231,6 +267,10 @@ export class LoteFichaComponent implements OnInit {
 
   pesajeVisible = false;
   anularVisible = false;
+  correccionVisible = false;
+  readonly aCorregir = signal<Pesaje | null>(null);
+  correccion: { kg: number | null; tipo: 'NETO' | 'BRUTO'; motivo: string } = { kg: null, tipo: 'NETO', motivo: '' };
+  readonly tiposCliente = [{ valor: 'NETO', etiqueta: 'Neto' }, { valor: 'BRUTO', etiqueta: 'Bruto' }];
   tipoPesaje: 'INGRESO' | 'CONTROL' = 'INGRESO';
   motivo = '';
 
@@ -276,7 +316,7 @@ export class LoteFichaComponent implements OnInit {
 
   nuevoPesaje(): void {
     const bascula = this.pesaje.value.bascula;
-    this.pesaje.reset({ tipo: 'INGRESO', bascula });
+    this.pesaje.reset({ tipo: 'INGRESO', bascula, peso_cliente_tipo: 'NETO' });
     this.tipoPesaje = 'INGRESO';
     this.cambiarTipo();
     this.pesajeVisible = true;
@@ -307,6 +347,31 @@ export class LoteFichaComponent implements OnInit {
         this.guardando.set(false);
         this.toast.add({ severity: 'error', summary: 'No se registró el pesaje', detail: mensajeDeError(e), life: 9000 });
       },
+    });
+  }
+
+  netoCliente(p: Pesaje): number {
+    return p.peso_cliente_tipo === 'BRUTO' ? +p.peso_cliente_kg! - +p.tara_kg : +p.peso_cliente_kg!;
+  }
+
+  historialCliente(p: Pesaje): string {
+    return (p.correcciones_cliente ?? []).map((c) =>
+      `${new Date(c.corregido_en).toLocaleDateString('es-BO')}: ${c.anterior_kg ?? '—'} ${c.anterior_tipo.toLowerCase()} → ${c.nuevo_kg ?? '—'} ${c.nuevo_tipo.toLowerCase()} · ${c.motivo}`).join('\n');
+  }
+
+  pedirCorreccion(p: Pesaje): void {
+    this.aCorregir.set(p);
+    this.correccion = { kg: p.peso_cliente_kg === null ? null : +p.peso_cliente_kg, tipo: p.peso_cliente_tipo ?? 'NETO', motivo: '' };
+    this.correccionVisible = true;
+  }
+
+  corregir(): void {
+    const p = this.aCorregir();
+    if (!p) return;
+    this.guardando.set(true);
+    this.servicio.corregirPesoCliente(p.id, this.correccion.kg, this.correccion.tipo, this.correccion.motivo.trim()).subscribe({
+      next: (r) => { this.guardando.set(false); this.correccionVisible = false; this.toast.add({ severity: 'success', summary: r.mensaje }); this.cargar(); },
+      error: (e) => { this.guardando.set(false); this.toast.add({ severity: 'error', summary: 'No se corrigió', detail: mensajeDeError(e), life: 9000 }); },
     });
   }
 

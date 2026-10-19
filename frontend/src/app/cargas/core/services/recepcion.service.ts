@@ -43,6 +43,11 @@ export class RecepcionService {
     return this.http.post<RespuestaApi<Pesaje> & { mensaje: string }>(`${this.base}/lotes/${loteId}/pesajes`, datos);
   }
 
+  corregirPesoCliente(id: number, kg: number | null, tipo: 'NETO' | 'BRUTO', motivo: string): Observable<RespuestaApi<Pesaje> & { mensaje: string }> {
+    return this.http.post<RespuestaApi<Pesaje> & { mensaje: string }>(`${this.base}/pesajes/${id}/peso-cliente`,
+      { peso_cliente_kg: kg, peso_cliente_tipo: tipo, motivo });
+  }
+
   anularPesaje(id: number, motivo: string): Observable<RespuestaApi<Pesaje> & { mensaje: string }> {
     return this.http.post<RespuestaApi<Pesaje> & { mensaje: string }>(`${this.base}/pesajes/${id}/anular`, { motivo });
   }

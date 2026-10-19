@@ -4,6 +4,7 @@ namespace App\Modules\Cargas\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cargas\Http\Requests\AnularPesajeRequest;
+use App\Modules\Cargas\Http\Requests\CorregirPesoClienteRequest;
 use App\Modules\Cargas\Http\Requests\PesajeRequest;
 use App\Modules\Cargas\Models\Lote;
 use App\Modules\Cargas\Models\Pesaje;
@@ -28,6 +29,16 @@ class PesajeController extends Controller
             'mensaje' => "Pesaje {$r['pesaje']->ticket} registrado: {$r['pesaje']->peso_neto_kg} kg netos."
                 . ($r['bono'] ? " Bono: " . self::monto($r['bono']) . "." : ''),
         ], 201);
+    }
+
+    public function corregirPesoCliente(CorregirPesoClienteRequest $request, Pesaje $pesaje): JsonResponse
+    {
+        abort_unless($pesaje->lote->esDelAmbitoDe($request->user()), 403, 'El lote es de una sede a la que su usuario no tiene acceso.');
+        $kg = $request->filled('peso_cliente_kg') ? (float) $request->input('peso_cliente_kg') : null;
+        $pesaje = $this->recepcion->corregirPesoCliente($pesaje, $kg, $request->input('peso_cliente_tipo'), $request->input('motivo'), $request->user());
+
+        return response()->json(['data' => $pesaje->load('correccionesCliente'),
+            'mensaje' => "Peso del cliente del ticket {$pesaje->ticket} corregido."]);
     }
 
     public function anular(AnularPesajeRequest $request, Pesaje $pesaje): JsonResponse

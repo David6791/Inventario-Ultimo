@@ -205,6 +205,44 @@ class RecepcionApiTest extends TestCase
         DB::table('cargas.lote')->where('id', $id)->update(['codigo_verificacion' => str_repeat('b', 32)]);
     }
 
+    public function test_peso_del_cliente_bruto_y_correccion_con_bono_pagado(): void
+    {
+        // Caso real: 24.700 bruto, 12.500 tara; el cliente declara 24.500 de BRUTO.
+        $this->como($this->usuario(self::RECEPCION));
+        $lote = $this->recibir([], $this->pesaje(['ticket' => 'T-458', 'peso_bruto_kg' => 24700, 'tara_kg' => 12500,
+            'peso_cliente_kg' => 24500, 'peso_cliente_tipo' => 'BRUTO']))->assertCreated()
+            ->assertJsonPath('data.peso_neto_humedo_kg', '12200.00')
+            ->assertJsonPath('data.peso_cliente_kg', '12000.00')          // 24.500 − 12.500
+            ->assertJsonPath('data.diferencia_cliente_kg', '-200.00')
+            ->json('data');
+        $pesaje = $lote['pesajes'][0]['id'];
+
+        // Un bruto declarado menor que la tara no tiene sentido.
+        $this->recibir([], $this->pesaje(['ticket' => 'T-459', 'peso_cliente_kg' => 4000, 'peso_cliente_tipo' => 'BRUTO']))
+            ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'mayor que la tara'));
+
+        // Se paga el bono: el pesaje ya no se anula, pero el peso del cliente sí se corrige con motivo.
+        [$caja] = $this->cajaAbierta(1000);
+        $this->postJson("/api/cargas/bonos/{$lote['pesajes'][0]['bono']['id']}/pagar", ['caja_id' => $caja->id])->assertCreated();
+
+        $this->como($this->usuario(self::RECEPCION));
+        $this->postJson("/api/cargas/pesajes/{$pesaje}/peso-cliente", ['peso_cliente_kg' => 12100, 'peso_cliente_tipo' => 'NETO'])
+            ->assertUnprocessable()->assertJsonValidationErrors('motivo');
+        $this->postJson("/api/cargas/pesajes/{$pesaje}/peso-cliente",
+            ['peso_cliente_kg' => 12100, 'peso_cliente_tipo' => 'NETO', 'motivo' => 'El cliente presentó su ticket neto'])
+            ->assertOk()->assertJsonPath('data.correcciones_cliente.0.anterior_kg', '24500.00');
+
+        $ficha = $this->getJson("/api/cargas/lotes/{$lote['id']}")->assertOk()
+            ->assertJsonPath('data.peso_cliente_kg', '12100.00')
+            ->assertJsonPath('data.diferencia_cliente_kg', '-100.00')
+            ->assertJsonPath('data.pesajes.0.correcciones_cliente.0.motivo', 'El cliente presentó su ticket neto');
+        $this->assertSame('BRUTO', $ficha->json('data.pesajes.0.correcciones_cliente.0.anterior_tipo'));
+
+        // Lo demás del pesaje sigue fijo, y por fuera de la función tampoco se toca el peso del cliente.
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        DB::table('cargas.pesaje')->where('id', $pesaje)->update(['peso_cliente_kg' => 1]);
+    }
+
     public function test_la_serie_decide_que_datos_exige(): void
     {
         $this->como($this->usuario(self::RECEPCION));

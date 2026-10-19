@@ -53,6 +53,16 @@ class RecepcionService
         });
     }
 
+    /** El peso del cliente es informativo: se corrige con motivo aunque el bono ya esté pagado. */
+    public function corregirPesoCliente(Pesaje $pesaje, ?float $kg, string $tipo, string $motivo, User $usuario): Pesaje
+    {
+        return Transaccion::como($usuario->id, function () use ($pesaje, $kg, $tipo, $motivo, $usuario) {
+            DB::select('select cargas.corregir_peso_cliente(?, ?, ?, ?, ?)', [$pesaje->id, $kg, $tipo, $motivo, $usuario->id]);
+
+            return $pesaje->refresh();
+        });
+    }
+
     public function anularLote(Lote $lote, string $motivo, User $usuario): Lote
     {
         return Transaccion::como($usuario->id, function () use ($lote, $motivo, $usuario) {

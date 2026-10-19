@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
 import { formatoDinero } from '../../caja/core/dinero';
 import { BonoCalculado } from '../core/models/cargas.model';
@@ -22,6 +23,7 @@ export function grupoPesaje(fb: FormBuilder): FormGroup {
     peso_bruto_kg: [null as number | null, [Validators.required, Validators.min(0.01)]],
     tara_kg: [null as number | null, [Validators.required, Validators.min(0)]],
     peso_cliente_kg: [null as number | null, [Validators.min(0.01)]],
+    peso_cliente_tipo: ['NETO' as 'NETO' | 'BRUTO'],
     num_sacos: [null as number | null],
     placa: [null as string | null],
     chofer_nombre: ['' as string | null, [Validators.required, Validators.maxLength(150)]],
@@ -41,7 +43,7 @@ export function recordarBascula(valor: string | null | undefined): void {
 @Component({
   selector: 'app-pesaje-campos',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, InputNumberModule, InputTextModule],
+  imports: [CommonModule, ReactiveFormsModule, InputNumberModule, InputTextModule, SelectButtonModule],
   template: `
     <div class="campos" [formGroup]="grupo()">
       <div class="campo span-2">
@@ -74,10 +76,19 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-2">
         <label for="cliente">Peso del cliente (kg) <span class="opcional">(opcional)</span></label>
         <p-inputNumber inputId="cliente" formControlName="peso_cliente_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
+        <p-selectButton [options]="tiposCliente" formControlName="peso_cliente_tipo" optionLabel="etiqueta" optionValue="valor"
+                        styleClass="tipo-cliente" />
       </div>
       <div class="campo span-4 diferencia">
+        <div class="aviso" *ngIf="pareceBruto()">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>¿{{ fmt(cliente()) }} es el <b>bruto</b> del cliente? Está a {{ fmt(abs(cliente()! - bruto()!)) }} kg del bruto de la báscula.
+            Como neto, la diferencia sería de {{ fmt(abs(cliente()! - neto()!)) }} kg.</span>
+          <button type="button" class="enlace" (click)="marcarBruto()">Es el bruto</button>
+        </div>
         <ng-container *ngIf="diferencia() as d; else sinCliente">
-          <span [class.error]="d.alerta">Diferencia con la báscula: <strong class="codigo">{{ d.kg > 0 ? '+' : '' }}{{ fmt(d.kg) }} kg</strong>
+          <span [class.error]="d.alerta">Neto del cliente {{ fmt(d.clienteNeto) }} kg{{ tipo() === 'BRUTO' ? ' (bruto declarado − tara)' : '' }}.
+            Diferencia: <strong class="codigo">{{ d.kg > 0 ? '+' : '' }}{{ fmt(d.kg) }} kg</strong>
             ({{ d.kg > 0 ? '+' : '' }}{{ fmt(d.pct) }} %). Vale el peso de la empresa.</span>
         </ng-container>
         <ng-template #sinCliente><small class="secundario">Si el productor declara su propio peso, anótelo para comparar. Si no, cuenta solo el de la empresa.</small></ng-template>
@@ -117,6 +128,9 @@ export function recordarBascula(valor: string | null | undefined): void {
     .neto { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 1.25rem; font-weight: 700; padding: 0.35rem 0; }
     .error { color: #b91c1c; }
     .diferencia { justify-content: flex-end; padding-bottom: 0.55rem; font-size: 0.88rem; }
+    .aviso { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.45rem 0.7rem; border-radius: 6px; background: #fef3c7; color: #92400e; }
+    .enlace { border: 0; background: none; color: #1d4ed8; font-weight: 600; cursor: pointer; white-space: nowrap; padding: 0; }
+    :host ::ng-deep .tipo-cliente .p-button { padding: 0.25rem 0.7rem; font-size: 0.78rem; }
     .secundario { color: var(--text-color-secondary, #6b7280); }
     .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
     .codigo { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
@@ -134,19 +148,40 @@ export class PesajeCamposComponent implements OnInit {
   readonly neto = signal<number | null>(null);
   readonly bono = signal<BonoCalculado | null>(null);
   readonly cliente = signal<number | null>(null);
-  /** Diferencia del peso declarado por el cliente con el neto de la báscula; alerta sobre 1 %. */
+  readonly tipo = signal<'NETO' | 'BRUTO'>('NETO');
+  readonly bruto = signal<number | null>(null);
+  readonly tara = signal<number | null>(null);
+  readonly tiposCliente = [{ valor: 'NETO', etiqueta: 'Neto' }, { valor: 'BRUTO', etiqueta: 'Bruto' }];
+  readonly abs = Math.abs;
+
+  /** Neto del cliente: el declarado, o su bruto menos la tara de la empresa. Alerta sobre 1 %. */
   readonly diferencia = computed(() => {
-    const n = this.neto(), c = this.cliente();
+    const n = this.neto(), c = this.cliente(), t = this.tara();
     if (n === null || n <= 0 || c === null || c <= 0) return null;
-    const kg = Math.round((c - n) * 100) / 100;
+    const clienteNeto = this.tipo() === 'BRUTO' ? (t === null ? null : c - t) : c;
+    if (clienteNeto === null) return null;
+    const kg = Math.round((clienteNeto - n) * 100) / 100;
     const pct = Math.round((kg / n) * 10000) / 100;
-    return { kg, pct, alerta: Math.abs(pct) > 1 };
+    return { clienteNeto, kg, pct, alerta: Math.abs(pct) > 1 };
   });
+
+  /** Anotado como neto pero más cerca del bruto de la báscula: probablemente es el bruto. */
+  readonly pareceBruto = computed(() => {
+    const c = this.cliente(), b = this.bruto(), n = this.neto();
+    return this.tipo() === 'NETO' && c !== null && b !== null && n !== null && n > 0 && Math.abs(c - b) < Math.abs(c - n);
+  });
+
+  marcarBruto(): void { this.grupo().patchValue({ peso_cliente_tipo: 'BRUTO' }); }
   readonly fmt = formatoDinero;
 
   ngOnInit(): void {
-    this.grupo().get('peso_cliente_kg')!.valueChanges.pipe(takeUntilDestroyed(this.destruir))
-      .subscribe((v) => this.cliente.set(v ?? null));
+    const g = this.grupo();
+    g.valueChanges.pipe(takeUntilDestroyed(this.destruir)).subscribe((v) => {
+      this.cliente.set(v.peso_cliente_kg ?? null);
+      this.tipo.set(v.peso_cliente_tipo ?? 'NETO');
+      this.bruto.set(v.peso_bruto_kg ?? null);
+      this.tara.set(v.tara_kg ?? null);
+    });
     this.grupo().valueChanges.pipe(
       map((v) => (v.peso_bruto_kg != null && v.tara_kg != null ? Math.round((v.peso_bruto_kg - v.tara_kg) * 100) / 100 : null)),
       distinctUntilChanged(),
