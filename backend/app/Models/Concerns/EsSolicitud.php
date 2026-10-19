@@ -60,7 +60,11 @@ trait EsSolicitud
      */
     public function recalcularEstado(): void
     {
-        if ($this->estado->esFinal() || $this->estado === EstadoSolicitud::Borrador) {
+        if (in_array($this->estado, [
+            EstadoSolicitud::Borrador,
+            EstadoSolicitud::Rechazada,
+            EstadoSolicitud::Anulada,
+        ], true)) {
             return;
         }
 
