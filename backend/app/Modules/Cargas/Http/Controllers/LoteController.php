@@ -115,6 +115,7 @@ class LoteController extends Controller
             'serie:id,prefijo,nombre', 'mina:id,nombre,propia', 'bocamina:id,codigo,nombre', 'municipio:id,nombre',
             'almacen:id,nombre', 'registradoPor:id,name', 'anuladoPor:id,name',
             'pesajes.registradoPor:id,name', 'pesajes.bono.movimiento:id,numero,caja_id,fecha',
+            'pesajes.correccionesCliente.corregidoPor:id,name',
             'eventos.usuario:id,name',
         ]);
 

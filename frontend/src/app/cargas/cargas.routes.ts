@@ -34,6 +34,24 @@ export const CARGAS_ROUTES: Routes = [
     loadComponent: () => import('./laboratorio/laboratorio.component').then((m) => m.LaboratorioComponent),
   },
   {
+    path: 'precios',
+    title: 'Tablas de precio',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./precios/tablas-precio.component').then((m) => m.TablasPrecioComponent),
+  },
+  {
+    path: 'cotizaciones',
+    title: 'Cotizaciones',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./precios/cotizaciones.component').then((m) => m.CotizacionesComponent),
+  },
+  {
+    path: 'retenciones',
+    title: 'Retenciones',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./precios/retenciones.component').then((m) => m.RetencionesComponent),
+  },
+  {
     path: 'bono',
     title: 'Bono de transporte',
     canMatch: [conPermiso('cargas.ver')],

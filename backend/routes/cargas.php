@@ -6,6 +6,9 @@ use App\Modules\Cargas\Http\Controllers\BonoController;
 use App\Modules\Cargas\Http\Controllers\LoteController;
 use App\Modules\Cargas\Http\Controllers\PesajeController;
 use App\Modules\Cargas\Http\Controllers\CooperativaController;
+use App\Modules\Cargas\Http\Controllers\CotizacionController;
+use App\Modules\Cargas\Http\Controllers\PrecioController;
+use App\Modules\Cargas\Http\Controllers\RetencionController;
 use App\Modules\Cargas\Http\Controllers\ElementoController;
 use App\Modules\Cargas\Http\Controllers\EstadoController;
 use App\Modules\Cargas\Http\Controllers\LaboratorioController;
@@ -59,6 +62,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('lotes/{lote}/boleta',      [LoteController::class, 'boleta'])->whereNumber('lote');
         Route::get('lotes/{lote}/rotulo',      [LoteController::class, 'rotulo'])->whereNumber('lote');
         Route::get('lotes/{lote}/laboratorio', [AnalisisController::class, 'show'])->whereNumber('lote');
+        Route::get('lotes/{lote}/valor',       [PrecioController::class, 'valorLote'])->whereNumber('lote');
+        Route::get('precios',                  [PrecioController::class, 'index']);
+        Route::get('precios/{tabla}',          [PrecioController::class, 'show'])->whereNumber('tabla');
+        Route::get('cotizaciones',             [CotizacionController::class, 'index']);
+        Route::get('retenciones',              [RetencionController::class, 'index']);
         Route::get('laboratorio/bandeja',      [AnalisisController::class, 'bandeja']);
         Route::get('muestras/{muestra}/etiquetas', [AnalisisController::class, 'etiquetas'])->whereNumber('muestra');
         Route::get('analisis/{analisis}/certificado', [AnalisisController::class, 'certificado'])->whereNumber('analisis');
@@ -125,7 +133,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('lotes/{lote}/anular',          [LoteController::class, 'anular'])->whereNumber('lote');
     Route::post('lotes/{lote}/pesajes',         [PesajeController::class, 'store'])->whereNumber('lote');
     Route::post('pesajes/{pesaje}/anular',      [PesajeController::class, 'anular'])->whereNumber('pesaje');
+    Route::post('pesajes/{pesaje}/peso-cliente', [PesajeController::class, 'corregirPesoCliente'])->whereNumber('pesaje');
     Route::put('lotes/{lote}/lectura-estimada', [AnalisisController::class, 'lecturaEstimada'])->whereNumber('lote');
+
+    // --- Precios, cotizaciones y retenciones (permisos en FormRequest o controlador)
+    Route::post('precios',                    [PrecioController::class, 'store']);
+    Route::put('precios/{tabla}',             [PrecioController::class, 'update'])->whereNumber('tabla');
+    Route::delete('precios/{tabla}',          [PrecioController::class, 'destroy'])->whereNumber('tabla');
+    Route::post('precios/{tabla}/copiar',     [PrecioController::class, 'copiar'])->whereNumber('tabla');
+    Route::post('precios/{tabla}/aprobar',    [PrecioController::class, 'aprobar'])->whereNumber('tabla');
+    Route::post('precios/{tabla}/anular',     [PrecioController::class, 'anular'])->whereNumber('tabla');
+    Route::post('cotizaciones',               [CotizacionController::class, 'store']);
+    Route::put('cotizaciones/{cotizacion}',   [CotizacionController::class, 'update'])->whereNumber('cotizacion');
+    Route::delete('cotizaciones/{cotizacion}', [CotizacionController::class, 'destroy'])->whereNumber('cotizacion');
+    Route::post('retenciones/tasas',          [RetencionController::class, 'publicar']);
 
     // --- Laboratorio (permisos en cada FormRequest o en el controlador) -----
     Route::post('lotes/{lote}/muestras',              [AnalisisController::class, 'registrarMuestra'])->whereNumber('lote');

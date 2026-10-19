@@ -91,6 +91,9 @@ const ESTRUCTURA: ItemMenu[] = [
     etiqueta: 'Manejo de cargas', icono: 'pi pi-truck', hijos: [
       { etiqueta: 'Recepción de lotes',  icono: 'pi pi-inbox',      ruta: '/cargas/lotes',        permiso: 'cargas.ver' },
       { etiqueta: 'Laboratorio',         icono: 'pi pi-filter-fill', ruta: '/cargas/laboratorio',  permiso: 'cargas.ver' },
+      { etiqueta: 'Tablas de precio',    icono: 'pi pi-dollar',     ruta: '/cargas/precios',      permiso: 'cargas.ver' },
+      { etiqueta: 'Cotizaciones',        icono: 'pi pi-chart-line', ruta: '/cargas/cotizaciones', permiso: 'cargas.ver' },
+      { etiqueta: 'Retenciones',         icono: 'pi pi-percentage', ruta: '/cargas/retenciones',  permiso: 'cargas.ver' },
       { etiqueta: 'Bono de transporte',  icono: 'pi pi-money-bill', ruta: '/cargas/bono',         permiso: 'cargas.ver' },
       { etiqueta: 'Productores',         icono: 'pi pi-users',      ruta: '/cargas/productores',  permiso: 'cargas.ver' },
       { etiqueta: 'Cooperativas',        icono: 'pi pi-sitemap',    ruta: '/cargas/cooperativas', permiso: 'cargas.ver' },

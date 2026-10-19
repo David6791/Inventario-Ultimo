@@ -236,6 +236,9 @@ export interface Pesaje {
   tara_kg: string;
   peso_neto_kg: string;
   peso_cliente_kg: string | null;
+  peso_cliente_tipo: 'NETO' | 'BRUTO';
+  correcciones_cliente?: { id: number; anterior_kg: string | null; anterior_tipo: string; nuevo_kg: string | null; nuevo_tipo: string;
+                           motivo: string; corregido_en: string; corregido_por?: Usuario }[];
   num_sacos: number | null;
   placa: string | null;
   chofer_nombre: string | null;
@@ -301,6 +304,7 @@ export interface DatosPesaje {
   peso_bruto_kg: number | null;
   tara_kg: number | null;
   peso_cliente_kg?: number | null;
+  peso_cliente_tipo?: 'NETO' | 'BRUTO';
   num_sacos: number | null;
   placa: string | null;
   chofer_nombre: string | null;
@@ -411,4 +415,56 @@ export interface FilaBandeja {
 export interface DatosMuestra {
   metodo: string | null; peso_g: number | null; observaciones: string | null;
   porciones: { destino: Porcion['destino']; precinto: string; entregada_a?: string | null }[];
+}
+
+// ------------------------------------------------------------ Precios (sprint 6)
+
+export type SituacionTabla = 'BORRADOR' | 'APROBADA' | 'ANULADA' | 'VIGENTE' | 'PROXIMA' | 'ANTERIOR';
+
+export interface TramoPrecio {
+  id?: number; ley_desde: string | number | null; ley_hasta: string | number | null;
+  precio_punto: string | number | null; porcentaje_pagable: string | number | null;
+}
+
+export interface TablaPrecio {
+  id: number; linea_producto_id: number; elemento_id: number;
+  modalidad: 'POR_PUNTO' | 'POR_PORCENTAJE'; moneda: 'BOB' | 'USD'; factor_conversion: string | null;
+  descripcion: string | null; vigente_desde: string; vigente_hasta: string | null;
+  estado: 'BORRADOR' | 'APROBADA' | 'ANULADA'; situacion: SituacionTabla;
+  creado_por: Usuario | number; aprobado_por: Usuario | number | null; aprobado_en: string | null;
+  linea?: { id: number; codigo: string; nombre: string; modalidad_precio?: string };
+  elemento?: { id: number; codigo: string; nombre: string; unidad_ley: string; unidad_cotizacion?: string | null };
+  tramos?: TramoPrecio[]; tramos_count?: number;
+  vista_previa?: { cotizacion: { valor: string; tipo: string; unidad: string; periodo: string } | null;
+                   tramos: { id: number; valor_desde: number | null; valor_hasta: number | null; hueco: boolean; baja: boolean }[] };
+}
+
+export interface Cotizacion {
+  id: number; elemento_id: number; elemento?: { id: number; codigo: string; nombre: string };
+  tipo: 'OFICIAL' | 'REFERENCIA'; anio: number; mes: number; quincena: 1 | 2;
+  periodo_desde: string; periodo_hasta: string; valor: string; unidad: string;
+  alicuota_rm_exportacion: string | null; alicuota_rm_venta_interna: string | null;
+  fuente: string | null; fecha_publicacion: string | null;
+}
+
+export interface TasaRetencion {
+  id: number; concepto_id: number; cooperativa_id: number | null; cooperativa?: { id: number; nombre: string } | null;
+  porcentaje: string; vigente_desde: string; vigente_hasta: string | null; vigente: boolean; proxima: boolean;
+}
+
+export interface ConceptoRetencion {
+  id: number; codigo: string; nombre: string; base_calculo: string; por_cooperativa: boolean; norma: string | null;
+  tasas: TasaRetencion[];
+}
+
+export interface ValorElemento {
+  elemento_id: number; elemento: string; unidad_ley: string;
+  fuente: 'LEY_FINAL' | 'ANALISIS_EMPRESA' | 'LECTURA_ESTIMADA' | null; ley: string | null;
+  tabla_precio_id: number | null; modalidad: string | null; moneda: string | null;
+  cotizacion: string | null; cotizacion_tipo: string | null;
+  valor_por_tm: string | null; peso_seco_tm: string | null; valor: string | null; observacion: string | null;
+}
+
+export interface ValorLote {
+  elementos: ValorElemento[]; totales: Record<string, number>; completo: boolean; definitivo: boolean; fecha: string;
 }
