@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { conPermiso } from '../core/guards/permisos.guard';
+import { conAlgunPermiso, conPermiso } from '../core/guards/permisos.guard';
 
 /**
  * Módulo de caja (/caja). Leer exige caja.ver; los botones de escritura se
@@ -53,6 +53,18 @@ export const CAJA_ROUTES: Routes = [
     title: 'Personas',
     canMatch: [conPermiso('caja.ver')],
     loadComponent: () => import('./configuracion/personas.component').then((m) => m.PersonasCajaComponent),
+  },
+  {
+    path: 'solicitudes',
+    title: 'Solicitudes de dinero',
+    canMatch: [conAlgunPermiso(['caja.solicitar', 'caja.registrar'])],
+    loadComponent: () => import('./solicitudes/solicitudes.component').then((m) => m.SolicitudesCajaComponent),
+  },
+  {
+    path: 'aprobaciones',
+    title: 'Aprobación de solicitudes',
+    canMatch: [conPermiso('caja.aprobar')],
+    loadComponent: () => import('./solicitudes/aprobaciones.component').then((m) => m.AprobacionesCajaComponent),
   },
   { path: '', redirectTo: 'operar', pathMatch: 'full' },
 ];

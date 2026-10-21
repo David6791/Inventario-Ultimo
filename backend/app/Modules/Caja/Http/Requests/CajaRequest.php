@@ -37,6 +37,10 @@ class CajaRequest extends FormularioCaja
             'formato_comprobante'  => ['required', 'string', 'max:60'],
             'reinicio_comprobante' => ['required', Rule::in(Caja::REINICIOS)],
             'activa'               => ['boolean'],
+            'requiere_aprobacion'  => ['boolean'],
+            // Desde qué número sigue el comprobante (por ejemplo, continuar otro sistema).
+            'proximo_comprobante'  => ['nullable', 'integer', 'min:1', 'max:99999999'],
+            'motivo_numeracion'    => ['nullable', 'string', 'max:250'],
         ];
     }
 
@@ -72,6 +76,15 @@ class CajaRequest extends FormularioCaja
                     $caja
                 );
 
+                if ($caja && $this->filled('proximo_comprobante')) {
+                    $ultimo = app(\App\Modules\Caja\Services\SolicitudService::class)->ultimoComprobante($caja);
+                    $proximo = $this->integer('proximo_comprobante');
+                    if ($proximo !== $ultimo + 1 && $proximo <= $ultimo) {
+                        $validator->errors()->add('proximo_comprobante',
+                            "La caja ya emitió hasta el correlativo {$ultimo}: el próximo no puede ser {$proximo}, se repetirían números.");
+                    }
+                }
+
                 if ($previa['error'] !== null) {
                     $validator->errors()->add('formato_comprobante', $previa['error']);
                 } elseif ($previa['repetido'] && ! $sinCambioDeFormato) {
@@ -82,11 +95,18 @@ class CajaRequest extends FormularioCaja
         ];
     }
 
+    /** Solo las columnas de la caja; la numeración se fija aparte. */
+    public function datosCaja(): array
+    {
+        return collect($this->validated())->except(['proximo_comprobante', 'motivo_numeracion'])->all();
+    }
+
     public function messages(): array
     {
         return [
             'codigo.regex'  => 'El código de caja va en mayúsculas y números, sin espacios ni guiones (por ejemplo PTS o PORCO).',
             'codigo.unique' => 'Ya existe una caja con ese código.',
+            'proximo_comprobante.min' => 'El próximo comprobante debe ser un número mayor que cero.',
         ];
     }
 }

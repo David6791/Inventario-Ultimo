@@ -50,13 +50,23 @@ class CajaService
         });
     }
 
+    /** Reemplaza la lista de aprobadores de la caja. */
+    public function asignarAprobadores(Caja $caja, array $usuarios, User $quien): void
+    {
+        Transaccion::como($quien->id, function () use ($caja, $usuarios, $quien) {
+            $caja->aprobadores()->sync(
+                collect($usuarios)->mapWithKeys(fn ($id) => [(int) $id => ['asignado_por' => $quien->id]])->all()
+            );
+        });
+    }
+
     /**
      * Cómo saldrá el próximo comprobante con estos datos, sin guardar ni
      * consumir números.
      *
      * @return array{numero: ?string, repetido: bool, error: ?string}
      */
-    public function vistaPrevia(array $datos, ?Caja $caja = null, ?string $fecha = null): array
+    public function vistaPrevia(array $datos, ?Caja $caja = null, ?string $fecha = null, ?int $proximo = null): array
     {
         if (blank($datos['formato_comprobante'] ?? null)) {
             return ['numero' => null, 'repetido' => false, 'error' => 'Escriba el formato del comprobante.'];
@@ -75,6 +85,14 @@ class CajaService
                     $fecha ?? now()->toDateString(),
                 ]
             )->numero);
+
+            // Con un correlativo elegido (seguir otro sistema), el número sale con ese.
+            if ($proximo !== null) {
+                $numero = DB::selectOne(
+                    "select comun.formatear_codigo(?, ?::date, ?, jsonb_build_object('CAJA', upper(btrim(?)))) as numero",
+                    [$datos['formato_comprobante'], $fecha ?? now()->toDateString(), $proximo, $datos['codigo'] ?? '']
+                )->numero;
+            }
         } catch (QueryException $e) {
             $error = ErrorBaseDatos::desde($e);
             if ($error === null) {

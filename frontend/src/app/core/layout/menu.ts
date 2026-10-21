@@ -80,6 +80,8 @@ const ESTRUCTURA: ItemMenu[] = [
   {
     etiqueta: 'Caja', icono: 'pi pi-wallet', hijos: [
       { etiqueta: 'Mis cajas',  icono: 'pi pi-wallet',   ruta: '/caja/operar',    permiso: 'caja.ver' },
+      { etiqueta: 'Solicitar dinero', icono: 'pi pi-send', ruta: '/caja/solicitudes', permiso: 'caja.solicitar' },
+      { etiqueta: 'Aprobaciones', icono: 'pi pi-check-square', ruta: '/caja/aprobaciones', permiso: 'caja.aprobar' },
       { etiqueta: 'Cierres',    icono: 'pi pi-lock',     ruta: '/caja/cierres',   permiso: 'caja.ver' },
       { etiqueta: 'Libro de caja', icono: 'pi pi-book',  ruta: '/caja/libro',     permiso: 'caja.reportes' },
       { etiqueta: 'Personas',   icono: 'pi pi-users',    ruta: '/caja/personas',  permiso: 'caja.ver' },

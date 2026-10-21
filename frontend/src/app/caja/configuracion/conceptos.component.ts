@@ -75,6 +75,8 @@ import { ESTILOS_CAJA } from '../core/estilos';
             <span *ngIf="c.origen !== 'MANUAL'" class="pastilla pastilla-acento" pTooltip="Lo registra el módulo de cargas, vinculado a su documento">
               Cargas · automático
             </span>
+            <span *ngIf="c.tipo === 'EGRESO' && c.origen === 'MANUAL' && c.exento_aprobacion" class="pastilla"
+                  pTooltip="En cajas con aprobación, el cajero lo registra directo, sin solicitud">Sin aprobación</span>
             <span *ngIf="!c.activo" class="pastilla">Inactivo</span>
           </td>
           <td class="derecha contador">{{ c.movimientos }}</td>
@@ -110,6 +112,14 @@ import { ESTILOS_CAJA } from '../core/estilos';
         <div class="campo span-3">
           <label>Tipo</label>
           <p-selectButton formControlName="tipo" [options]="tipos" optionLabel="etiqueta" optionValue="valor" />
+        </div>
+        <div class="campo span-6" *ngIf="form.getRawValue().tipo === 'EGRESO'">
+          <div class="check-campo">
+            <p-checkbox formControlName="exento_aprobacion" [binary]="true" inputId="exento" />
+            <label for="exento">No pasa por aprobación</label>
+          </div>
+          <small>En cajas que piden aprobación, el cajero registra este egreso directo, sin solicitud. Úselo solo para
+                 movimientos donde el dinero no sale de la empresa, como el depósito en banco.</small>
         </div>
         <div class="campo span-6 check-campo">
           <p-checkbox formControlName="activo" [binary]="true" inputId="activo" />
@@ -164,6 +174,7 @@ export class ConceptosCajaComponent implements OnInit {
     codigo: ['', [Validators.required, Validators.maxLength(40)]],
     tipo: ['EGRESO', Validators.required],
     activo: [true],
+    exento_aprobacion: [false],
   });
 
   ngOnInit(): void {
@@ -183,7 +194,7 @@ export class ConceptosCajaComponent implements OnInit {
 
   abrir(c: Concepto | null): void {
     this.actual.set(c);
-    this.form.reset(c ? { ...c } : { tipo: 'EGRESO', activo: true });
+    this.form.reset(c ? { ...c, exento_aprobacion: !!c.exento_aprobacion } : { tipo: 'EGRESO', activo: true, exento_aprobacion: false });
     c?.movimientos ? this.form.get('tipo')!.disable() : this.form.get('tipo')!.enable();
     this.editorVisible = true;
   }

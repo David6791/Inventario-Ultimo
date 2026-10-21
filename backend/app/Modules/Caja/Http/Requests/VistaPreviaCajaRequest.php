@@ -21,6 +21,7 @@ class VistaPreviaCajaRequest extends FormularioCaja
             'formato_comprobante'  => ['nullable', 'string', 'max:80'],
             'reinicio_comprobante' => ['nullable', Rule::in(Caja::REINICIOS)],
             'fecha'                => ['nullable', 'date'],
+            'proximo_comprobante'  => ['nullable', 'integer', 'min:1', 'max:99999999'],
         ];
     }
 }

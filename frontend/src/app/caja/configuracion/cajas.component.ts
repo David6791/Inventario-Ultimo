@@ -73,6 +73,11 @@ import { ESTILOS_CAJA } from '../core/estilos';
               <ng-container *ngIf="c.cajeros?.length; else sinCajeros">{{ nombres(c.cajeros) }}</ng-container>
               <ng-template #sinCajeros><span class="sin-cajeros">Sin cajeros asignados: nadie la puede abrir</span></ng-template>
             </div>
+            <div class="secundario cajeros" *ngIf="c.requiere_aprobacion">
+              <span class="pastilla pastilla-aprobacion">Con aprobación</span>
+              <ng-container *ngIf="c.aprobadores?.length; else sinAprobadores">Aprueban: {{ nombres(c.aprobadores) }}</ng-container>
+              <ng-template #sinAprobadores><span class="sin-cajeros">Sin aprobadores: nadie puede aprobar sus solicitudes</span></ng-template>
+            </div>
           </td>
           <td>
             <div class="codigo">{{ c.formato_comprobante }}</div>
@@ -148,13 +153,34 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <small>Toque un marcador para insertarlo donde está el cursor.</small>
         </div>
 
+        <div class="campo span-2">
+          <label for="proximo">Próximo correlativo</label>
+          <input id="proximo" pInputText formControlName="proximo_comprobante" inputmode="numeric" maxlength="8" class="codigo"
+                 [class.ng-invalid]="proximoInvalido()" [class.ng-dirty]="proximoInvalido()" />
+        </div>
+        <div class="campo span-4">
+          <label for="motivo-numeracion">Motivo del cambio <span class="opcional">(opcional)</span></label>
+          <input id="motivo-numeracion" pInputText formControlName="motivo_numeracion" maxlength="250"
+                 placeholder="Por ejemplo: sigue la numeración del sistema anterior" />
+        </div>
+        <div class="campo span-6 ayuda-proximo">
+          <small *ngIf="!proximoInvalido()">
+            Para seguir la numeración de otro sistema escriba el número con que debe salir el próximo comprobante.
+            Solo hacia adelante{{ actual()?.ultimo_correlativo ? ': ya se emitió hasta el ' + actual()!.ultimo_correlativo : '' }}.
+            {{ form.value.reinicio_comprobante !== 'NUNCA' ? 'Vale para el período actual: al reiniciar vuelve a 1.' : '' }}
+          </small>
+          <small *ngIf="proximoInvalido()" class="alerta">
+            Escriba un número entero mayor que {{ actual()?.ultimo_correlativo ?? 0 }}: los anteriores ya se emitieron.
+          </small>
+        </div>
+
         <div class="campo span-6">
-          <div class="previa" [class.previa-error]="previa()?.error || (previa()?.repetido && formatoCambiado())">
+          <div class="previa" [class.previa-error]="previa()?.error || (previa()?.repetido && (formatoCambiado() || proximoCambiado()))">
             <span class="rotulo">Así saldrá el próximo comprobante</span>
             <ng-container *ngIf="previa() as p; else calculando">
               <span class="codigo-grande" *ngIf="p.numero">{{ p.numero }}</span>
               <span class="mensaje" *ngIf="p.error">{{ p.error }}</span>
-              <span class="mensaje" *ngIf="p.repetido && formatoCambiado()">Ese número ya existe: con este formato se repetirían comprobantes.</span>
+              <span class="mensaje" *ngIf="p.repetido && (formatoCambiado() || proximoCambiado())">Ese número ya existe: con este formato se repetirían comprobantes.</span>
             </ng-container>
             <ng-template #calculando><span class="mensaje neutro">Calculando…</span></ng-template>
           </div>
@@ -169,6 +195,30 @@ import { ESTILOS_CAJA } from '../core/estilos';
                  permiso para abrir o registrar en caja.</small>
         </div>
 
+        <div class="campo span-6 bloque-aprobacion">
+          <div class="check-campo">
+            <p-checkbox formControlName="requiere_aprobacion" [binary]="true" inputId="aprobacion" />
+            <label for="aprobacion">Pide aprobación para entregar dinero</label>
+          </div>
+          <small *ngIf="!form.value.requiere_aprobacion">
+            La cajera entrega el efectivo directamente: registra el egreso y emite el comprobante.
+          </small>
+          <small *ngIf="form.value.requiere_aprobacion">
+            Quien necesita dinero registra una solicitud; un aprobador la aprueba o la rechaza, y solo entonces la cajera
+            paga. Los anticipos, los bonos y los conceptos marcados como exentos (por ejemplo, el depósito en banco) no
+            pasan por aprobación.
+          </small>
+          <ng-container *ngIf="form.value.requiere_aprobacion">
+            <label for="aprobadores" class="rotulo-aprobadores">Aprobadores</label>
+            <p-multiSelect inputId="aprobadores" [options]="opciones()?.aprobadores ?? []" [(ngModel)]="aprobadoresElegidos"
+                           [ngModelOptions]="{ standalone: true }" optionLabel="name" optionValue="id" display="chip"
+                           placeholder="Elija quiénes aprueban" [style]="{ width: '100%' }" [filter]="true" filterBy="name,email"
+                           appendTo="body" emptyMessage="Ningún usuario tiene el permiso para aprobar solicitudes" />
+            <small>Salen los usuarios con permiso para aprobar solicitudes (rol Aprobador de Caja). Nadie aprueba lo que él
+                   mismo pidió, y quien aprueba no puede pagar esa solicitud.</small>
+          </ng-container>
+        </div>
+
         <div class="campo span-6 check-campo">
           <p-checkbox formControlName="activa" [binary]="true" inputId="activa" />
           <label for="activa">Activa (se puede abrir)</label>
@@ -178,7 +228,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
       <ng-template pTemplate="footer">
         <p-button label="Cancelar" [text]="true" (onClick)="editorVisible = false" />
         <p-button label="Guardar" icon="pi pi-check" [loading]="guardando()"
-                  [disabled]="form.invalid || !!previa()?.error || (!!previa()?.repetido && formatoCambiado()) || guardando()"
+                  [disabled]="form.invalid || proximoInvalido() || !!previa()?.error || (!!previa()?.repetido && (formatoCambiado() || proximoCambiado())) || guardando()"
                   (onClick)="guardar()" />
       </ng-template>
     </p-dialog>
@@ -189,6 +239,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
     .cajeros i { font-size: 0.7rem; }
     .sin-cajeros { color: #b45309; }
     .alinear-abajo { align-self: end; padding-bottom: 0.5rem; }
+    .pastilla-aprobacion { background: #ede9fe; color: #5b21b6; }
+    .bloque-aprobacion { border: 1px solid var(--surface-border, #e5e7eb); border-radius: 8px; padding: 0.75rem 0.9rem;
+                         display: flex; flex-direction: column; gap: 0.4rem; }
+    .rotulo-aprobadores { margin-top: 0.4rem; }
+    .ayuda-proximo { margin-top: -0.4rem; }
+    .alerta { color: #b91c1c; font-weight: 600; }
+    .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
     .marcadores { display: flex; flex-wrap: wrap; gap: 0.35rem; }
     .marcador {
       border: 1px solid var(--surface-border, #d1d5db); background: var(--surface-card, #fff);
@@ -225,6 +282,9 @@ export class CajasComponent implements OnInit {
 
   editorVisible = false;
   cajerosElegidos: number[] = [];
+  aprobadoresElegidos: number[] = [];
+  /** Correlativo con que saldría el próximo comprobante al abrir el editor. */
+  private proximoOriginal = 1;
 
   readonly form = this.fb.group({
     codigo: ['', [Validators.required, Validators.maxLength(10)]],
@@ -234,6 +294,9 @@ export class CajasComponent implements OnInit {
     formato_comprobante: ['{CAJA}-{AAAA}-{N:6}', [Validators.required, Validators.maxLength(60)]],
     reinicio_comprobante: ['ANUAL', Validators.required],
     activa: [true],
+    requiere_aprobacion: [false],
+    proximo_comprobante: ['1'],
+    motivo_numeracion: [''],
   });
 
   ngOnInit(): void {
@@ -245,7 +308,11 @@ export class CajasComponent implements OnInit {
       switchMap(() => {
         this.previa.set(null);
         const v = this.form.getRawValue();
-        return this.servicio.vistaPrevia({ ...v, caja_id: this.actual()?.id ?? null } as any).pipe(
+        const proximo = this.proximoCambiado() && !this.proximoInvalido() ? this.proximo() : null;
+        return this.servicio.vistaPrevia({
+          codigo: v.codigo ?? '', formato_comprobante: v.formato_comprobante ?? '', reinicio_comprobante: v.reinicio_comprobante as any,
+          caja_id: this.actual()?.id ?? null, proximo_comprobante: proximo,
+        }).pipe(
           catchError((e) => of({ numero: null, repetido: false, error: mensajeDeError(e) })),
         );
       }),
@@ -275,6 +342,22 @@ export class CajasComponent implements OnInit {
     return !c || c.formato_comprobante !== v.formato_comprobante || c.reinicio_comprobante !== v.reinicio_comprobante;
   }
 
+  /** Correlativo escrito como entero, o null si no es válido. */
+  proximo(): number | null {
+    const t = String(this.form.value.proximo_comprobante ?? '').trim();
+    return /^\d{1,8}$/.test(t) && Number(t) >= 1 ? Number(t) : null;
+  }
+
+  proximoCambiado(): boolean {
+    return this.proximo() !== null && this.proximo() !== this.proximoOriginal;
+  }
+
+  /** Vacío o no entero, o hacia atrás de lo ya emitido. */
+  proximoInvalido(): boolean {
+    const n = this.proximo();
+    return n === null || n <= (this.actual()?.ultimo_correlativo ?? 0);
+  }
+
   nombres(usuarios: UsuarioCorto[] | undefined): string {
     return (usuarios ?? []).map((u) => u.name).join(', ');
   }
@@ -282,11 +365,13 @@ export class CajasComponent implements OnInit {
   abrir(c: Caja | null): void {
     this.actual.set(c);
     this.cajerosElegidos = (c?.cajeros ?? []).map((u) => u.id);
+    this.aprobadoresElegidos = (c?.aprobadores ?? []).map((u) => u.id);
+    this.proximoOriginal = (c?.ultimo_correlativo ?? 0) + 1;
     this.previa.set(null);
     const sede = this.opciones()?.almacenes.length === 1 ? this.opciones()!.almacenes[0].id : null;
-    this.form.reset(c ? { ...c } as any : {
+    this.form.reset(c ? { ...c, proximo_comprobante: String(this.proximoOriginal), motivo_numeracion: '' } as any : {
       almacen_id: sede, maneja_usd: false, formato_comprobante: '{CAJA}-{AAAA}-{N:6}',
-      reinicio_comprobante: 'ANUAL', activa: true,
+      reinicio_comprobante: 'ANUAL', activa: true, requiere_aprobacion: false, proximo_comprobante: '1', motivo_numeracion: '',
     });
 
     for (const campo of ['codigo', 'almacen_id']) {
@@ -313,9 +398,20 @@ export class CajasComponent implements OnInit {
 
   guardar(): void {
     this.guardando.set(true);
-    // Primero la caja (puede ser nueva y no tener id); después sus cajeros.
-    this.servicio.guardar(this.form.getRawValue() as DatosCaja, this.actual()?.id).pipe(
+    const v = this.form.getRawValue();
+    const datos: DatosCaja = {
+      codigo: v.codigo ?? '', nombre: v.nombre ?? '', almacen_id: v.almacen_id!, maneja_usd: !!v.maneja_usd,
+      formato_comprobante: v.formato_comprobante ?? '', reinicio_comprobante: v.reinicio_comprobante as any,
+      activa: !!v.activa, requiere_aprobacion: !!v.requiere_aprobacion,
+      // El correlativo solo viaja si se cambió: así no se registra un ajuste por cada edición.
+      proximo_comprobante: this.proximoCambiado() ? this.proximo() : null,
+      motivo_numeracion: this.proximoCambiado() ? (v.motivo_numeracion || null) : null,
+    };
+    // Primero la caja (puede ser nueva y no tener id); después sus cajeros y aprobadores.
+    this.servicio.guardar(datos, this.actual()?.id).pipe(
       switchMap((c) => this.servicio.guardarCajeros(c.id, this.cajerosElegidos).pipe(switchMap(() => of(c)))),
+      switchMap((c) => this.servicio.guardarAprobadores(c.id, this.aprobadoresElegidos)
+        .pipe(switchMap(() => of(c)))),
     ).subscribe({
       next: (c) => {
         this.guardando.set(false);

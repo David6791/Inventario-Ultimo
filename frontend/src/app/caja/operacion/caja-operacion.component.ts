@@ -20,7 +20,8 @@ import { RecepcionService } from '../../cargas/core/services/recepcion.service';
 import { PermisosService } from '../../core/services/permisos.service';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import {
-  CajaOperacion, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, PersonaCorta, SaldoSesion, TipoMovimiento, UsuarioCorto,
+  CajaOperacion, DatosMovimiento, FormaPago, Moneda, Movimiento, OpcionesCaja, PersonaCorta, SaldoSesion, SolicitudConUsuarios,
+  TipoMovimiento, UsuarioCorto,
 } from '../core/caja.model';
 import { CajaService } from '../core/caja.service';
 import { abrirPdf } from '../core/archivos';
@@ -69,6 +70,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
             <p-button label="Bonos por pagar" icon="pi pi-truck" severity="secondary" [outlined]="true" (onClick)="abrirBonos()"
                       [badge]="bonos().length ? '' + bonos().length : ''" badgeClass="p-badge-warning" />
           </ng-container>
+          <ng-container *ngIf="c.requiere_aprobacion">
+            <ng-container *appTienePermiso="'caja.registrar'">
+              <p-button label="Solicitudes por pagar" icon="pi pi-inbox" severity="secondary" [outlined]="true"
+                        (onClick)="abrirSolicitudes()"
+                        [badge]="c.solicitudes_por_pagar ? '' + c.solicitudes_por_pagar : ''" badgeClass="p-badge-warning" />
+            </ng-container>
+          </ng-container>
           <ng-container *appTienePermiso="'caja.registrar'">
             <p-button label="Ingreso" icon="pi pi-arrow-down-left" severity="success" [outlined]="true"
                       (onClick)="nuevoMovimiento('INGRESO')" />
@@ -83,6 +91,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
         <i class="pi pi-exclamation-triangle"></i>
         <span>Esta sesión se abrió el {{ c.sesion_abierta?.abierta_en | date: 'dd/MM/yyyy' }} y la caja se cierra a diario:
               ciérrela con su arqueo y abra la de hoy para seguir registrando.</span>
+      </div>
+
+      <div class="nota nota-neutra nota-encabezado" *ngIf="c.requiere_aprobacion && c.soy_cajero">
+        <i class="pi pi-shield"></i>
+        <span>Esta caja trabaja con aprobación: los egresos se pagan desde <strong>Solicitudes por pagar</strong>, una vez
+              aprobados. Directo solo se registran ingresos y los egresos exentos (por ejemplo, el depósito en banco).
+              <a [routerLink]="['/caja/solicitudes']" [queryParams]="{ caja: c.id }">Registrar una solicitud a nombre de alguien</a>.</span>
       </div>
 
       <div class="nota nota-neutra nota-encabezado" *ngIf="!c.soy_cajero">
@@ -226,6 +241,9 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <p-dropdown inputId="concepto" formControlName="concepto_id" [options]="conceptosDelTipo()" optionLabel="nombre"
                       optionValue="id" placeholder="Seleccione" [filter]="true" filterBy="nombre" appendTo="body"
                       emptyMessage="No hay conceptos" />
+          <small *ngIf="caja()?.requiere_aprobacion && tipoNuevo() === 'EGRESO'">
+            Solo los egresos exentos de aprobación. Los demás se pagan desde Solicitudes por pagar.
+          </small>
           <small *ngIf="opciones() && !conceptosDelTipo().length" class="alerta">
             No hay conceptos de {{ tipoNuevo() === 'INGRESO' ? 'ingreso' : 'egreso' }} activos.
             Créelos en Caja → Conceptos.
@@ -340,6 +358,69 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </ng-template>
     </p-dialog>
 
+    <!-- ====================== Solicitudes aprobadas por pagar ====================== -->
+    <p-dialog [(visible)]="solicitudesVisible" header="Solicitudes aprobadas por pagar" [modal]="true" [style]="{ width: '58rem' }"
+              [draggable]="false">
+      <p class="explicacion">Entregue el dinero a la persona y pídale que firme el comprobante. El monto, el concepto y la
+        persona son los aprobados; no se cambian.</p>
+      <p-table [value]="porPagar()" dataKey="id" styleClass="p-datatable-sm tabla" [loading]="cargandoSolicitudes()">
+        <ng-template pTemplate="header">
+          <tr><th style="width: 9rem">Solicitud</th><th style="width: 13rem">Para</th><th>Concepto</th>
+              <th style="width: 10rem">Aprobó</th><th class="derecha" style="width: 8rem">Monto</th><th style="width: 7rem"></th></tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-s>
+          <tr>
+            <td><span class="codigo">{{ s.numero }}</span><div class="secundario">{{ s.registrado_en | date: 'dd/MM HH:mm' }}</div></td>
+            <td>{{ s.persona_nombre }}<div class="secundario">{{ s.persona_ci ? 'CI ' + s.persona_ci : 'Sin CI' }}</div></td>
+            <td>{{ s.concepto?.nombre }}<div class="secundario">{{ s.glosa }}</div></td>
+            <td>{{ nombreDe(s.resuelto_por) }}<div class="secundario">{{ s.resuelto_en | date: 'dd/MM HH:mm' }}</div></td>
+            <td class="derecha monto">{{ s.monto | dinero: s.moneda }}</td>
+            <td><p-button label="Pagar" size="small" icon="pi pi-check" (onClick)="pedirPago(s)" /></td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="6"><div class="vacio"><i class="pi pi-check-circle"></i>
+            <div class="titulo-vacio">No hay solicitudes aprobadas por pagar</div></div></td></tr>
+        </ng-template>
+      </p-table>
+    </p-dialog>
+
+    <p-dialog [(visible)]="pagoVisible" header="Pagar solicitud" [modal]="true" [style]="{ width: '34rem' }" [draggable]="false">
+      <ng-container *ngIf="aPagar() as s">
+        <p class="explicacion">
+          <strong class="codigo">{{ s.numero }}</strong> · {{ s.persona_nombre }} recibe <strong>{{ s.monto | dinero: s.moneda }}</strong>
+          por {{ s.concepto?.nombre?.toLowerCase() }}.
+        </p>
+        <div class="campos">
+          <div class="campo span-6">
+            <label>Forma de pago</label>
+            <p-selectButton [options]="opciones()?.formas_pago ?? []" [(ngModel)]="pago.forma_pago" optionLabel="etiqueta" optionValue="valor" />
+          </div>
+          <ng-container *ngIf="pago.forma_pago !== 'EFECTIVO'">
+            <div class="campo span-3">
+              <label for="pago-banco">Banco</label>
+              <p-dropdown inputId="pago-banco" [options]="opciones()?.bancos ?? []" [(ngModel)]="pago.banco_id" optionLabel="nombre"
+                          optionValue="id" placeholder="Seleccione" appendTo="body" />
+            </div>
+            <div class="campo span-3">
+              <label for="pago-doc">N.º de {{ pago.forma_pago === 'CHEQUE' ? 'cheque' : 'transferencia' }}</label>
+              <input id="pago-doc" pInputText [(ngModel)]="pago.nro_documento" maxlength="40" />
+            </div>
+          </ng-container>
+          <div class="campo span-6" *ngIf="pago.forma_pago === 'EFECTIVO' && excedePago()">
+            <small class="alerta">Supera el efectivo en caja: {{ disponiblePago() }}.</small>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="pagoVisible = false" />
+        <p-button label="Pagar y emitir comprobante" icon="pi pi-check" [loading]="pagandoSolicitud()"
+                  [disabled]="pagandoSolicitud() || (pago.forma_pago === 'EFECTIVO' && excedePago())
+                              || (pago.forma_pago !== 'EFECTIVO' && (!pago.banco_id || !pago.nro_documento))"
+                  (onClick)="pagarSolicitud()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Bonos de transporte por pagar (lotes recibidos en la sede de esta caja) -->
     <p-dialog [(visible)]="bonosVisible" header="Bonos de transporte por pagar" [modal]="true" [style]="{ width: '50rem' }"
               [draggable]="false">
@@ -419,6 +500,15 @@ export class CajaOperacionComponent implements OnInit {
   private readonly toast = inject(MessageService);
   private readonly recepcion = inject(RecepcionService);
 
+  readonly porPagar = signal<SolicitudConUsuarios[]>([]);
+  readonly cargandoSolicitudes = signal(false);
+  readonly aPagar = signal<SolicitudConUsuarios | null>(null);
+  readonly pagandoSolicitud = signal(false);
+  solicitudesVisible = false;
+  pagoVisible = false;
+  pago: { forma_pago: FormaPago; banco_id: number | null; nro_documento: string | null } =
+    { forma_pago: 'EFECTIVO', banco_id: null, nro_documento: null };
+
   readonly bonos = signal<BonoPendiente[]>([]);
   readonly pagando = signal<number | null>(null);
   bonosVisible = false;
@@ -468,8 +558,10 @@ export class CajaOperacionComponent implements OnInit {
   /** Valor del formulario como señal, para que los avisos de saldo se recalculen al escribir. */
   private readonly valores = signal(this.form.getRawValue());
 
+  /** En cajas con aprobación, los egresos directos son solo los exentos. */
   readonly conceptosDelTipo = computed(() =>
-    (this.opciones()?.conceptos ?? []).filter((c) => c.tipo === this.tipoNuevo()));
+    (this.opciones()?.conceptos ?? []).filter((c) => c.tipo === this.tipoNuevo()
+      && (this.tipoNuevo() !== 'EGRESO' || !this.caja()?.requiere_aprobacion || c.exento_aprobacion)));
 
   private saldoDe(moneda: string): SaldoSesion | undefined {
     return this.caja()?.sesion_abierta?.saldos.find((s) => s.moneda === moneda);
@@ -522,6 +614,60 @@ export class CajaOperacionComponent implements OnInit {
         }
       },
       error: (e) => this.toast.add({ severity: 'error', summary: 'No se pudo cargar la caja', detail: mensajeDeError(e), life: 10000 }),
+    });
+  }
+
+  // ------------------------------------------------- Solicitudes por pagar
+
+  abrirSolicitudes(): void {
+    const c = this.caja();
+    if (!c) return;
+    this.solicitudesVisible = true;
+    this.cargandoSolicitudes.set(true);
+    this.servicio.solicitudesDeCaja(c.id).subscribe({
+      next: (s) => { this.porPagar.set(s); this.cargandoSolicitudes.set(false); },
+      error: (e) => {
+        this.cargandoSolicitudes.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se pudieron cargar las solicitudes', detail: mensajeDeError(e), life: 9000 });
+      },
+    });
+  }
+
+  pedirPago(s: SolicitudConUsuarios): void {
+    this.aPagar.set(s);
+    this.pago = { forma_pago: 'EFECTIVO', banco_id: null, nro_documento: null };
+    this.pagoVisible = true;
+  }
+
+  disponiblePago(): string {
+    const s = this.aPagar();
+    const saldo = s ? this.saldoDe(s.moneda) : undefined;
+    return saldo ? `${simbolo(saldo.moneda)} ${formatoDinero(saldo.saldo_efectivo_actual)}` : '';
+  }
+
+  excedePago(): boolean {
+    const s = this.aPagar();
+    const saldo = s ? this.saldoDe(s.moneda) : undefined;
+    return !!s && !!saldo && Number(s.monto) > Number(saldo.saldo_efectivo_actual);
+  }
+
+  pagarSolicitud(): void {
+    const s = this.aPagar();
+    if (!s) return;
+    this.pagandoSolicitud.set(true);
+    this.servicio.pagarSolicitud(s.id, this.pago).subscribe({
+      next: (r) => {
+        this.pagandoSolicitud.set(false);
+        this.pagoVisible = false;
+        this.solicitudesVisible = false;
+        this.ultimo.set(r.data);
+        this.toast.add({ severity: 'success', summary: r.mensaje ?? 'Pagada', detail: 'Imprima el comprobante para que lo firme.', life: 8000 });
+        this.cargar();
+      },
+      error: (e) => {
+        this.pagandoSolicitud.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se pagó la solicitud', detail: mensajeDeError(e), life: 9000 });
+      },
     });
   }
 

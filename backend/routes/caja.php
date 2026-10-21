@@ -6,6 +6,7 @@ use App\Modules\Caja\Http\Controllers\LibroCajaController;
 use App\Modules\Caja\Http\Controllers\MovimientoController;
 use App\Modules\Caja\Http\Controllers\PersonaController;
 use App\Modules\Caja\Http\Controllers\SesionController;
+use App\Modules\Caja\Http\Controllers\SolicitudController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +38,19 @@ Route::middleware('auth:sanctum')->group(function () {
             ->whereNumber('movimiento');
     });
 
+    Route::get('cajas/{caja}/solicitudes', [SolicitudController::class, 'deCaja'])
+        ->middleware('can:caja.ver')->whereNumber('caja');
+
+    // --- Solicitudes de dinero (permiso en cada controlador o FormRequest) --
+    Route::get('solicitudes/opciones',     [SolicitudController::class, 'opciones']);
+    Route::get('solicitudes/mias',         [SolicitudController::class, 'mias']);
+    Route::get('solicitudes/por-aprobar',  [SolicitudController::class, 'porAprobar']);
+    Route::post('solicitudes',             [SolicitudController::class, 'store']);
+    Route::post('solicitudes/{solicitud}/aprobar',  [SolicitudController::class, 'aprobar'])->whereNumber('solicitud');
+    Route::post('solicitudes/{solicitud}/rechazar', [SolicitudController::class, 'rechazar'])->whereNumber('solicitud');
+    Route::post('solicitudes/{solicitud}/anular',   [SolicitudController::class, 'anular'])->whereNumber('solicitud');
+    Route::post('solicitudes/{solicitud}/pagar',    [SolicitudController::class, 'pagar'])->whereNumber('solicitud');
+
     // --- Reportes (caja.reportes, en LibroCajaRequest) ----------------------
     Route::get('libro',        [LibroCajaController::class, 'index']);
     Route::get('libro/pdf',    [LibroCajaController::class, 'pdf']);
@@ -49,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('conceptos',              [ConceptoController::class, 'store']);
     Route::put('conceptos/{concepto}',    [ConceptoController::class, 'update'])->whereNumber('concepto');
     Route::put('cajas/{caja}/cajeros',    [CajaController::class, 'cajerosActualizar'])->whereNumber('caja');
+    Route::put('cajas/{caja}/aprobadores', [CajaController::class, 'aprobadoresActualizar'])->whereNumber('caja');
     Route::put('personas/{persona}',      [PersonaController::class, 'update'])->whereNumber('persona');
     Route::post('personas/{persona}/unificar', [PersonaController::class, 'unificar'])->whereNumber('persona');
 

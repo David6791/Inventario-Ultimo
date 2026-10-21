@@ -212,6 +212,8 @@ final class Permisos
         'caja.reportes'              => 'Ver y exportar el libro de caja y sus reportes',
         'caja.pagar-anticipo'        => 'Pagar anticipos de mineral y recibir sus devoluciones',
         'caja.pagar-bono'            => 'Pagar bonos de transporte a los choferes',
+        'caja.solicitar'             => 'Solicitar dinero de las cajas con aprobación y ver sus solicitudes',
+        'caja.aprobar'               => 'Aprobar o rechazar solicitudes de dinero de las cajas asignadas',
 
         // Manejo de cargas
         'cargas.ver'                 => 'Consultar lotes, pesajes, análisis y anticipos',

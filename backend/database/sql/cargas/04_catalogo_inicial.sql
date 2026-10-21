@@ -134,8 +134,13 @@ ON CONFLICT (codigo) DO NOTHING;
 
 -- Conceptos manuales de arranque (sprint 2). El administrador los cambia o
 -- agrega otros desde Caja → Conceptos.
+-- El depósito en banco no sale de la empresa: en cajas con aprobación la
+-- cajera lo registra directo, sin solicitud (17_solicitudes_caja.sql).
+INSERT INTO caja.concepto (codigo, nombre, tipo, origen, exento_aprobacion) VALUES
+    ('DEPOSITO_BANCARIO',   'Depósito de efectivo en banco',       'EGRESO',  'MANUAL', true)
+ON CONFLICT DO NOTHING;
+
 INSERT INTO caja.concepto (codigo, nombre, tipo, origen) VALUES
-    ('DEPOSITO_BANCARIO',   'Depósito de efectivo en banco',       'EGRESO',  'MANUAL'),
     ('SERVICIOS_BASICOS',   'Servicios básicos (luz, agua, internet)', 'EGRESO', 'MANUAL'),
     ('COMBUSTIBLE',         'Compra de combustible',               'EGRESO',  'MANUAL'),
     ('GASTOS_MENORES',      'Gastos menores de oficina',           'EGRESO',  'MANUAL'),

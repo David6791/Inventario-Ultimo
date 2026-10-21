@@ -20,13 +20,14 @@ class Caja extends CajaModel
 
     protected $fillable = [
         'codigo', 'nombre', 'almacen_id', 'maneja_usd',
-        'formato_comprobante', 'reinicio_comprobante', 'activa',
+        'formato_comprobante', 'reinicio_comprobante', 'activa', 'requiere_aprobacion',
     ];
 
     protected $casts = [
         'almacen_id' => 'integer',
         'maneja_usd' => 'boolean',
         'activa'     => 'boolean',
+        'requiere_aprobacion' => 'boolean',
     ];
 
     public const REINICIOS = ['NUNCA', 'ANUAL', 'MENSUAL', 'DIARIO'];
@@ -76,6 +77,23 @@ class Caja extends CajaModel
     public function esCajero(User $usuario): bool
     {
         return $this->exists && $this->cajeros()->whereKey($usuario->id)->exists();
+    }
+
+    /** Usuarios que aprueban o rechazan las solicitudes de dinero de esta caja. */
+    public function aprobadores(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'caja.caja_aprobador', 'caja_id', 'user_id')
+            ->withPivot(['asignado_por', 'asignado_en']);
+    }
+
+    public function esAprobador(User $usuario): bool
+    {
+        return $this->exists && $this->aprobadores()->whereKey($usuario->id)->exists();
+    }
+
+    public function solicitudes(): HasMany
+    {
+        return $this->hasMany(Solicitud::class, 'caja_id');
     }
 
     /**

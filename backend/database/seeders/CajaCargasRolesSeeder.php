@@ -46,6 +46,20 @@ class CajaCargasRolesSeeder extends Seeder
             ],
         ],
 
+        'Aprobador de Caja' => [
+            'descripcion' => 'Aprueba o rechaza las solicitudes de dinero de las cajas que tiene asignadas. No opera ni valida cajas.',
+            'permisos' => [
+                'caja.aprobar',
+            ],
+        ],
+
+        'Solicitante de Caja' => [
+            'descripcion' => 'Solicita dinero de las cajas con aprobación y sigue el estado de sus solicitudes.',
+            'permisos' => [
+                'caja.solicitar',
+            ],
+        ],
+
         'Recepción de Cargas' => [
             'descripcion' => 'Registra los lotes que llegan y sus pesajes.',
             'permisos' => [
@@ -91,6 +105,7 @@ class CajaCargasRolesSeeder extends Seeder
         ['cargas.precios-editar', 'cargas.precios-aprobar'],
         ['cargas.anticipo-registrar', 'cargas.anticipo-autorizar'],
         ['caja.cerrar', 'caja.validar'],
+        ['caja.registrar', 'caja.aprobar'],
     ];
 
     public function run(): void

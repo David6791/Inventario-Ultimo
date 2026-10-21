@@ -13,6 +13,7 @@ use App\Modules\Caja\Models\Caja;
 use App\Modules\Caja\Models\Concepto;
 use App\Modules\Caja\Models\Movimiento;
 use App\Modules\Caja\Services\CajaService;
+use App\Modules\Caja\Services\SolicitudService;
 use App\Modules\Comun\Models\Banco;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,15 +26,18 @@ class CajaController extends Controller
 {
     use AmbitoDeCaja;
 
-    public function __construct(private readonly CajaService $cajas)
-    {
+    public function __construct(
+        private readonly CajaService $cajas,
+        private readonly SolicitudService $solicitudes,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
     {
         $cajas = Caja::query()
             ->delAmbitoDe($request->user())
-            ->with(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name'])
+            ->with(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name', 'aprobadores:id,name'])
+            ->withCount(['solicitudes as solicitudes_por_pagar' => fn ($q) => $q->where('estado', 'APROBADA')])
             ->orderByDesc('activa')
             ->orderBy('codigo')
             ->get()
@@ -43,8 +47,10 @@ class CajaController extends Controller
                 return [
                     ...$caja->toArray(),
                     'cajeros'         => $this->cajeros($caja),
+                    'aprobadores'     => $this->usuariosDe($caja->aprobadores),
                     'soy_cajero'      => $caja->cajeros->contains('id', $request->user()->id),
                     'tiene_sesiones'  => $caja->tieneSesiones(),
+                    'ultimo_correlativo' => $this->solicitudes->ultimoComprobante($caja),
                     'proximo_numero'  => $this->cajas->vistaPrevia($caja->only(['codigo', 'formato_comprobante', 'reinicio_comprobante']), $caja)['numero'],
                     'sesion_abierta'  => $sesion ? [
                         'id'          => $sesion->id,
@@ -64,7 +70,8 @@ class CajaController extends Controller
     {
         $this->asegurarAmbito($caja);
 
-        $caja->load(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name']);
+        $caja->load(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name', 'aprobadores:id,name']);
+        $caja->loadCount(['solicitudes as solicitudes_por_pagar' => fn ($q) => $q->where('estado', 'APROBADA')]);
         $sesion = $caja->sesionAbierta;
 
         $ultima = $caja->sesiones()
@@ -76,6 +83,7 @@ class CajaController extends Controller
         return response()->json(['data' => [
             ...$caja->toArray(),
             'cajeros'         => $this->cajeros($caja),
+            'aprobadores'     => $this->usuariosDe($caja->aprobadores),
             'soy_cajero'      => $caja->cajeros->contains('id', $request->user()->id),
             'saldos_arranque' => $this->cajas->saldosDeArranque($caja),
             'ultima_cerrada'  => $ultima ? [
@@ -102,14 +110,16 @@ class CajaController extends Controller
 
     public function store(CajaRequest $request): JsonResponse
     {
-        $caja = $this->cajas->crearCaja($request->validated());
+        $caja = $this->cajas->crearCaja($request->datosCaja());
+        $this->fijarNumeracion($request, $caja);
 
         return response()->json(['data' => $caja->load('almacen:id,codigo,nombre')], 201);
     }
 
     public function update(CajaRequest $request, Caja $caja): JsonResponse
     {
-        $caja = $this->cajas->actualizarCaja($caja, $request->validated());
+        $caja = $this->cajas->actualizarCaja($caja, $request->datosCaja());
+        $this->fijarNumeracion($request, $caja);
 
         return response()->json(['data' => $caja->load('almacen:id,codigo,nombre')]);
     }
@@ -125,6 +135,17 @@ class CajaController extends Controller
         ]);
     }
 
+    /** Aprobadores de las solicitudes de dinero. Reemplaza la lista completa. */
+    public function aprobadoresActualizar(CajerosRequest $request, Caja $caja): JsonResponse
+    {
+        $this->cajas->asignarAprobadores($caja, $request->input('usuarios', []), $request->user());
+
+        return response()->json([
+            'data'    => $this->usuariosDe($caja->load('aprobadores:id,name')->aprobadores),
+            'mensaje' => "Aprobadores de la caja {$caja->codigo} actualizados.",
+        ]);
+    }
+
     /** Vista previa en vivo del formato del comprobante. Nunca guarda ni consume números. */
     public function vistaPrevia(VistaPreviaCajaRequest $request): JsonResponse
     {
@@ -134,6 +155,7 @@ class CajaController extends Controller
             $request->only(['codigo', 'formato_comprobante', 'reinicio_comprobante']),
             $caja,
             $request->input('fecha'),
+            $request->filled('proximo_comprobante') ? $request->integer('proximo_comprobante') : null,
         )]);
     }
 
@@ -160,9 +182,21 @@ class CajaController extends Controller
                 ->get(['id', 'name', 'email'])
             : [];
 
+        // Para asignar aprobadores: usuarios activos con caja.aprobar.
+        $aprobadores = $usuario->can('caja.administrar')
+            ? User::query()
+                ->where('activo', true)
+                ->where(fn ($q) => $q
+                    ->where(fn ($p) => $p->permission(['caja.aprobar']))
+                    ->orWhereHas('roles', fn ($r) => $r->where('name', Permisos::SUPER_ADMIN)))
+                ->orderBy('name')
+                ->get(['id', 'name', 'email'])
+            : [];
+
         return response()->json(['data' => [
             'almacenes'   => $almacenes,
             'usuarios'    => $usuarios,
+            'aprobadores' => $aprobadores,
             'bancos'      => Banco::activos()->orderBy('nombre')->get(['id', 'nombre']),
             'monedas'     => [['valor' => 'BOB', 'etiqueta' => 'Bolivianos (Bs)'], ['valor' => 'USD', 'etiqueta' => 'Dólares (US$)']],
             'formas_pago' => array_map(fn ($f) => ['valor' => $f, 'etiqueta' => ucfirst(mb_strtolower($f))], Movimiento::FORMAS_PAGO),
@@ -179,8 +213,23 @@ class CajaController extends Controller
                 ->where('origen', Concepto::MANUAL)
                 ->where('activo', true)
                 ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'tipo']),
+                ->get(['id', 'codigo', 'nombre', 'tipo', 'exento_aprobacion']),
         ]]);
+    }
+
+    /** Si el formulario indicó desde qué número sigue el comprobante, se fija. */
+    private function fijarNumeracion(CajaRequest $request, Caja $caja): void
+    {
+        if ($request->filled('proximo_comprobante')) {
+            $this->solicitudes->fijarProximoComprobante(
+                $caja, $request->integer('proximo_comprobante'), $request->user(), $request->input('motivo_numeracion')
+            );
+        }
+    }
+
+    private function usuariosDe($usuarios): array
+    {
+        return $usuarios->sortBy('name')->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name])->values()->all();
     }
 
     private function cajeros(Caja $caja): array

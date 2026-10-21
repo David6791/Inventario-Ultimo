@@ -17,7 +17,7 @@ class Movimiento extends CajaModel
 
     protected $fillable = [
         'sesion_id', 'concepto_id', 'monto', 'moneda', 'forma_pago', 'banco_id',
-        'nro_documento', 'persona_id', 'persona_nombre', 'persona_ci', 'glosa', 'registrado_por',
+        'nro_documento', 'persona_id', 'persona_nombre', 'persona_ci', 'glosa', 'registrado_por', 'solicitud_id',
     ];
 
     protected $casts = [
@@ -26,6 +26,7 @@ class Movimiento extends CajaModel
         'concepto_id' => 'integer',
         'banco_id'    => 'integer',
         'persona_id'  => 'integer',
+        'solicitud_id' => 'integer',
         'monto'       => 'decimal:2',
         'fecha'       => 'datetime',
         'anulado_en'  => 'datetime',
@@ -59,6 +60,11 @@ class Movimiento extends CajaModel
     public function persona(): BelongsTo
     {
         return $this->belongsTo(Persona::class, 'persona_id');
+    }
+
+    public function solicitud(): BelongsTo
+    {
+        return $this->belongsTo(Solicitud::class, 'solicitud_id');
     }
 
     public function registradoPor(): BelongsTo

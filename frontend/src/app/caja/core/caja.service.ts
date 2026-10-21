@@ -5,7 +5,8 @@ import { environment } from '../../../environments/environment';
 import {
   Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, Pagina,
   Persona, PersonaCorta, PersonaDetalle, SaldoSesion, SesionAbierta, UsuarioCorto, VistaPreviaComprobante,
-  DatosCierre, FiltrosLibro, LibroCaja, SesionDetalle, SesionFila,
+  DatosCierre, FiltrosLibro, LibroCaja, SesionDetalle, SesionFila, DatosSolicitud, FormaPago, OpcionesSolicitud,
+  SolicitudConUsuarios,
 } from './caja.model';
 
 interface Respuesta<T> { data: T; mensaje?: string; }
@@ -51,6 +52,52 @@ export class CajaService {
   guardarCajeros(cajaId: number, usuarios: number[]): Observable<UsuarioCorto[]> {
     return this.http.put<Respuesta<UsuarioCorto[]>>(`${this.base}/cajas/${cajaId}/cajeros`, { usuarios })
       .pipe(map((r) => r.data));
+  }
+
+  /** Reemplaza la lista de aprobadores de la caja. */
+  guardarAprobadores(cajaId: number, usuarios: number[]): Observable<UsuarioCorto[]> {
+    return this.http.put<Respuesta<UsuarioCorto[]>>(`${this.base}/cajas/${cajaId}/aprobadores`, { usuarios })
+      .pipe(map((r) => r.data));
+  }
+
+  // -------------------------------------------------------- Solicitudes
+  opcionesSolicitud(): Observable<OpcionesSolicitud> {
+    return this.http.get<Respuesta<OpcionesSolicitud>>(`${this.base}/solicitudes/opciones`).pipe(map((r) => r.data));
+  }
+
+  misSolicitudes(): Observable<SolicitudConUsuarios[]> {
+    return this.http.get<Respuesta<SolicitudConUsuarios[]>>(`${this.base}/solicitudes/mias`).pipe(map((r) => r.data));
+  }
+
+  porAprobar(estado: 'PENDIENTE' | 'RESUELTAS'): Observable<{ data: SolicitudConUsuarios[]; cajas: { id: number; codigo: string; nombre: string }[] }> {
+    return this.http.get<{ data: SolicitudConUsuarios[]; cajas: { id: number; codigo: string; nombre: string }[] }>(
+      `${this.base}/solicitudes/por-aprobar`, { params: { estado } });
+  }
+
+  solicitudesDeCaja(cajaId: number, estado = 'APROBADA'): Observable<SolicitudConUsuarios[]> {
+    return this.http.get<Respuesta<SolicitudConUsuarios[]>>(`${this.base}/cajas/${cajaId}/solicitudes`, { params: { estado } })
+      .pipe(map((r) => r.data));
+  }
+
+  solicitar(datos: DatosSolicitud): Observable<Respuesta<SolicitudConUsuarios>> {
+    return this.http.post<Respuesta<SolicitudConUsuarios>>(`${this.base}/solicitudes`, datos);
+  }
+
+  aprobarSolicitud(id: number, observacion: string | null): Observable<Respuesta<SolicitudConUsuarios>> {
+    return this.http.post<Respuesta<SolicitudConUsuarios>>(`${this.base}/solicitudes/${id}/aprobar`, { observacion });
+  }
+
+  rechazarSolicitud(id: number, observacion: string): Observable<Respuesta<SolicitudConUsuarios>> {
+    return this.http.post<Respuesta<SolicitudConUsuarios>>(`${this.base}/solicitudes/${id}/rechazar`, { observacion });
+  }
+
+  anularSolicitud(id: number, motivo: string): Observable<Respuesta<SolicitudConUsuarios>> {
+    return this.http.post<Respuesta<SolicitudConUsuarios>>(`${this.base}/solicitudes/${id}/anular`, { motivo });
+  }
+
+  pagarSolicitud(id: number, pago: { forma_pago: FormaPago; banco_id?: number | null; nro_documento?: string | null }):
+      Observable<Respuesta<Movimiento> & { saldos: SaldoSesion[] }> {
+    return this.http.post<Respuesta<Movimiento> & { saldos: SaldoSesion[] }>(`${this.base}/solicitudes/${id}/pagar`, pago);
   }
 
   // ---------------------------------------------------------- Personas

@@ -18,7 +18,9 @@ export interface OpcionesCaja {
   reinicios: Opcion<Reinicio>[];
   marcadores: { marcador: string; descripcion: string }[];
   denominaciones: Record<Moneda, number[]>;
-  conceptos: { id: number; codigo: string; nombre: string; tipo: TipoMovimiento }[];
+  conceptos: { id: number; codigo: string; nombre: string; tipo: TipoMovimiento; exento_aprobacion: boolean }[];
+  /** Candidatos a aprobador (usuarios con caja.aprobar; solo llega a quien administra cajas). */
+  aprobadores: { id: number; name: string; email: string }[];
 }
 
 /** Una fila de caja.v_sesion_resumen (los montos llegan como texto decimal). */
@@ -43,6 +45,8 @@ export interface Concepto {
   tipo: TipoMovimiento;
   origen: string;
   activo: boolean;
+  /** Egreso que se registra directo aun en cajas con aprobación (por ejemplo, depósito en banco). */
+  exento_aprobacion?: boolean;
   movimientos?: number;
 }
 
@@ -119,9 +123,15 @@ export interface Caja {
   formato_comprobante: string;
   reinicio_comprobante: Reinicio;
   activa: boolean;
+  /** Los egresos manuales salen solo de una solicitud aprobada. */
+  requiere_aprobacion: boolean;
   tiene_sesiones?: boolean;
   proximo_numero?: string | null;
+  /** Último correlativo emitido en el período actual (0 si ninguno). */
+  ultimo_correlativo?: number;
+  solicitudes_por_pagar?: number;
   cajeros?: UsuarioCorto[];
+  aprobadores?: UsuarioCorto[];
   /** Si el usuario que mira está asignado: solo entonces opera la caja. */
   soy_cajero?: boolean;
   sesion_abierta: SesionAbierta | null;
@@ -142,6 +152,66 @@ export interface DatosCaja {
   formato_comprobante: string;
   reinicio_comprobante: Reinicio;
   activa: boolean;
+  requiere_aprobacion: boolean;
+  /** Desde qué número sigue el comprobante; solo se manda si cambia. */
+  proximo_comprobante?: number | null;
+  motivo_numeracion?: string | null;
+}
+
+export type EstadoSolicitud = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'PAGADA' | 'ANULADA';
+
+/** Solicitud de dinero de una caja con aprobación. */
+export interface Solicitud {
+  id: number;
+  numero: string;
+  caja_id: number;
+  caja?: { id: number; codigo: string; nombre: string };
+  concepto_id: number;
+  concepto?: { id: number; codigo: string; nombre: string };
+  monto: string;
+  moneda: Moneda;
+  persona_id: number;
+  persona_nombre: string;
+  persona_ci: string | null;
+  glosa: string;
+  estado: EstadoSolicitud;
+  registrado_por: number;
+  registrado_en: string;
+  resuelto_en: string | null;
+  observacion: string | null;
+  anulado_en: string | null;
+  motivo_anulacion: string | null;
+  movimiento_id: number | null;
+  movimiento?: { id: number; numero: string; estado: string; fecha: string } | null;
+  resuelto_por: number | null;
+  anulado_por: number | null;
+  /** Solo en la bandeja del aprobador: la registró él o es a su nombre (no la puede aprobar). */
+  es_mia?: boolean;
+}
+
+/** Nombres de usuario de las relaciones registradoPor, resueltoPor, anuladoPor. */
+export interface SolicitudConUsuarios extends Omit<Solicitud, 'registrado_por' | 'resuelto_por' | 'anulado_por'> {
+  registrado_por: UsuarioCorto | number;
+  resuelto_por: UsuarioCorto | number | null;
+  anulado_por: UsuarioCorto | number | null;
+}
+
+export interface OpcionesSolicitud {
+  cajas: { id: number; codigo: string; nombre: string; sede: string | null; monedas: Moneda[]; soy_cajero: boolean }[];
+  conceptos: { id: number; codigo: string; nombre: string }[];
+  puede_a_nombre_de: boolean;
+  puede_solicitar: boolean;
+}
+
+export interface DatosSolicitud {
+  caja_id: number;
+  concepto_id: number;
+  monto: number;
+  moneda: Moneda;
+  glosa: string;
+  persona_id?: number | null;
+  persona_nombre?: string | null;
+  persona_ci?: string | null;
 }
 
 export interface DatosMovimiento {

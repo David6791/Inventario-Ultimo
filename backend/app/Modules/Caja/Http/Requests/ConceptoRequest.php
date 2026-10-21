@@ -32,6 +32,7 @@ class ConceptoRequest extends FormularioCaja
             'nombre' => ['required', 'string', 'max:120'],
             'tipo'   => ['required', Rule::in(Concepto::TIPOS)],
             'activo' => ['boolean'],
+            'exento_aprobacion' => ['boolean'],
         ];
     }
 

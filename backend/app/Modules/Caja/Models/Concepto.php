@@ -11,9 +11,9 @@ class Concepto extends CajaModel
 {
     protected $table = 'caja.concepto';
 
-    protected $fillable = ['codigo', 'nombre', 'tipo', 'origen', 'activo'];
+    protected $fillable = ['codigo', 'nombre', 'tipo', 'origen', 'activo', 'exento_aprobacion'];
 
-    protected $casts = ['activo' => 'boolean'];
+    protected $casts = ['activo' => 'boolean', 'exento_aprobacion' => 'boolean'];
 
     public const TIPOS = ['INGRESO', 'EGRESO'];
     public const MANUAL = 'MANUAL';
