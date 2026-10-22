@@ -85,6 +85,7 @@ class SolicitudService
                 'forma_pago'     => $pago['forma_pago'] ?? 'EFECTIVO',
                 'banco_id'       => $pago['banco_id'] ?? null,
                 'nro_documento'  => $pago['nro_documento'] ?? null,
+                'provisional'    => (bool) ($pago['provisional'] ?? false),
                 'glosa'          => Str::limit("Solicitud {$solicitud->numero}: {$solicitud->glosa}", 247),
                 'registrado_por' => $cajero->id,
             ]);

@@ -101,7 +101,8 @@ class CajaController extends Controller
                 'saldos'      => $this->cajas->resumen($sesion),
                 'movimientos' => $sesion->movimientos()
                     ->with(['concepto:id,codigo,nombre,tipo,origen', 'banco:id,nombre',
-                            'registradoPor:id,name', 'anuladoPor:id,name', 'persona:id,nombre,ci'])
+                            'registradoPor:id,name', 'anuladoPor:id,name', 'persona:id,nombre,ci', 'validadoPor:id,name',
+                            'ajustes.registradoPor:id,name', 'ajustes.resueltoPor:id,name', 'ajustes.aplicadoPor:id,name'])
                     ->orderByDesc('id')
                     ->get(),
             ] : null,

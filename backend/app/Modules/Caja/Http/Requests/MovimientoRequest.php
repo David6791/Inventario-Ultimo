@@ -43,6 +43,8 @@ class MovimientoRequest extends FormularioCaja
             'persona_nombre' => ['required_without:persona_id', 'nullable', 'string', 'max:150'],
             'persona_ci'     => ['nullable', 'string', 'max:15'],
             'glosa'          => ['required', 'string', 'min:5', 'max:250'],
+            // Egreso a rendir en el día: el monto se ajusta hasta validarlo.
+            'provisional'    => ['boolean'],
         ];
     }
 

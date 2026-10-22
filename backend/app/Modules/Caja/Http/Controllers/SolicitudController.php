@@ -99,6 +99,18 @@ class SolicitudController extends Controller
                 'es_mia' => $s->registrado_por === $usuario->id
                     || ($usuario->ci && $s->persona_ci && mb_strtoupper(trim($usuario->ci)) === $s->persona_ci),
             ]),
+            // Aumentos de comprobantes provisionales por aprobar (solo en la vista de pendientes).
+            'ajustes' => $estado === Solicitud::PENDIENTE
+                ? \App\Modules\Caja\Models\MovimientoAjuste::query()
+                    ->where('estado', 'PENDIENTE')
+                    ->whereHas('movimiento', fn ($m) => $m->whereIn('caja_id',
+                        fn ($q) => $q->select('caja_id')->from('caja.caja_aprobador')->where('user_id', $usuario->id)))
+                    ->with(['movimiento:id,numero,caja_id,concepto_id,monto,moneda,persona_nombre,persona_ci,glosa,registrado_por,solicitud_id',
+                            'movimiento.caja:id,codigo', 'movimiento.concepto:id,nombre', 'registradoPor:id,name'])
+                    ->orderBy('id')->get()
+                    ->map(fn ($a) => [...$a->toArray(), 'es_mio' => in_array($usuario->id, [$a->registrado_por, $a->movimiento->registrado_por], true)
+                        || ($usuario->ci && $a->movimiento->persona_ci && mb_strtoupper(trim($usuario->ci)) === $a->movimiento->persona_ci)])
+                : [],
             'cajas' => $usuario->can('caja.aprobar')
                 ? Caja::whereIn('id', fn ($q) => $q->select('caja_id')->from('caja.caja_aprobador')->where('user_id', $usuario->id))
                     ->orderBy('codigo')->get(['id', 'codigo', 'nombre'])

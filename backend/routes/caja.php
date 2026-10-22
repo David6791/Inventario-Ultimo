@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Caja\Http\Controllers\AjusteController;
 use App\Modules\Caja\Http\Controllers\CajaController;
 use App\Modules\Caja\Http\Controllers\ConceptoController;
 use App\Modules\Caja\Http\Controllers\LibroCajaController;
@@ -73,4 +74,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('sesiones/{sesion}/cerrar',          [SesionController::class, 'cerrar'])->whereNumber('sesion');
     Route::post('sesiones/{sesion}/validar',         [SesionController::class, 'validar'])->whereNumber('sesion');
     Route::post('movimientos/{movimiento}/anular',   [MovimientoController::class, 'anular'])->whereNumber('movimiento');
+
+    // --- Comprobantes provisionales: ajuste en el día y validación ----------
+    Route::post('movimientos/{movimiento}/ajustes',  [AjusteController::class, 'ajustar'])->whereNumber('movimiento');
+    Route::post('movimientos/{movimiento}/validar',  [AjusteController::class, 'validar'])->whereNumber('movimiento');
+    Route::post('ajustes/{ajuste}/aprobar',          [AjusteController::class, 'aprobar'])->whereNumber('ajuste');
+    Route::post('ajustes/{ajuste}/rechazar',         [AjusteController::class, 'rechazar'])->whereNumber('ajuste');
+    Route::post('ajustes/{ajuste}/aplicar',          [AjusteController::class, 'aplicar'])->whereNumber('ajuste');
 });

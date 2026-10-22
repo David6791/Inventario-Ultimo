@@ -92,6 +92,12 @@
       </div>
     @endif
 
+    @if ($mov->estado !== 'ANULADO' && $mov->provisional && ! $mov->validado_en)
+      <div class="sello-anulado">
+        <b>PROVISIONAL</b> — el monto puede ajustarse hoy y vale recién cuando se valida. Imprima el comprobante validado para firmar.
+      </div>
+    @endif
+
     <table>
       <tr>
         <td>
@@ -135,6 +141,26 @@
         <td class="rotulo">Glosa</td>
         <td class="valor">{{ $mov->glosa }}</td>
       </tr>
+      @php($aplicados = $mov->ajustes->where('estado', 'APLICADO'))
+      @if ($aplicados->isNotEmpty())
+        <tr>
+          <td class="rotulo">Ajustes</td>
+          <td class="valor">
+            Entregado {{ number_format((float) $aplicados->first()->monto_anterior, 2, ',', '.') }}
+            @foreach ($aplicados as $a)
+              · {{ $a->monto_nuevo > $a->monto_anterior ? '+' : '−' }}{{ number_format(abs($a->monto_nuevo - $a->monto_anterior), 2, ',', '.') }}
+              ({{ $a->motivo }}{{ $a->documento ? ', doc. ' . $a->documento : '' }})
+            @endforeach
+            · total {{ $monto }}
+          </td>
+        </tr>
+      @endif
+      @if ($mov->validado_en)
+        <tr>
+          <td class="rotulo">Validado</td>
+          <td class="valor">{{ $mov->validado_en->format('d/m/Y H:i') }} por {{ $mov->validadoPor?->name }}</td>
+        </tr>
+      @endif
     </table>
 
     <table class="firmas">

@@ -26,6 +26,7 @@ class PagarSolicitudRequest extends FormularioCaja
             'banco_id'      => ['nullable', 'required_unless:forma_pago,EFECTIVO', 'integer',
                                 Rule::exists(Banco::class, 'id')->where('activo', true)],
             'nro_documento' => ['nullable', 'required_unless:forma_pago,EFECTIVO', 'string', 'max:40'],
+            'provisional'   => ['boolean'],
         ];
     }
 

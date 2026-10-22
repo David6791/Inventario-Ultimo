@@ -4,6 +4,7 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
+import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
 import { DropdownModule } from 'primeng/dropdown';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -20,13 +21,14 @@ import { RecepcionService } from '../../cargas/core/services/recepcion.service';
 import { PermisosService } from '../../core/services/permisos.service';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import {
-  CajaOperacion, DatosMovimiento, FormaPago, Moneda, Movimiento, OpcionesCaja, PersonaCorta, SaldoSesion, SolicitudConUsuarios,
+  AjusteMovimiento, CajaOperacion, DatosMovimiento, FormaPago, Moneda, Movimiento, OpcionesCaja, PersonaCorta, SaldoSesion, SolicitudConUsuarios,
   TipoMovimiento, UsuarioCorto,
 } from '../core/caja.model';
 import { CajaService } from '../core/caja.service';
 import { abrirPdf } from '../core/archivos';
 import { DineroPipe, formatoDinero, simbolo } from '../core/dinero';
 import { ESTILOS_CAJA } from '../core/estilos';
+import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
 
 /**
  * Operación de una caja: apertura, saldo del momento por moneda, registro de
@@ -40,7 +42,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
   selector: 'app-caja-operacion',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, DialogModule, DropdownModule,
+    CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, CheckboxModule, DialogModule, DropdownModule,
     InputNumberModule, InputTextModule, InputTextareaModule, SelectButtonModule, TableModule, ToastModule,
     TooltipModule, DineroPipe, TienePermisoDirective,
   ],
@@ -91,6 +93,12 @@ import { ESTILOS_CAJA } from '../core/estilos';
         <i class="pi pi-exclamation-triangle"></i>
         <span>Esta sesión se abrió el {{ c.sesion_abierta?.abierta_en | date: 'dd/MM/yyyy' }} y la caja se cierra a diario:
               ciérrela con su arqueo y abra la de hoy para seguir registrando.</span>
+      </div>
+
+      <div class="nota nota-aviso nota-encabezado" *ngIf="provisionalesPendientes().length">
+        <i class="pi pi-hourglass"></i>
+        <span>{{ provisionalesPendientes().length === 1 ? 'Hay un comprobante provisional' : 'Hay ' + provisionalesPendientes().length + ' comprobantes provisionales' }}
+              sin validar ({{ numerosPendientes() }}): ajústelos con el monto real y valídelos antes de cerrar la caja.</span>
       </div>
 
       <div class="nota nota-neutra nota-encabezado" *ngIf="c.requiere_aprobacion && c.soy_cajero">
@@ -185,6 +193,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
               <td>
                 <div class="codigo">{{ m.numero }}</div>
                 <div class="secundario">{{ m.fecha | date: 'HH:mm' }} · {{ nombreDe(m.registrado_por) }}</div>
+                <ng-container *ngIf="m.estado === 'VIGENTE' && m.provisional">
+                  <span class="pastilla pastilla-provisional" *ngIf="!m.validado_en && !ajusteEnCurso(m)">Provisional</span>
+                  <span class="pastilla pastilla-aviso" *ngIf="ajusteEnCurso(m)?.estado === 'PENDIENTE'"
+                        [pTooltip]="'Pide ' + (ajusteEnCurso(m)!.monto_nuevo | dinero: m.moneda) + ': ' + ajusteEnCurso(m)!.motivo">Ajuste por aprobar</span>
+                  <span class="pastilla pastilla-acento" *ngIf="ajusteEnCurso(m)?.estado === 'APROBADO'">Ajuste aprobado</span>
+                  <span class="pastilla pastilla-ok" *ngIf="m.validado_en" [pTooltip]="'Validado por ' + nombreDe(m.validado_por ?? null)">Validado</span>
+                </ng-container>
               </td>
               <td>
                 <div>
@@ -208,10 +223,21 @@ import { ESTILOS_CAJA } from '../core/estilos';
                 <span class="monto" [class.ingreso]="m.tipo === 'INGRESO'" [class.egreso]="m.tipo === 'EGRESO'">
                   {{ m.tipo === 'INGRESO' ? '+' : '−' }} {{ m.monto | dinero: m.moneda }}
                 </span>
+                <div class="secundario" *ngIf="entregadoOriginal(m) as o">entregado {{ o | dinero }}</div>
               </td>
               <td class="centro">
                 <p-button icon="pi pi-print" [text]="true" [rounded]="true" size="small" pTooltip="Imprimir comprobante"
                           (onClick)="imprimir(m)" />
+                <ng-container *ngIf="m.estado === 'VIGENTE' && m.provisional && !m.validado_en && c.soy_cajero">
+                  <ng-container *appTienePermiso="'caja.registrar'">
+                    <p-button *ngIf="ajusteEnCurso(m)?.estado === 'APROBADO'" icon="pi pi-arrow-up-right" [text]="true" [rounded]="true"
+                              size="small" severity="warning" pTooltip="Entregar la diferencia aprobada" (onClick)="aplicarAjuste(m)" />
+                    <p-button *ngIf="!ajusteEnCurso(m)" icon="pi pi-sliders-h" [text]="true" [rounded]="true" size="small"
+                              pTooltip="Ajustar al monto real" (onClick)="pedirAjuste(m)" />
+                    <p-button *ngIf="!ajusteEnCurso(m)" icon="pi pi-check-circle" [text]="true" [rounded]="true" size="small"
+                              severity="success" pTooltip="Validar con el monto final" (onClick)="validar(m)" />
+                  </ng-container>
+                </ng-container>
                 <ng-container *ngIf="m.estado === 'VIGENTE' && m.concepto?.origen === 'MANUAL' && c.soy_cajero">
                   <p-button *appTienePermiso="'caja.anular'" icon="pi pi-ban" [text]="true" [rounded]="true" size="small"
                             severity="danger" pTooltip="Anular" (onClick)="pedirAnulacion(m)" />
@@ -268,6 +294,15 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <p-selectButton formControlName="forma_pago" [options]="opciones()?.formas_pago ?? []" optionLabel="etiqueta"
                           optionValue="valor" />
           <small *ngIf="form.value.forma_pago !== 'EFECTIVO'">Se registra para el libro de caja, pero no mueve el efectivo.</small>
+        </div>
+
+        <div class="campo span-6" *ngIf="tipoNuevo() === 'EGRESO' && form.value.forma_pago === 'EFECTIVO'">
+          <div class="check-campo">
+            <p-checkbox formControlName="provisional" [binary]="true" inputId="provisional" />
+            <label for="provisional">Monto a rendir en el día (provisional)</label>
+          </div>
+          <small>Para compras cuyo precio final no se sabe todavía: hoy mismo se ajusta al monto de la factura (se entrega la
+                 diferencia o se recibe la devolución) y se valida antes de cerrar la caja.</small>
         </div>
 
         <ng-container *ngIf="form.value.forma_pago !== 'EFECTIVO'">
@@ -358,6 +393,46 @@ import { ESTILOS_CAJA } from '../core/estilos';
       </ng-template>
     </p-dialog>
 
+    <!-- ====================== Ajustar comprobante provisional ====================== -->
+    <p-dialog [(visible)]="ajusteVisible" header="Ajustar al monto real" [modal]="true" [style]="{ width: '34rem' }" [draggable]="false">
+      <ng-container *ngIf="aAjustar() as m">
+        <p class="explicacion">
+          Comprobante <strong class="codigo">{{ m.numero }}</strong> · {{ m.concepto?.nombre }} · {{ m.persona_nombre }}.
+          Hoy se entregó <strong>{{ m.monto | dinero: m.moneda }}</strong>.
+        </p>
+        <div class="campos">
+          <div class="campo span-3">
+            <label for="monto-final">Monto real</label>
+            <input id="monto-final" pInputText inputmode="decimal" [(ngModel)]="ajuste.monto" placeholder="0,00"
+                   [class.ng-invalid]="montoAjusteInvalido()" [class.ng-dirty]="montoAjusteInvalido()" />
+          </div>
+          <div class="campo span-3">
+            <label for="documento-ajuste">Factura o recibo <span class="opcional">(opcional)</span></label>
+            <input id="documento-ajuste" pInputText [(ngModel)]="ajuste.documento" maxlength="60" placeholder="N.º" />
+          </div>
+          <div class="campo span-6" *ngIf="diferenciaAjuste() as d">
+            <div class="nota" [class.nota-aviso]="d > 0" [class.nota-neutra]="d < 0">
+              <i class="pi" [ngClass]="d > 0 ? 'pi-arrow-up-right' : 'pi-arrow-down-left'"></i>
+              <span *ngIf="d > 0 && !pideAprobacion()">Entregue <strong>{{ d | dinero: m.moneda }}</strong> más a {{ m.persona_nombre }}.</span>
+              <span *ngIf="d > 0 && pideAprobacion()">El aumento de <strong>{{ d | dinero: m.moneda }}</strong> va a la bandeja del
+                    aprobador. Entréguelo recién cuando lo aprueben.</span>
+              <span *ngIf="d < 0">Reciba <strong>{{ -d | dinero: m.moneda }}</strong> de devolución.</span>
+            </div>
+          </div>
+          <div class="campo span-6">
+            <label for="motivo-ajuste">Motivo</label>
+            <textarea id="motivo-ajuste" pInputTextarea [(ngModel)]="ajuste.motivo" rows="2" maxlength="250"
+                      placeholder="Por ejemplo: el repuesto costó más que lo cotizado"></textarea>
+          </div>
+        </div>
+      </ng-container>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="ajusteVisible = false" />
+        <p-button [label]="(diferenciaAjuste() ?? 0) > 0 && pideAprobacion() ? 'Enviar a aprobación' : 'Ajustar'" icon="pi pi-check"
+                  [loading]="ajustando()" [disabled]="ajustando() || !ajusteValido()" (onClick)="ajustar()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- ====================== Solicitudes aprobadas por pagar ====================== -->
     <p-dialog [(visible)]="solicitudesVisible" header="Solicitudes aprobadas por pagar" [modal]="true" [style]="{ width: '58rem' }"
               [draggable]="false">
@@ -407,6 +482,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
               <input id="pago-doc" pInputText [(ngModel)]="pago.nro_documento" maxlength="40" />
             </div>
           </ng-container>
+          <div class="campo span-6" *ngIf="pago.forma_pago === 'EFECTIVO'">
+            <div class="check-campo">
+              <p-checkbox [(ngModel)]="pago.provisional" [binary]="true" inputId="pago-provisional" />
+              <label for="pago-provisional">Monto a rendir en el día (provisional)</label>
+            </div>
+            <small>Si el gasto real puede ser distinto, hoy se ajusta con la factura. Un aumento lo aprueba un aprobador.</small>
+          </div>
           <div class="campo span-6" *ngIf="pago.forma_pago === 'EFECTIVO' && excedePago()">
             <small class="alerta">Supera el efectivo en caja: {{ disponiblePago() }}.</small>
           </div>
@@ -488,6 +570,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
     .alerta { color: #b91c1c !important; font-weight: 600; }
     .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
     .explicacion { font-size: 0.88rem; line-height: 1.5; margin-top: 0; }
+    .pastilla-provisional { background: #fef3c7; color: #92400e; margin-top: 0.2rem; }
   `],
 })
 export class CajaOperacionComponent implements OnInit {
@@ -506,8 +589,13 @@ export class CajaOperacionComponent implements OnInit {
   readonly pagandoSolicitud = signal(false);
   solicitudesVisible = false;
   pagoVisible = false;
-  pago: { forma_pago: FormaPago; banco_id: number | null; nro_documento: string | null } =
-    { forma_pago: 'EFECTIVO', banco_id: null, nro_documento: null };
+  pago: { forma_pago: FormaPago; banco_id: number | null; nro_documento: string | null; provisional: boolean } =
+    { forma_pago: 'EFECTIVO', banco_id: null, nro_documento: null, provisional: false };
+
+  readonly aAjustar = signal<Movimiento | null>(null);
+  readonly ajustando = signal(false);
+  ajusteVisible = false;
+  ajuste = { monto: '', motivo: '', documento: '' };
 
   readonly bonos = signal<BonoPendiente[]>([]);
   readonly pagando = signal<number | null>(null);
@@ -553,6 +641,7 @@ export class CajaOperacionComponent implements OnInit {
     persona_nombre: ['', [Validators.required, Validators.maxLength(150)]],
     persona_ci: [null as string | null],
     glosa: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(250)]],
+    provisional: [false],
   });
 
   /** Valor del formulario como señal, para que los avisos de saldo se recalculen al escribir. */
@@ -617,6 +706,91 @@ export class CajaOperacionComponent implements OnInit {
     });
   }
 
+  // --------------------------------------------- Comprobantes provisionales
+
+  readonly provisionalesPendientes = computed(() =>
+    (this.caja()?.sesion_abierta?.movimientos ?? []).filter((m) => m.estado === 'VIGENTE' && m.provisional && !m.validado_en));
+
+  numerosPendientes(): string {
+    return this.provisionalesPendientes().map((m) => m.numero).join(', ');
+  }
+
+  ajusteEnCurso(m: Movimiento): AjusteMovimiento | undefined {
+    return (m.ajustes ?? []).find((a) => a.estado === 'PENDIENTE' || a.estado === 'APROBADO');
+  }
+
+  /** Lo que se entregó al emitir, si después se ajustó. */
+  entregadoOriginal(m: Movimiento): string | null {
+    const aplicados = (m.ajustes ?? []).filter((a) => a.estado === 'APLICADO');
+    return aplicados.length ? aplicados[0].monto_anterior : null;
+  }
+
+  pedirAjuste(m: Movimiento): void {
+    this.aAjustar.set(m);
+    this.ajuste = { monto: '', motivo: '', documento: '' };
+    this.ajusteVisible = true;
+  }
+
+  montoAjusteInvalido(): boolean {
+    return numeroInvalido(this.ajuste.monto, 2) || aNumero(this.ajuste.monto, 2) === 0;
+  }
+
+  diferenciaAjuste(): number | null {
+    const m = this.aAjustar();
+    const n = aNumero(this.ajuste.monto, 2);
+    if (!m || n === null || n === 0) return null;
+    const d = Math.round((n - Number(m.monto)) * 100) / 100;
+    return d === 0 ? null : d;
+  }
+
+  /** Un aumento en caja con aprobación (concepto no exento) va al aprobador. */
+  pideAprobacion(): boolean {
+    const m = this.aAjustar();
+    const exento = this.opciones()?.conceptos.find((k) => k.id === m?.concepto_id)?.exento_aprobacion ?? false;
+    return !!this.caja()?.requiere_aprobacion && !exento;
+  }
+
+  ajusteValido(): boolean {
+    return this.diferenciaAjuste() !== null && this.ajuste.motivo.trim().length >= 5;
+  }
+
+  ajustar(): void {
+    const m = this.aAjustar();
+    if (!m) return;
+    this.ajustando.set(true);
+    this.servicio.ajustarMovimiento(m.id, {
+      monto: aNumero(this.ajuste.monto, 2)!, motivo: this.ajuste.motivo.trim(), documento: this.ajuste.documento.trim() || null,
+    }).subscribe({
+      next: (r) => {
+        this.ajustando.set(false);
+        this.ajusteVisible = false;
+        this.toast.add({ severity: r.ajuste.estado === 'PENDIENTE' ? 'info' : 'success', summary: r.mensaje ?? 'Ajustado', life: 9000 });
+        this.cargar();
+      },
+      error: (e) => { this.ajustando.set(false); this.toast.add({ severity: 'error', summary: 'No se ajustó', detail: mensajeDeError(e), life: 9000 }); },
+    });
+  }
+
+  aplicarAjuste(m: Movimiento): void {
+    const a = this.ajusteEnCurso(m);
+    if (!a) return;
+    this.servicio.aplicarAjuste(a.id).subscribe({
+      next: (r) => { this.toast.add({ severity: 'success', summary: r.mensaje ?? 'Aplicado', life: 9000 }); this.cargar(); },
+      error: (e) => this.toast.add({ severity: 'error', summary: 'No se entregó la diferencia', detail: mensajeDeError(e), life: 9000 }),
+    });
+  }
+
+  validar(m: Movimiento): void {
+    this.servicio.validarMovimiento(m.id).subscribe({
+      next: (r) => {
+        this.ultimo.set(r.data);
+        this.toast.add({ severity: 'success', summary: r.mensaje ?? 'Validado', life: 8000 });
+        this.cargar();
+      },
+      error: (e) => this.toast.add({ severity: 'error', summary: 'No se validó', detail: mensajeDeError(e), life: 9000 }),
+    });
+  }
+
   // ------------------------------------------------- Solicitudes por pagar
 
   abrirSolicitudes(): void {
@@ -635,7 +809,7 @@ export class CajaOperacionComponent implements OnInit {
 
   pedirPago(s: SolicitudConUsuarios): void {
     this.aPagar.set(s);
-    this.pago = { forma_pago: 'EFECTIVO', banco_id: null, nro_documento: null };
+    this.pago = { forma_pago: 'EFECTIVO', banco_id: null, nro_documento: null, provisional: false };
     this.pagoVisible = true;
   }
 
@@ -745,7 +919,7 @@ export class CajaOperacionComponent implements OnInit {
 
   nuevoMovimiento(tipo: TipoMovimiento): void {
     this.tipoNuevo.set(tipo);
-    this.form.reset({ moneda: 'BOB', forma_pago: 'EFECTIVO' });
+    this.form.reset({ moneda: 'BOB', forma_pago: 'EFECTIVO', provisional: false });
     this.form.get('persona_ci')!.enable();
     this.personaTexto = null;
     this.parecidas.set([]);
@@ -827,7 +1001,10 @@ export class CajaOperacionComponent implements OnInit {
     if (!sesion) return;
 
     this.guardando.set(true);
-    this.servicio.registrar(sesion.id, this.form.getRawValue() as DatosMovimiento).subscribe({
+    const datos = this.form.getRawValue();
+    // Provisional solo vale para egresos en efectivo.
+    datos.provisional = !!datos.provisional && this.tipoNuevo() === 'EGRESO' && datos.forma_pago === 'EFECTIVO';
+    this.servicio.registrar(sesion.id, datos as DatosMovimiento).subscribe({
       next: (r) => {
         this.guardando.set(false);
         this.movimientoVisible = false;

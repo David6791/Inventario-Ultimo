@@ -76,6 +76,35 @@ export interface Movimiento {
   anulado_por: UsuarioCorto | number | null;
   anulado_en: string | null;
   motivo_anulacion: string | null;
+  /** Egreso a rendir en el día: su monto se ajusta hasta validarlo. */
+  provisional?: boolean;
+  validado_por?: UsuarioCorto | number | null;
+  validado_en?: string | null;
+  ajustes?: AjusteMovimiento[];
+}
+
+export type EstadoAjuste = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'APLICADO' | 'ANULADO';
+
+/** Ajuste del monto de un comprobante provisional. */
+export interface AjusteMovimiento {
+  id: number;
+  movimiento_id: number;
+  monto_anterior: string;
+  monto_nuevo: string;
+  motivo: string;
+  documento: string | null;
+  estado: EstadoAjuste;
+  registrado_por: UsuarioCorto | number;
+  registrado_en: string;
+  resuelto_por: UsuarioCorto | number | null;
+  resuelto_en: string | null;
+  observacion: string | null;
+  aplicado_por: UsuarioCorto | number | null;
+  aplicado_en: string | null;
+  /** Solo en la bandeja del aprobador. */
+  movimiento?: Pick<Movimiento, 'id' | 'numero' | 'monto' | 'moneda' | 'persona_nombre' | 'persona_ci' | 'glosa'>
+    & { caja?: { id: number; codigo: string }; concepto?: { id: number; nombre: string } };
+  es_mio?: boolean;
 }
 
 export interface SesionAbierta {
@@ -225,6 +254,7 @@ export interface DatosMovimiento {
   persona_nombre: string | null;
   persona_ci: string | null;
   glosa: string;
+  provisional?: boolean;
 }
 
 // ------------------------------------------------------------ Cierre (sprint 3)

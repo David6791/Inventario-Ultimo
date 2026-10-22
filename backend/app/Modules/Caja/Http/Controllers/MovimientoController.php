@@ -20,7 +20,8 @@ class MovimientoController extends Controller
 
     private const RELACIONES = [
         'concepto:id,codigo,nombre,tipo,origen', 'banco:id,nombre',
-        'registradoPor:id,name', 'anuladoPor:id,name', 'persona:id,nombre,ci',
+        'registradoPor:id,name', 'anuladoPor:id,name', 'persona:id,nombre,ci', 'validadoPor:id,name',
+        'ajustes.registradoPor:id,name', 'ajustes.resueltoPor:id,name', 'ajustes.aplicadoPor:id,name',
     ];
 
     public function __construct(private readonly CajaService $cajas)

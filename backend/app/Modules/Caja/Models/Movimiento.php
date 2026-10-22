@@ -17,7 +17,7 @@ class Movimiento extends CajaModel
 
     protected $fillable = [
         'sesion_id', 'concepto_id', 'monto', 'moneda', 'forma_pago', 'banco_id',
-        'nro_documento', 'persona_id', 'persona_nombre', 'persona_ci', 'glosa', 'registrado_por', 'solicitud_id',
+        'nro_documento', 'persona_id', 'persona_nombre', 'persona_ci', 'glosa', 'registrado_por', 'solicitud_id', 'provisional',
     ];
 
     protected $casts = [
@@ -30,6 +30,8 @@ class Movimiento extends CajaModel
         'monto'       => 'decimal:2',
         'fecha'       => 'datetime',
         'anulado_en'  => 'datetime',
+        'provisional' => 'boolean',
+        'validado_en' => 'datetime',
     ];
 
     public const MONEDAS = ['BOB', 'USD'];
@@ -65,6 +67,17 @@ class Movimiento extends CajaModel
     public function solicitud(): BelongsTo
     {
         return $this->belongsTo(Solicitud::class, 'solicitud_id');
+    }
+
+    /** Ajustes del monto (solo comprobantes provisionales), del primero al último. */
+    public function ajustes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MovimientoAjuste::class, 'movimiento_id')->orderBy('id');
+    }
+
+    public function validadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'validado_por');
     }
 
     public function registradoPor(): BelongsTo

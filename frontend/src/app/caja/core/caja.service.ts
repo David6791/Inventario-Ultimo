@@ -6,7 +6,7 @@ import {
   Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, Pagina,
   Persona, PersonaCorta, PersonaDetalle, SaldoSesion, SesionAbierta, UsuarioCorto, VistaPreviaComprobante,
   DatosCierre, FiltrosLibro, LibroCaja, SesionDetalle, SesionFila, DatosSolicitud, FormaPago, OpcionesSolicitud,
-  SolicitudConUsuarios,
+  SolicitudConUsuarios, AjusteMovimiento,
 } from './caja.model';
 
 interface Respuesta<T> { data: T; mensaje?: string; }
@@ -69,8 +69,8 @@ export class CajaService {
     return this.http.get<Respuesta<SolicitudConUsuarios[]>>(`${this.base}/solicitudes/mias`).pipe(map((r) => r.data));
   }
 
-  porAprobar(estado: 'PENDIENTE' | 'RESUELTAS'): Observable<{ data: SolicitudConUsuarios[]; cajas: { id: number; codigo: string; nombre: string }[] }> {
-    return this.http.get<{ data: SolicitudConUsuarios[]; cajas: { id: number; codigo: string; nombre: string }[] }>(
+  porAprobar(estado: 'PENDIENTE' | 'RESUELTAS'): Observable<{ data: SolicitudConUsuarios[]; ajustes: AjusteMovimiento[]; cajas: { id: number; codigo: string; nombre: string }[] }> {
+    return this.http.get<{ data: SolicitudConUsuarios[]; ajustes: AjusteMovimiento[]; cajas: { id: number; codigo: string; nombre: string }[] }>(
       `${this.base}/solicitudes/por-aprobar`, { params: { estado } });
   }
 
@@ -95,7 +95,30 @@ export class CajaService {
     return this.http.post<Respuesta<SolicitudConUsuarios>>(`${this.base}/solicitudes/${id}/anular`, { motivo });
   }
 
-  pagarSolicitud(id: number, pago: { forma_pago: FormaPago; banco_id?: number | null; nro_documento?: string | null }):
+  // ------------------------------------------------ Comprobantes provisionales
+  ajustarMovimiento(id: number, datos: { monto: number; motivo: string; documento: string | null }):
+      Observable<Respuesta<Movimiento> & { ajuste: AjusteMovimiento; saldos: SaldoSesion[] }> {
+    return this.http.post<Respuesta<Movimiento> & { ajuste: AjusteMovimiento; saldos: SaldoSesion[] }>(
+      `${this.base}/movimientos/${id}/ajustes`, datos);
+  }
+
+  aplicarAjuste(id: number): Observable<Respuesta<Movimiento> & { saldos: SaldoSesion[] }> {
+    return this.http.post<Respuesta<Movimiento> & { saldos: SaldoSesion[] }>(`${this.base}/ajustes/${id}/aplicar`, {});
+  }
+
+  validarMovimiento(id: number): Observable<Respuesta<Movimiento> & { saldos: SaldoSesion[] }> {
+    return this.http.post<Respuesta<Movimiento> & { saldos: SaldoSesion[] }>(`${this.base}/movimientos/${id}/validar`, {});
+  }
+
+  aprobarAjuste(id: number, observacion: string | null): Observable<Respuesta<AjusteMovimiento>> {
+    return this.http.post<Respuesta<AjusteMovimiento>>(`${this.base}/ajustes/${id}/aprobar`, { observacion });
+  }
+
+  rechazarAjuste(id: number, observacion: string): Observable<Respuesta<AjusteMovimiento>> {
+    return this.http.post<Respuesta<AjusteMovimiento>>(`${this.base}/ajustes/${id}/rechazar`, { observacion });
+  }
+
+  pagarSolicitud(id: number, pago: { forma_pago: FormaPago; banco_id?: number | null; nro_documento?: string | null; provisional?: boolean }):
       Observable<Respuesta<Movimiento> & { saldos: SaldoSesion[] }> {
     return this.http.post<Respuesta<Movimiento> & { saldos: SaldoSesion[] }>(`${this.base}/solicitudes/${id}/pagar`, pago);
   }
