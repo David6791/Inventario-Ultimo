@@ -13,3 +13,5 @@
 
 # Volúmenes y datos locales de Docker
 /data/
+# Producción con Cloudflare (token del túnel y credenciales)
+/docker-activos/.env.ingenio
