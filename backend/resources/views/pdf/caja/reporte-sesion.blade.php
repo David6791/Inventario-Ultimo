@@ -56,6 +56,7 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 @php
   $dinero = fn ($v) => number_format((float) $v, 2, ',', '.');
   $simbolo = fn ($m) => $m === 'USD' ? 'US$' : 'Bs';
@@ -66,7 +67,7 @@
 <table class="cabecera">
   <tr>
     <td>
-      <div class="institucion">{{ $institucion }}</div>
+      @include('pdf._institucion')
       <div class="sede">Caja {{ $sesion->caja->codigo }} — {{ $sesion->caja->nombre }} · {{ $sesion->caja->almacen?->nombre }}</div>
     </td>
     <td style="width: 95mm;">

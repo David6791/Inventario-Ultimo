@@ -34,7 +34,7 @@
     <table>
       <tr>
         <td>
-          <div class="institucion">{{ $institucion }}</div>
+          @include('pdf._institucion', ['alturaLogo' => '7mm'])
           <div class="destino">MUESTRA · PORCIÓN {{ $p->destino }}</div>
           <div class="codigo">{{ $muestra->codigo }}</div>
           <div class="precinto"><span>Precinto</span> {{ $p->precinto ?? '—' }}</div>

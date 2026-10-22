@@ -36,6 +36,7 @@ final class Permisos
         'usuarios'      => ['Usuarios',             'pi pi-users'],
         'roles'         => ['Roles y permisos',     'pi pi-shield'],
         'auditoria'     => ['Auditoría',            'pi pi-history'],
+        'empresa'       => ['Datos de la empresa',  'pi pi-building'],
         'activos'               => ['Activos fijos',             'pi pi-desktop'],
         'activos-custodia'      => ['Custodia de activos',       'pi pi-user-edit'],
         'activos-mantenimiento' => ['Mantenimiento de activos',  'pi pi-wrench'],
@@ -149,6 +150,9 @@ final class Permisos
 
         // Auditoría
         'auditoria.ver'              => 'Consultar la bitácora de acciones',
+
+        // Datos de la empresa
+        'empresa.configurar'         => 'Cambiar el nombre, el logo y la marca de agua de documentos y reportes',
 
         // ── 2. Agregar a la constante CATALOGO ───────────────────────────────────────
 

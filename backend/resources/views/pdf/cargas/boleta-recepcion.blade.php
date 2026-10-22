@@ -40,6 +40,7 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 @php
   $kg = fn ($v) => number_format((float) $v, 2, ',', '.');
   $ingresos = $lote->pesajes->where('tipo', 'INGRESO');
@@ -53,7 +54,7 @@
   <table>
     <tr>
       <td>
-        <div class="institucion">{{ $institucion }}</div>
+        @include('pdf._institucion')
         <div class="sede">{{ $lote->almacen?->nombre }} · Recibido por {{ $lote->registradoPor?->name }}</div>
         <div class="titulo" style="margin-top: 1.5mm;">BOLETA DE RECEPCIÓN DE MINERAL</div>
         <div class="tanto">{{ $tanto }}</div>

@@ -48,7 +48,7 @@
 <table>
   <tr>
     <td>
-      <div class="institucion">{{ $institucion }}</div>
+      @include('pdf._institucion')
       <div class="titulo">IDENTIFICACIÓN DE CARGA</div>
       <div class="sede">{{ $lote->almacen?->nombre }}</div>
     </td>

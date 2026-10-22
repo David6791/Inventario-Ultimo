@@ -128,8 +128,9 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 
-  <div class="institucion">{{ $institucion }}</div>
+  @include('pdf._institucion', ['centrado' => true])
   <div class="titulo">@yield('titulo')</div>
   <div class="numero">N.º {{ $solicitud->numero }}</div>
 

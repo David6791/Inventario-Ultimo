@@ -198,3 +198,44 @@ tr.atenuada .codigo { color: var(--tinta-tenue); }
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Celular -------------------------------------------------------------------
+   Las pantallas se pensaron para escritorio. En un teléfono: los diálogos
+   ocupan el ancho, los encabezados apilan título y botones, las tablas se
+   desplazan de lado en vez de aplastarse y los avisos no tapan la pantalla.
+   Van con !important porque los estilos de cada componente pesan más. */
+@media (max-width: 640px) {
+  .p-dialog { width: calc(100vw - 1rem) !important; max-height: calc(100dvh - 1rem) !important; }
+  .p-dialog .p-dialog-header { padding: 1rem 1rem .75rem; }
+  .p-dialog .p-dialog-content { padding: 0 1rem 1rem; }
+  .p-dialog .p-dialog-footer { padding: .75rem 1rem; flex-wrap: wrap; }
+
+  .encabezado, .pagina { flex-direction: column !important; align-items: stretch !important; gap: .75rem !important; }
+  .encabezado .acciones, .pagina .acciones { flex-wrap: wrap; }
+  .encabezado h2, .pagina h1 { font-size: 1.15rem !important; }
+
+  .p-datatable .p-datatable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .p-datatable table { min-width: 38rem; }
+  .p-paginator { flex-wrap: wrap; }
+
+  .p-toast { width: calc(100vw - 1.5rem) !important; right: .75rem !important; left: auto !important; }
+  .filtros .crece { min-width: 100%; }
+}
+
+/* Menú lateral en el celular (p-sidebar). */
+.menu-movil.p-sidebar { width: min(19rem, 86vw); }
+.menu-movil .p-sidebar-header { padding: .75rem .75rem 0; }
+.menu-movil .p-sidebar-content { padding: 0 .75rem 2rem; }
+.menu-movil .navegacion .p-panelmenu-panel { border: 0; }
+.menu-movil .navegacion .p-panelmenu-header-content { border: 0; background: transparent; }
+.menu-movil .navegacion .p-panelmenu-content { border: 0; background: transparent; padding-left: .6rem; }
+.menu-movil .navegacion .p-menuitem-link-active { background: var(--acento-lavado); box-shadow: inset 3px 0 0 var(--acento); }
+.menu-movil .marca { display: flex; align-items: center; gap: .65rem; padding: .25rem .5rem 1rem; margin-bottom: .5rem;
+                     border-bottom: 1px solid var(--linea-tenue); text-decoration: none; color: inherit; }
+.menu-movil .marca img { max-height: 2.4rem; max-width: 5rem; object-fit: contain; }
+.menu-movil .marca-icono { width: 2.3rem; height: 2.3rem; border-radius: 10px; display: grid; place-items: center;
+                           background: var(--acento-lavado); color: var(--acento); }
+.menu-movil .marca-texto { display: flex; flex-direction: column; line-height: 1.25; }
+.menu-movil .marca-texto strong { font-size: .9rem; }
+.menu-movil .marca-texto small { font-size: .72rem; color: var(--tinta-suave); }

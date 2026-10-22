@@ -91,8 +91,9 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 
-  <div class="institucion">{{ $institucion }}</div>
+  @include('pdf._institucion', ['centrado' => true])
   <div class="titulo">Guía de Traslado entre Almacenes</div>
 
   <table class="cabecera-numero">

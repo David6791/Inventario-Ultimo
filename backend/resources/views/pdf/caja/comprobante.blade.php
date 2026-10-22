@@ -53,6 +53,7 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 @php
   $esIngreso = $mov->tipo === 'INGRESO';
   $simbolo   = $mov->moneda === 'USD' ? 'US$' : 'Bs';
@@ -73,7 +74,7 @@
     <table>
       <tr>
         <td>
-          <div class="institucion">{{ $institucion }}</div>
+          @include('pdf._institucion')
           <div class="sede">Caja {{ $mov->caja->codigo }} — {{ $mov->caja->nombre }} · {{ $mov->caja->almacen?->nombre }}</div>
         </td>
         <td style="width: 95mm;">

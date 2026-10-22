@@ -47,6 +47,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
+// Nombre y logo de la empresa: los muestra la pantalla de ingreso.
+Route::get('/empresa', [\App\Modules\Comun\Http\Controllers\EmpresaController::class, 'publico']);
+Route::get('/empresa/logo', [\App\Modules\Comun\Http\Controllers\EmpresaController::class, 'logo']);
+
 // --- Autenticadas -----------------------------------------------------------
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -58,6 +62,10 @@ Route::middleware('auth:sanctum')->group(function () {
     | se pueda desincronizar entre pestañas.
     */
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Datos de la empresa (cambiarlos exige empresa.configurar, en EmpresaRequest).
+    Route::get('/empresa/marca-agua', [\App\Modules\Comun\Http\Controllers\EmpresaController::class, 'marcaAgua']);
+    Route::post('/empresa', [\App\Modules\Comun\Http\Controllers\EmpresaController::class, 'actualizar']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/cambiar-clave', [AuthController::class, 'cambiarClave']);
 

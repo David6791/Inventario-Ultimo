@@ -313,6 +313,15 @@ export const routes: Routes = [
           import('./features/roles/rol-form.component').then(m => m.RolFormComponent),
       },
 
+      // Datos de la empresa (nombre, logo y marca de agua de documentos)
+      {
+        path: 'empresa',
+        title: 'Datos de la empresa',
+        canMatch: [conPermiso('empresa.configurar')],
+        loadComponent: () =>
+          import('./features/empresa/empresa.component').then(m => m.EmpresaComponent),
+      },
+
       // Usuarios
       {
         path: 'usuarios',

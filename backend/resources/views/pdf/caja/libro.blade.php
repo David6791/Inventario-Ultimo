@@ -31,6 +31,7 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 @php
   $d = fn ($v) => $v === null || (float) $v == 0 ? '' : number_format((float) $v, 2, ',', '.');
   $t = $libro->totales;
@@ -38,7 +39,7 @@
   $forma = ['EFECTIVO' => 'Efectivo', 'CHEQUE' => 'Cheque', 'TRANSFERENCIA' => 'Transf.'];
 @endphp
 
-<div class="institucion">{{ $institucion }}</div>
+@include('pdf._institucion')
 <div class="titulo">LIBRO DE CAJA</div>
 <div class="sub">{{ $libro->titulo() }} · {{ $t['moneda'] === 'USD' ? 'Dólares (US$)' : 'Bolivianos (Bs)' }}</div>
 

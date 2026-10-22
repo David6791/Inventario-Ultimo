@@ -73,8 +73,9 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 
-  <div class="institucion">{{ $institucion }}</div>
+  @include('pdf._institucion', ['centrado' => true])
   <div class="titulo">{{ $reporte->titulo() }}</div>
 
   @if (count($filtros))

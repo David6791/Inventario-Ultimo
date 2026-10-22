@@ -63,6 +63,7 @@ const ESTRUCTURA: ItemMenu[] = [
       { etiqueta: 'Usuarios',         icono: 'pi pi-users',   ruta: '/usuarios',  permiso: 'usuarios.ver' },
       { etiqueta: 'Roles y permisos', icono: 'pi pi-shield',  ruta: '/roles',     permiso: 'roles.ver' },
       { etiqueta: 'Auditoría',        icono: 'pi pi-history', ruta: '/auditoria', permiso: 'auditoria.ver' },
+      { etiqueta: 'Datos de la empresa', icono: 'pi pi-building', ruta: '/empresa', permiso: 'empresa.configurar' },
     ],
   },
     {
@@ -126,7 +127,8 @@ function filtrar(items: ItemMenu[], permisos: PermisosService): MenuItem[] {
     }
 
     if (!item.permiso || permisos.can(item.permiso)) {
-      acumulado.push({ label: item.etiqueta, icon: item.icono, routerLink: item.ruta });
+      acumulado.push({ label: item.etiqueta, icon: item.icono, routerLink: item.ruta,
+                       routerLinkActiveOptions: { exact: false } });
     }
 
     return acumulado;

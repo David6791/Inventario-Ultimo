@@ -30,5 +30,15 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $usuario, string $habilidad) {
             return $usuario->hasRole(Permisos::SUPER_ADMIN) ? true : null;
         });
+
+        /*
+        | Todos los PDF (pdf.*) llevan el nombre, el logo y la marca de agua que
+        | se configuran en Administración → Datos de la empresa. «institucion»
+        | se reemplaza aquí, después de lo que pase cada controlador.
+        */
+        \Illuminate\Support\Facades\View::composer('pdf.*', function ($vista) {
+            $empresa = app(\App\Modules\Comun\Services\EmpresaService::class)->paraPdf();
+            $vista->with('empresa', $empresa)->with('institucion', $empresa['nombre']);
+        });
     }
 }

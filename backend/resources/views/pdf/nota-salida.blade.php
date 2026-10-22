@@ -85,8 +85,9 @@
   </style>
 </head>
 <body>
+@include('pdf._marca_agua')
 
-  <div class="institucion">{{ $institucion }}</div>
+  @include('pdf._institucion', ['centrado' => true])
   <div class="titulo">Nota de Salida de Almacén</div>
 
   <table class="cabecera-numero">
