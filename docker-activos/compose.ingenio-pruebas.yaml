@@ -12,6 +12,7 @@
 #   - Debe correr desde OTRA carpeta del código (p. ej. D:\IngenioPruebas):
 #     ingenio monta D:\Activos\backend, y aplicar un parche ahí cambiaría
 #     producción en el acto.
+#   - La base no publica puerto (se entra con Adminer o docker exec).
 #   - Sin túnel de Cloudflare: se entra por la red de la oficina
 #     (http://IP-de-esta-PC:8091), también desde el celular.
 # =============================================================================
@@ -29,8 +30,9 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: America/La_Paz
-    ports:
-      - "127.0.0.1:${PUERTO_DB:-5436}:5432"
+    # Sin puerto publicado: Windows reserva rangos enteros de puertos (Hyper-V,
+    # WSL) y la réplica no lo necesita. Para entrar a la base: Adminer, o
+    #   docker exec -it ingenio-pruebas-db psql -U <usuario> -d <base>
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
