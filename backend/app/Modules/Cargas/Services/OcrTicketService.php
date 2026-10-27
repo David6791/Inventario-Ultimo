@@ -67,7 +67,7 @@ class OcrTicketService
                 $varios = $tipo === 'numero' || $campo === 'placa';
                 $variantes = $varios
                     ? array_values(array_unique([[$d, 'otsu'], [0, 'otsu'], [2, 'otsu'], [1, 'local']], SORT_REGULAR))
-                    : [[$d, 'otsu'], [1, 'local']];
+                    : array_values(array_unique([[$d, 'otsu'], [0, 'otsu'], [1, 'local']], SORT_REGULAR));
                 $lecturas = [];
                 foreach ($variantes as [$dv, $metodo]) {
                     $l = $this->leerRecuadro($imagen, [...$c, 'desenfoque' => $dv, 'umbral' => $metodo], $tipo);
@@ -87,10 +87,8 @@ class OcrTicketService
                     }
                 }
                 usort($lecturas, fn ($a, $b) => $b['confianza'] <=> $a['confianza']);
-                if ($campo === 'placa') {
-                    // Primero las lecturas con forma de placa (1175PFT).
-                    usort($lecturas, fn ($a, $b) => (int) $this->esPlaca($b['valor']) <=> (int) $this->esPlaca($a['valor']));
-                }
+                // Primero las lecturas con la forma esperada (placa 1175PFT, fecha válida…).
+                usort($lecturas, fn ($a, $b) => (int) $this->valido($campo, $b['valor']) <=> (int) $this->valido($campo, $a['valor']));
                 $candidatos[$campo] = $lecturas;
                 $resultado[$campo] = $lecturas[0] ?? ['texto' => '', 'valor' => null, 'confianza' => 0, 'metodo' => 'recuadro'];
             }
@@ -156,6 +154,7 @@ class OcrTicketService
         $by0 = (int) round((($c['y'] * $H) - $y) * $escala) + $borde;
         $by1 = (int) round($by0 + $c['h'] * $H * $escala);
 
+        $this->quitarMarcos($bin, max(8, $by1 - $by0));
         $zona = $this->ubicarLinea($bin, $bx0, $bx1, $by0, $by1);
         if (! $zona) {
             imagedestroy($bin);
@@ -205,6 +204,67 @@ class OcrTicketService
         }
 
         return ['texto' => $texto, 'valor' => $valor, 'confianza' => $confianza, 'metodo' => 'recuadro'];
+    }
+
+    /**
+     * Borra del recorte binario las líneas y los marcos impresos (las cajas
+     * donde algunas balanzas imprimen el peso, subrayados, bordes de tabla):
+     * son manchas mucho más anchas o altas que un número y casi vacías por
+     * dentro. Si quedan, Tesseract las lee como 1 o como otros dígitos.
+     */
+    private function quitarMarcos(GdImage $bin, int $alto): void
+    {
+        $W = imagesx($bin);
+        $H = imagesy($bin);
+        $tinta = [];
+        for ($y = 0; $y < $H; $y++) {
+            for ($x = 0; $x < $W; $x++) {
+                $tinta[$y * $W + $x] = (imagecolorat($bin, $x, $y) & 0xFF) < 128;
+            }
+        }
+        $visto = [];
+        $blanco = imagecolorallocate($bin, 255, 255, 255);
+        for ($i = 0; $i < $W * $H; $i++) {
+            if (! $tinta[$i] || isset($visto[$i])) {
+                continue;
+            }
+            // Mancha conectada (8 vecinos).
+            $pila = [$i];
+            $visto[$i] = true;
+            $puntos = [];
+            $x0 = $W; $x1 = 0; $y0 = $H; $y1 = 0;
+            while ($pila) {
+                $k = array_pop($pila);
+                $puntos[] = $k;
+                $x = $k % $W; $y = intdiv($k, $W);
+                $x0 = min($x0, $x); $x1 = max($x1, $x); $y0 = min($y0, $y); $y1 = max($y1, $y);
+                for ($dy = -1; $dy <= 1; $dy++) {
+                    for ($dx = -1; $dx <= 1; $dx++) {
+                        $nx = $x + $dx; $ny = $y + $dy;
+                        if ($nx < 0 || $ny < 0 || $nx >= $W || $ny >= $H) {
+                            continue;
+                        }
+                        $n = $ny * $W + $nx;
+                        if ($tinta[$n] && ! isset($visto[$n])) {
+                            $visto[$n] = true;
+                            $pila[] = $n;
+                        }
+                    }
+                }
+            }
+            $w = $x1 - $x0 + 1;
+            $h = $y1 - $y0 + 1;
+            $relleno = count($puntos) / ($w * $h);
+            $marco = $w >= 0.9 * $W || $h >= 0.9 * $H                               // cruza todo el recorte
+                || ($relleno < 0.2 && ($w > 1.8 * $alto || $h > 1.25 * $alto))       // marco o esquina de caja
+                || ($h <= max(3, 0.08 * $alto) && $w > 0.6 * $alto)                  // raya horizontal
+                || ($w <= max(3, 0.06 * $alto) && $h > 1.15 * $alto);                // raya vertical, más alta que el dato
+            if ($marco) {
+                foreach ($puntos as $k) {
+                    imagesetpixel($bin, $k % $W, intdiv($k, $W), $blanco);
+                }
+            }
+        }
     }
 
     /**
