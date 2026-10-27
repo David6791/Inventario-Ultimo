@@ -26,7 +26,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Version = '1.0'
+$Version = '1.1'
 
 # Páginas que pueden pedir un escaneo (expresión regular sobre el encabezado Origin).
 $OrigenesPermitidos = '^https?://(localhost|127\.0\.0\.1|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2}|([a-z0-9-]+\.)*ingeniocasiano\.com)(:\d+)?$'
@@ -62,9 +62,13 @@ function Get-Escaneres {
 }
 
 function Set-Propiedad($item, [int]$id, $valor) {
+    try {
+        $item.Properties.Item("$id").Value = $valor
+        return
+    } catch { }
     foreach ($p in $item.Properties) {
         if ($p.PropertyID -eq $id) {
-            try { $p.Value = $valor } catch { Anotar "  (propiedad $id no aceptó $valor)" }
+            try { $p.Value = $valor } catch { Anotar "  (el escáner no aceptó la propiedad $id = $valor)" }
             return
         }
     }
@@ -82,7 +86,8 @@ function Get-Maximo($item, [int]$id) {
 function Invoke-Escaneo([string]$dispositivo, [int]$dpi, [bool]$color) {
     if ($env:ESCANER_SIMULADO) {
         Start-Sleep -Milliseconds 300
-        return [IO.File]::ReadAllBytes($env:ESCANER_SIMULADO)
+        $script:TipoUltimo = 'image/jpeg'
+        return ,([IO.File]::ReadAllBytes($env:ESCANER_SIMULADO))
     }
     $dm = New-Object -ComObject WIA.DeviceManager
     $info = $null
@@ -104,19 +109,47 @@ function Invoke-Escaneo([string]$dispositivo, [int]$dpi, [bool]$color) {
     if ($ancho) { Set-Propiedad $item 6151 $ancho }              # todo el vidrio
     if ($alto) { Set-Propiedad $item 6152 $alto }
 
-    $img = $item.Transfer($FormatoJpg)
-    if ($img.FormatID -ne $FormatoJpg) {
-        # Algunos controladores entregan BMP: se convierte a JPG.
-        $ip = New-Object -ComObject WIA.ImageProcess
-        $ip.Filters.Add($ip.FilterInfos.Item('Convert').FilterID)
-        $ip.Filters.Item(1).Properties.Item('FormatID').Value = $FormatoJpg
-        $ip.Filters.Item(1).Properties.Item('Quality').Value = 90
-        $img = $ip.Apply($img)
+    # Tres formas de pedir la imagen: cada controlador acepta alguna.
+    $img = $null
+    $intentos = @(
+        @{ nombre = 'Transfer(JPG)';      accion = { $item.Transfer($FormatoJpg) } },
+        @{ nombre = 'Transfer()';         accion = { $item.Transfer() } },
+        @{ nombre = 'ShowTransfer(JPG)';  accion = { (New-Object -ComObject WIA.CommonDialog).ShowTransfer($item, $FormatoJpg, $false) } }
+    )
+    $errores = @()
+    foreach ($i in $intentos) {
+        try {
+            $img = & $i.accion
+            if ($img) { Anotar "  imagen recibida con $($i.nombre) (formato $($img.FormatID))"; break }
+        } catch {
+            $errores += "$($i.nombre): $($_.Exception.Message)"
+            Anotar "  $($i.nombre) falló: $($_.Exception.Message)"
+        }
     }
-    $tmp = Join-Path $Carpeta ('escaneo-{0}.jpg' -f [guid]::NewGuid())
+    if (-not $img) { throw ('El escáner no entregó la imagen. ' + ($errores -join ' | ')) }
+
+    $extension = 'jpg'
+    if ($img.FormatID -ne $FormatoJpg) {
+        # Algunos controladores entregan BMP o PNG: se intenta pasar a JPG. Si no se
+        # puede, se manda tal cual (el navegador la convierte al subirla).
+        try {
+            $ip = New-Object -ComObject WIA.ImageProcess
+            $ip.Filters.Add($ip.FilterInfos.Item('Convert').FilterID)
+            $ip.Filters.Item(1).Properties.Item('FormatID').Value = $FormatoJpg
+            $ip.Filters.Item(1).Properties.Item('Quality').Value = 90
+            $img = $ip.Apply($img)
+        } catch {
+            Anotar "  no se pudo convertir a JPG ($($_.Exception.Message)); se envía como viene"
+            $extension = 'bmp'
+            if ($img.FormatID -eq '{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}') { $extension = 'png' }
+        }
+    }
+    $tmp = Join-Path $Carpeta ('escaneo-{0}.{1}' -f [guid]::NewGuid(), $extension)
     try {
         $img.SaveFile($tmp)
-        return [IO.File]::ReadAllBytes($tmp)
+        $script:TipoUltimo = @{ jpg = 'image/jpeg'; bmp = 'image/bmp'; png = 'image/png' }[$extension]
+        # La coma evita que PowerShell desarme el arreglo de bytes al devolverlo.
+        return ,([IO.File]::ReadAllBytes($tmp))
     } finally {
         Remove-Item -Force -ErrorAction SilentlyContinue $tmp
     }
@@ -219,10 +252,11 @@ function Invoke-Pedido($cliente) {
             try {
                 $bytes = Invoke-Escaneo $p.consulta['dispositivo'] $dpi $color
                 Anotar "  listo: $([Math]::Round($bytes.Length / 1024)) KB"
-                Send-Respuesta $stream 200 'image/jpeg' $bytes $permitido
+                Send-Respuesta $stream 200 $script:TipoUltimo $bytes $permitido
             } catch {
                 $msg = "$($_.Exception.Message)"
-                Anotar "  error: $msg"
+                Anotar "  error: $msg (línea $($_.InvocationInfo.ScriptLineNumber))"
+                Anotar "  $($_.ScriptStackTrace -replace "`r?`n", ' <- ')"
                 Send-Json $stream 503 @{ error = "No se pudo escanear: $msg" } $permitido
             }
             return
@@ -238,6 +272,15 @@ function Invoke-Pedido($cliente) {
 }
 
 # --------------------------------------------------------------------- inicio
+# WIA solo funciona en un hilo STA («La conversión especificada no es válida» en
+# MTA, como en PowerShell 7): si no es así, se vuelve a lanzar con -STA.
+if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA' -and -not $env:ESCANER_SIMULADO) {
+    Anotar 'Relanzando en modo STA con Windows PowerShell'
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    Start-Process -WindowStyle Hidden -FilePath $ps -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Puerto', $Puerto)
+    exit 0
+}
+$script:TipoUltimo = 'image/jpeg'
 $escucha = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $Puerto)
 try {
     $escucha.Start()
