@@ -25,6 +25,10 @@ echo Se reemplazara TODA la base de la replica (%DB_DATABASE%) con una copia de 
 set /p OK=Escriba SI para continuar:
 if /i not "%OK%"=="SI" ( echo Cancelado. & exit /b 1 )
 
+echo ==^> Revisando las bases
+call :esperar ingenio-db || exit /b 1
+call :esperar ingenio-pruebas-db || exit /b 1
+
 echo ==^> Respaldo de produccion (solo lectura)
 docker exec ingenio-db pg_dump -U %ORIGEN_DB_USERNAME% -d %ORIGEN_DB_DATABASE% -Fc -f /tmp/copia-pruebas.dump || exit /b 1
 docker cp ingenio-db:/tmp/copia-pruebas.dump "%TEMP%\copia-pruebas.dump" || exit /b 1
@@ -52,3 +56,16 @@ docker exec ingenio-pruebas-app php artisan optimize:clear
 echo.
 echo Listo: la replica tiene los datos de produccion y las migraciones del codigo de pruebas.
 endlocal
+exit /b 0
+
+rem Arranca el contenedor si esta detenido y espera a que PostgreSQL responda.
+:esperar
+docker start %1 >nul 2>&1
+for /l %%i in (1,1,30) do (
+  docker exec %1 pg_isready -q >nul 2>&1 && exit /b 0
+  timeout /t 2 /nobreak >nul
+)
+echo.
+echo El contenedor %1 no arranca. Ultimas lineas de su registro:
+docker logs --tail 25 %1
+exit /b 1
