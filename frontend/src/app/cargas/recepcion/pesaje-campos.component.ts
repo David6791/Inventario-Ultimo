@@ -10,6 +10,9 @@ import { formatoDinero } from '../../caja/core/dinero';
 import { BonoCalculado, LecturaTicket, PlantillaBascula } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { FotoTicketComponent, TicketLeido } from './fotos/foto-ticket.component';
+import { FotoSimpleComponent } from './fotos/foto-simple.component';
+import { ETIQUETA_CRITERIO, pesoQueVale } from '../core/peso-que-vale';
+import { FormsModule } from '@angular/forms';
 
 const CLAVE_BASCULA = 'cargas.ultima-bascula';
 
@@ -48,13 +51,34 @@ export function recordarBascula(valor: string | null | undefined): void {
 @Component({
   selector: 'app-pesaje-campos',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, InputNumberModule, InputTextModule, SelectButtonModule, FotoTicketComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, InputNumberModule, InputTextModule, SelectButtonModule, FotoTicketComponent, FotoSimpleComponent],
   template: `
-    <div class="fotos" *ngIf="conFotos()">
+    <div class="modo" *ngIf="conFotos()">
+      <p-selectButton [options]="modos" [allowEmpty]="false" [ngModel]="modo()" (ngModelChange)="cambiarModo($event)"
+                      optionLabel="etiqueta" optionValue="valor" styleClass="modos">
+        <ng-template let-m pTemplate="item"><i [class]="m.icono"></i><span>{{ m.etiqueta }}</span></ng-template>
+      </p-selectButton>
+      <small class="secundario">{{ modo() === 'LECTOR'
+        ? 'Escanee o fotografíe la boleta: los datos se llenan solos y se pueden corregir antes de guardar.'
+        : 'Escriba los datos mirando la boleta. Adjunte la foto o el escaneo como respaldo.' }}</small>
+    </div>
+    <div class="fotos" *ngIf="conFotos() && modo() === 'LECTOR'">
       <app-foto-ticket tipo="TICKET_INTERIOR" [plantillas]="plantillas()" [obligatoria]="fotoObligatoria()"
                        (listo)="ticketInterior($event)" (quitado)="quitarFoto('foto_interior_id')" />
       <app-foto-ticket tipo="TICKET_EXTERIOR" [plantillas]="plantillas()"
                        (listo)="ticketExterior($event)" (quitado)="quitarFoto('foto_exterior_id')" />
+    </div>
+    <div class="fotos manual" *ngIf="conFotos() && modo() === 'MANUAL'">
+      <div class="respaldo">
+        <app-foto-simple tipo="TICKET_INTERIOR" (subida)="grupo().patchValue({ foto_interior_id: $event.id })"
+                         [etiqueta]="grupo().value.foto_interior_id ? '' : 'Foto'" />
+        <span>Boleta interior (empresa) <span class="obligatoria" *ngIf="fotoObligatoria()">obligatoria</span></span>
+      </div>
+      <div class="respaldo">
+        <app-foto-simple tipo="TICKET_EXTERIOR" (subida)="grupo().patchValue({ foto_exterior_id: $event.id })"
+                         [etiqueta]="grupo().value.foto_exterior_id ? '' : 'Foto'" />
+        <span>Boleta exterior (cliente) <span class="opcional">(opcional)</span></span>
+      </div>
     </div>
     <div class="campos" [formGroup]="grupo()">
       <div class="campo span-2">
@@ -104,7 +128,7 @@ export function recordarBascula(valor: string | null | undefined): void {
         <ng-container *ngIf="diferencia() as d; else sinCliente">
           <span [class.error]="d.alerta">Neto del cliente {{ fmt(d.clienteNeto) }} kg{{ tipo() === 'BRUTO' ? ' (bruto declarado − tara)' : '' }}.
             Diferencia: <strong class="codigo">{{ d.kg > 0 ? '+' : '' }}{{ fmt(d.kg) }} kg</strong>
-            ({{ d.kg > 0 ? '+' : '' }}{{ fmt(d.pct) }} %). Vale el peso de la empresa.</span>
+            ({{ d.kg > 0 ? '+' : '' }}{{ fmt(d.pct) }} %).</span>
         </ng-container>
         <ng-template #sinCliente><small class="secundario">Si el productor declara su propio peso, anótelo para comparar. Si no, cuenta solo el de la empresa.</small></ng-template>
       </div>
@@ -138,6 +162,14 @@ export function recordarBascula(valor: string | null | undefined): void {
         <div class="leido">{{ pl }}</div>
       </div>
 
+      <div class="campo span-6" *ngIf="vale() as v">
+        <div class="vale" [class.otro]="v.criterio !== 'EMPRESA'">
+          <i class="pi pi-check-square"></i>
+          <span>Peso que vale para el lote: <strong class="codigo">{{ fmt(v.kg) }} kg</strong> — {{ etiquetaCriterio[v.criterio] }}.
+            <span class="secundario">{{ explicacion(v.criterio) }}</span></span>
+        </div>
+      </div>
+
       <div class="campo span-6" *ngIf="neto() !== null && neto()! > 0">
         <div class="bono" [class.sin-bono]="!bono()">
           <i class="pi" [class.pi-truck]="bono()" [class.pi-info-circle]="!bono()"></i>
@@ -149,6 +181,16 @@ export function recordarBascula(valor: string | null | undefined): void {
     </div>
   `,
   styles: [`
+    .modo { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.8rem; }
+    :host ::ng-deep .modos .p-button { gap: 0.4rem; padding: 0.45rem 0.9rem; font-size: 0.85rem; }
+    .fotos.manual { grid-template-columns: 1fr 1fr; }
+    .respaldo { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; padding: 0.5rem 0.7rem;
+                border: 1px dashed var(--surface-border, #cbd5e1); border-radius: 8px; }
+    .obligatoria { font-size: 0.7rem; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 4px; padding: 0.05rem 0.35rem; }
+    .vale { display: flex; gap: 0.6rem; align-items: center; padding: 0.6rem 0.9rem; border-radius: 8px; font-size: 0.9rem;
+            background: #eef2ff; border: 1px solid #c7d2fe; }
+    .vale.otro { background: #fff7ed; border-color: #fed7aa; }
+    .vale .secundario { display: block; font-size: 0.78rem; }
     .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
     @media (max-width: 720px) { .fotos { grid-template-columns: 1fr; } }
     .leido { font-size: 0.9rem; padding: 0.5rem 0; font-weight: 550; }
@@ -184,6 +226,50 @@ export class PesajeCamposComponent implements OnInit {
   readonly sinSacos = input(false);
 
   readonly deFoto = signal<Set<string>>(new Set());
+  /** Límite para promediar (parámetro LIMITE_PROMEDIO_PESO_KG). */
+  readonly limite = input(100);
+  /** Mixta: kg de sacos que se restan del neto del camión y del cliente. */
+  readonly descuentoSacos = input(0);
+  readonly modos = [
+    { valor: 'LECTOR', etiqueta: 'Con escáner o foto', icono: 'pi pi-print' },
+    { valor: 'MANUAL', etiqueta: 'Registro manual', icono: 'pi pi-pencil' },
+  ];
+  readonly modo = signal<'LECTOR' | 'MANUAL'>(PesajeCamposComponent.modoGuardado());
+  readonly etiquetaCriterio = ETIQUETA_CRITERIO;
+
+  private static modoGuardado(): 'LECTOR' | 'MANUAL' {
+    try { return localStorage.getItem('cargas.modo-registro') === 'MANUAL' ? 'MANUAL' : 'LECTOR'; } catch { return 'LECTOR'; }
+  }
+
+  cambiarModo(m: 'LECTOR' | 'MANUAL'): void {
+    if (m === this.modo()) return;
+    this.modo.set(m);
+    try { localStorage.setItem('cargas.modo-registro', m); } catch { /* sin almacenamiento */ }
+    // Las fotos del otro modo no se arrastran: se vuelven a adjuntar.
+    this.grupo().patchValue({ foto_interior_id: null, foto_exterior_id: null });
+    this.deFoto.set(new Set());
+    this.lecturaInterior.set(null);
+    this.lecturaExterior.set(null);
+    this.avisarLecturas();
+  }
+
+  /** El peso que valdrá, con la misma regla que la base. */
+  readonly vale = computed(() => {
+    const n = this.neto();
+    if (n === null || n <= 0) return null;
+    const d = this.diferencia();
+    const s = this.descuentoSacos() || 0;
+    return pesoQueVale(n - s, d ? d.clienteNeto - s : null, this.limite());
+  });
+
+  explicacion(c: 'EMPRESA' | 'CLIENTE' | 'PROMEDIO'): string {
+    const l = this.fmt(this.limite());
+    return {
+      EMPRESA: this.diferencia() ? `Nuestra báscula pesa menos que el cliente por más de ${l} kg.` : 'El cliente no declaró peso.',
+      CLIENTE: 'Nuestra báscula pesa igual o más que el cliente: vale el menor.',
+      PROMEDIO: `Nuestra báscula pesa menos que el cliente, hasta ${l} kg: se promedian.`,
+    }[c];
+  }
   /** Lo leído de cada boleta, para buscar el productor y avisar diferencias. */
   readonly lecturaInterior = signal<LecturaTicket | null>(null);
   readonly lecturaExterior = signal<LecturaTicket | null>(null);

@@ -119,7 +119,7 @@
           <td class="num">{{ $p->num_sacos ?? '' }}</td>
           <td class="num">{{ $kg($p->peso_bruto_kg) }}</td>
           <td class="num">{{ $p->modalidad === 'SACOS' ? '—' : $kg($p->tara_kg) }}</td>
-          <td class="num">{{ $kg($p->peso_neto_kg) }}@if ((float) $p->descuento_sacos_kg > 0)<br><span style="font-size: 5.6pt;">− {{ $kg($p->descuento_sacos_kg) }} sacos</span>@endif</td>
+          <td class="num">{{ $kg($p->peso_neto_kg) }}@if ((float) $p->descuento_sacos_kg > 0)<br><span style="font-size: 5.6pt;">− {{ $kg($p->descuento_sacos_kg) }} sacos</span>@endif @if ($p->criterio_peso && $p->criterio_peso !== 'EMPRESA')<br><b style="font-size: 6pt;">vale {{ $kg($p->peso_final_kg) }} ({{ $p->criterio_peso === 'CLIENTE' ? 'cliente' : 'promedio' }})</b>@endif</td>
           @if ($conCliente)<td class="num">@if ($p->peso_cliente_kg === null)—@elseif ($p->peso_cliente_tipo === 'BRUTO'){{ $kg($p->peso_cliente_kg - $p->tara_kg) }}<br><span style="font-size: 5.6pt;">bruto {{ $kg($p->peso_cliente_kg) }}</span>@else{{ $kg($p->peso_cliente_kg) }}@endif</td>@endif
           <td class="num">{{ $p->bono && $p->bono->estado !== 'ANULADO' ? ($p->bono->moneda === 'USD' ? 'US$' : 'Bs') . ' ' . $kg($p->bono->monto) . ($p->bono->estado === 'PAGADO' ? ' ✓' : '') : '—' }}</td>
         </tr>

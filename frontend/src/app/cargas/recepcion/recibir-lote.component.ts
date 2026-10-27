@@ -69,11 +69,19 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
           <small *ngIf="serie()">{{ serie()!.linea?.nombre }}</small>
         </div>
 
-        <div class="campo span-3">
+        <div class="campo span-3" *ngIf="!sedeFija(); else sedeAsignada">
           <label for="sede">Sede</label>
-          <p-dropdown inputId="sede" formControlName="almacen_id" [options]="opciones()?.almacenes ?? []" optionLabel="nombre"
+          <p-dropdown inputId="sede" formControlName="almacen_id" [options]="sedes()" optionLabel="nombre"
                       optionValue="id" placeholder="Elija la sede" appendTo="body" [style]="{ width: '100%' }" />
+          <small class="aviso-texto" *ngIf="opciones() && !sedes().length">Su usuario no recibe carga en ninguna sede: pida que lo asignen en «Sedes de recepción».</small>
         </div>
+        <ng-template #sedeAsignada>
+          <div class="campo span-3">
+            <label>Sede</label>
+            <div class="sede-fija"><i class="pi pi-map-marker"></i> {{ sedeFija()!.nombre }}</div>
+            <small>Es la sede donde usted recibe carga.</small>
+          </div>
+        </ng-template>
         <div class="campo span-3">
           <label for="guia">Guía de transporte <span class="opcional">(opcional)</span></label>
           <input id="guia" pInputText formControlName="guia_transporte" maxlength="40" class="codigo" />
@@ -151,6 +159,7 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
       </div>
       <app-pesaje-campos *ngIf="conPesaje || tipoRecepcion === 'MIXTA'" [grupo]="pesaje" [plantillas]="plantillas()"
                          [fotoObligatoria]="!!opciones()?.foto_ticket_obligatoria" [sinSacos]="tipoRecepcion === 'MIXTA'"
+                         [limite]="opciones()?.limite_promedio_peso_kg ?? 100" [descuentoSacos]="tipoRecepcion === 'MIXTA' ? (reparto()?.sacos ?? 0) : 0"
                          (leido)="boletasLeidas($event)" />
       <p class="secundario" *ngIf="!conPesaje && tipoRecepcion === 'BASCULA'">Podrá agregar los pesajes después, desde la ficha del lote.</p>
     </section>
@@ -228,6 +237,7 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
                 cursor: pointer; font-size: 0.85rem; }
     .parecido:hover { background: #dbeafe; }
     .de-boleta { color: #047857; margin-left: 0.4rem; }
+    .sede-fija { display: flex; gap: 0.4rem; align-items: center; font-weight: 600; padding: 0.55rem 0; }
     .aviso-texto { color: #b45309; }
     .diferencias { list-style: none; padding: 0; margin: 0.5rem 0 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
     .diferencias li { display: flex; gap: 0.45rem; color: #92400e; font-size: 0.9rem; }
@@ -307,6 +317,13 @@ export class RecibirLoteComponent implements OnInit {
     try { localStorage.setItem(CLAVE_TIPO, this.tipoRecepcion); } catch { /* sin almacenamiento */ }
   }
 
+  /** Sedes donde este usuario recibe; con una sola asignada, va fija y no se elige. */
+  readonly sedes = computed(() => this.opciones()?.sedes_recepcion ?? this.opciones()?.almacenes ?? []);
+  readonly sedeFija = computed(() => {
+    const id = this.opciones()?.sede_recepcion_fija;
+    return id ? this.sedes().find((s) => s.id === id) ?? null : null;
+  });
+
   readonly serie = computed(() => this.series().find((s) => s.id === this.serieId()) ?? null);
   readonly minasCompra = computed(() => this.minas().filter((m) => !m.propia));
   readonly minasPropias = computed(() => this.minas().filter((m) => m.propia));
@@ -319,7 +336,9 @@ export class RecibirLoteComponent implements OnInit {
     this.catalogos.listarMinas({ solo_activas: true }).subscribe((m) => this.minas.set(m));
     this.catalogos.opciones$.subscribe((o) => {
       this.opciones.set(o);
-      const sede = o.almacen_predeterminado ?? (o.almacenes.length === 1 ? o.almacenes[0].id : null);
+      const lista = o.sedes_recepcion ?? o.almacenes;
+      const pred = o.almacen_predeterminado && lista.some((a) => a.id === o.almacen_predeterminado) ? o.almacen_predeterminado : null;
+      const sede = o.sede_recepcion_fija ?? pred ?? (lista.length === 1 ? lista[0].id : null);
       if (sede && !this.form.value.almacen_id) this.form.patchValue({ almacen_id: sede });
     });
     this.form.get('serie_id')!.valueChanges.subscribe((id) => {

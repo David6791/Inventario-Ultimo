@@ -26,6 +26,7 @@ class Pesaje extends CargasModel
         'peso_cliente_kg' => 'decimal:2',
         'peso_neto_kg'  => 'decimal:2',
         'descuento_sacos_kg' => 'decimal:2',
+        'peso_final_kg' => 'decimal:2',
         'pesaje_viaje_id' => 'integer',
         'num_sacos'     => 'integer',
         'anulado'       => 'boolean',

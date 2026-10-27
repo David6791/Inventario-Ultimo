@@ -34,6 +34,11 @@ export interface Opciones {
   almacen_predeterminado: number | null;
   /** Parámetro FOTO_TICKET_OBLIGATORIA. */
   foto_ticket_obligatoria?: boolean;
+  /** Sedes donde este usuario recibe carga; con una sola asignada viene la fija. */
+  sedes_recepcion?: { id: number; codigo: string; nombre: string }[];
+  sede_recepcion_fija?: number | null;
+  /** Hasta cuántos kg de diferencia (nuestra menor que la del cliente) se promedia. */
+  limite_promedio_peso_kg?: number;
 }
 
 export type TipoProductor = 'COOPERATIVISTA' | 'PARTICULAR' | 'EMPRESA' | 'INGENIO';
@@ -241,6 +246,9 @@ export interface Pesaje {
   pesaje_viaje_id?: number | null;
   numero_orden?: string | null;
   fecha_ticket?: string | null;
+  /** Peso que vale para el lote y con qué regla salió. */
+  peso_final_kg?: string;
+  criterio_peso?: CriterioPeso;
   viaje?: { id: number; lote_id: number; ticket: string | null; bascula: string; lote?: { id: number; codigo: string } } | null;
   fotos?: FotoRecepcion[];
   sacos?: PesadaSaco[];
@@ -357,6 +365,9 @@ export interface DatosRecepcion {
 
 // ------------------------------------------------------- Recepción con fotos
 export type TipoRecepcion = 'BASCULA' | 'SACOS' | 'MIXTA';
+export type CriterioPeso = 'EMPRESA' | 'CLIENTE' | 'PROMEDIO';
+
+export interface SedeRecepcion { id: number; codigo: string; nombre: string; recepcionistas: { id: number; name: string }[]; }
 export type ModalidadPesaje = 'BASCULA' | 'SACOS';
 export type TipoFoto = 'TICKET_INTERIOR' | 'TICKET_EXTERIOR' | 'BALANZA_MANUAL';
 export type CampoTicket = 'ticket' | 'peso_bruto_kg' | 'tara_kg' | 'peso_neto_kg' | 'placa' | 'numero_orden' | 'productor' | 'chofer' | 'fecha' | 'hora';

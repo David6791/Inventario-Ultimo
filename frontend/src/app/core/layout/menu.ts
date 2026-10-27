@@ -107,6 +107,7 @@ const ESTRUCTURA: ItemMenu[] = [
       { etiqueta: 'Líneas y elementos',  icono: 'pi pi-tags',       ruta: '/cargas/lineas',       permiso: 'cargas.ver' },
       { etiqueta: 'Series de lote',      icono: 'pi pi-hashtag',    ruta: '/cargas/series',       permiso: 'cargas.ver' },
       { etiqueta: 'Plantillas de báscula', icono: 'pi pi-camera',   ruta: '/cargas/plantillas-bascula', permiso: 'cargas.ver' },
+      { etiqueta: 'Sedes de recepción',  icono: 'pi pi-map-marker', ruta: '/cargas/sedes-recepcion', permiso: 'cargas.ver' },
       { etiqueta: 'Estado del módulo',   icono: 'pi pi-heart',      ruta: '/cargas/estado',       permiso: 'cargas.ver' },
     ],
   },

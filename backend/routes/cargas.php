@@ -13,6 +13,7 @@ use App\Modules\Cargas\Http\Controllers\ElementoController;
 use App\Modules\Cargas\Http\Controllers\EstadoController;
 use App\Modules\Cargas\Http\Controllers\FotoRecepcionController;
 use App\Modules\Cargas\Http\Controllers\PlantillaBasculaController;
+use App\Modules\Cargas\Http\Controllers\SedeRecepcionController;
 use App\Modules\Cargas\Http\Controllers\LaboratorioController;
 use App\Modules\Cargas\Http\Controllers\LineaProductoController;
 use App\Modules\Cargas\Http\Controllers\MinaController;
@@ -75,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('analisis/{analisis}/certificado', [AnalisisController::class, 'certificado'])->whereNumber('analisis');
         Route::get('bono-tramos',              [BonoController::class, 'tramos']);
         Route::get('plantillas-bascula',       [PlantillaBasculaController::class, 'index']);
+        Route::get('sedes-recepcion',          [SedeRecepcionController::class, 'index']);
         Route::get('plantillas-bascula/{plantilla}/muestra', [PlantillaBasculaController::class, 'muestra'])->whereNumber('plantilla');
         Route::get('fotos/{foto}',             [FotoRecepcionController::class, 'imagen'])->whereNumber('foto');
         Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
@@ -144,6 +146,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('fotos',                        [FotoRecepcionController::class, 'store']);
 
     // --- Plantillas de báscula (cargas.catalogos) ----------------------------
+    Route::put('sedes-recepcion/{almacen}',     [SedeRecepcionController::class, 'update'])->whereNumber('almacen');
     Route::post('plantillas-bascula/probar',    [PlantillaBasculaController::class, 'probar']);
     Route::post('plantillas-bascula',           [PlantillaBasculaController::class, 'store']);
     Route::post('plantillas-bascula/{plantilla}', [PlantillaBasculaController::class, 'update'])->whereNumber('plantilla');

@@ -211,7 +211,8 @@ class RecepcionApiTest extends TestCase
         $this->como($this->usuario(self::RECEPCION));
         $lote = $this->recibir([], $this->pesaje(['ticket' => 'T-458', 'peso_bruto_kg' => 24700, 'tara_kg' => 12500,
             'peso_cliente_kg' => 24500, 'peso_cliente_tipo' => 'BRUTO']))->assertCreated()
-            ->assertJsonPath('data.peso_neto_humedo_kg', '12200.00')
+            ->assertJsonPath('data.peso_neto_humedo_kg', '12000.00')      // nuestra báscula pesa más: vale el del cliente
+            ->assertJsonPath('data.pesajes.0.criterio_peso', 'CLIENTE')
             ->assertJsonPath('data.peso_cliente_kg', '12000.00')          // 24.500 − 12.500
             ->assertJsonPath('data.diferencia_cliente_kg', '-200.00')
             ->json('data');

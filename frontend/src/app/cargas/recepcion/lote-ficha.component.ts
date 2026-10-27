@@ -80,7 +80,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
         <div class="dato"><span class="rotulo">Municipio</span><span>{{ l.municipio?.nombre ?? '—' }}</span></div>
         <div class="dato"><span class="rotulo">Material</span><span class="codigo">{{ l.material ?? '—' }}</span></div>
         <div class="dato"><span class="rotulo">Guía</span><span class="codigo">{{ l.guia_transporte ?? '—' }}</span></div>
-        <div class="dato grande"><span class="rotulo">Peso neto húmedo</span>
+        <div class="dato grande"><span class="rotulo">Peso que vale (húmedo)</span>
           <span class="monto">{{ kg(l.peso_neto_humedo_kg) }} kg</span>
           <small class="secundario">{{ l.num_pesajes }} pesaje(s){{ l.num_sacos ? ' · ' + l.num_sacos + ' sacos' : '' }}</small></div>
         <div class="dato grande" *ngIf="l.pesajes_con_peso_cliente"><span class="rotulo">Peso del cliente</span>
@@ -134,7 +134,10 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
             <td class="derecha monto">{{ kg(p.peso_bruto_kg) }}</td>
             <td class="derecha monto">{{ p.modalidad === 'SACOS' ? '—' : kg(p.tara_kg) }}</td>
             <td class="derecha monto fuerte">{{ kg(p.peso_neto_kg) }}
-              <div class="secundario" *ngIf="+(p.descuento_sacos_kg ?? 0) > 0">− {{ kg(p.descuento_sacos_kg) }} de sacos</div></td>
+              <div class="secundario" *ngIf="+(p.descuento_sacos_kg ?? 0) > 0">− {{ kg(p.descuento_sacos_kg) }} de sacos</div>
+              <div class="vale" *ngIf="p.criterio_peso && p.criterio_peso !== 'EMPRESA'"
+                   [pTooltip]="p.criterio_peso === 'CLIENTE' ? 'Nuestra báscula pesó igual o más: vale el del cliente' : 'Nuestra báscula pesó menos, dentro del límite: se promedian'">
+                vale {{ kg(p.peso_final_kg) }} <span class="secundario">({{ p.criterio_peso === 'CLIENTE' ? 'cliente' : 'promedio' }})</span></div></td>
             <td class="derecha monto">
               <ng-container *ngIf="p.peso_cliente_kg !== null; else sinCliente">
                 {{ kg(netoCliente(p)) }}
@@ -191,7 +194,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
         <small class="secundario">{{ tipoPesaje === 'INGRESO' ? 'Otro camión del mismo lote: suma al peso y genera su bono.' :
           'Repesaje para verificar: no suma al peso ni genera bono.' }}</small>
       </div>
-      <app-pesaje-campos *ngIf="pesajeVisible" [grupo]="pesaje" [plantillas]="plantillas()" [fotoObligatoria]="fotoObligatoria()"
+      <app-pesaje-campos *ngIf="pesajeVisible" [grupo]="pesaje" [plantillas]="plantillas()" [fotoObligatoria]="fotoObligatoria()" [limite]="limite()"
                          (leido)="lecturas = $event" />
       <div class="nota-diferencias" *ngIf="diferencias().length">
         <b>Lo leído de la boleta no coincide con lo anotado:</b>
@@ -222,7 +225,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     <!-- Corregir peso del cliente -->
     <p-dialog [(visible)]="correccionVisible" [header]="'Peso del cliente · ticket ' + (aCorregir()?.ticket ?? '')" [modal]="true"
               [style]="{ width: '32rem' }" [draggable]="false">
-      <p class="explicacion">Es informativo: no cambia el peso del lote, el bono ni la liquidación. La corrección queda registrada con su motivo.
+      <p class="explicacion">No cambia el bono. Sí recalcula el peso que vale del pesaje con la regla de la empresa (menor, promedio o el nuestro). La corrección queda registrada con su motivo.
         Báscula de la empresa: bruto {{ kg(aCorregir()?.peso_bruto_kg) }}, tara {{ kg(aCorregir()?.tara_kg) }}, neto {{ kg(aCorregir()?.peso_neto_kg) }}.</p>
       <div class="campo">
         <label>Peso que declaró el cliente (kg) <span class="secundario">vacío si no declaró</span></label>
@@ -262,6 +265,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     .codigo-lote { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
     .estado { vertical-align: middle; margin-left: 0.5rem; font-size: 0.75rem; }
     .estado-recibido { background: #e0f2fe; color: #075985; }
+    td .vale { font-size: 0.8rem; color: #4338ca; font-weight: 600; }
     .nota-diferencias { margin-top: 0.8rem; padding: 0.6rem 0.8rem; border-radius: 8px; background: #fef3c7; color: #92400e; font-size: 0.86rem; }
     .nota-diferencias ul { margin: 0.3rem 0; padding-left: 1.1rem; }
     .nota-par { display: flex; gap: 0.5rem; align-items: center; padding: 0.55rem 0.8rem; border-radius: 8px; background: #eff6ff;
@@ -307,6 +311,7 @@ export class LoteFichaComponent implements OnInit, OnChanges {
 
   readonly plantillas = signal<PlantillaBascula[]>([]);
   readonly fotoObligatoria = signal(false);
+  readonly limite = signal(100);
   readonly fotosDe = signal<Pesaje | null>(null);
   lecturas: { interior: LecturaTicket | null; exterior: LecturaTicket | null } = { interior: null, exterior: null };
   readonly diferencias = signal<string[]>([]);
@@ -333,7 +338,10 @@ export class LoteFichaComponent implements OnInit, OnChanges {
     const mensaje = history.state?.mensaje;
     if (mensaje) setTimeout(() => this.toast.add({ severity: 'success', summary: 'Lote recibido', detail: mensaje, life: 8000 }));
     this.servicio.plantillas(true).subscribe((r) => this.plantillas.set(r.data));
-    this.catalogos.opciones$.subscribe((o) => this.fotoObligatoria.set(!!o.foto_ticket_obligatoria));
+    this.catalogos.opciones$.subscribe((o) => {
+      this.fotoObligatoria.set(!!o.foto_ticket_obligatoria);
+      this.limite.set(o.limite_promedio_peso_kg ?? 100);
+    });
   }
 
   /** También al pasar de un lote a su par: la ruta es la misma y solo cambia el id. */

@@ -252,7 +252,9 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertStringContainsString('(granel)', $r->json('mensaje'));
 
         $this->assertSame('MIXTA', $granel['tipo_recepcion']);
-        $this->assertEquals(9500, (float) $granel['peso_neto_humedo_kg']);            // 20.000 − 8.000 − 2.500
+        $this->assertEquals(9500, (float) $granel['pesajes'][0]['peso_neto_kg']);     // 20.000 − 8.000 − 2.500
+        $this->assertEquals(9550, (float) $granel['peso_neto_humedo_kg']);            // cliente 9.600: 100 kg más → promedio
+        $this->assertSame('PROMEDIO', $granel['pesajes'][0]['criterio_peso']);
         $this->assertEquals(2500, (float) $granel['pesajes'][0]['descuento_sacos_kg']);
         $this->assertEquals(100, (float) $granel['pesajes'][0]['bono']['monto']);      // por 12.000 kg del camión
         $this->assertEquals(9600, (float) $granel['pesajes'][0]['peso_cliente_kg']);   // 12.100 del cliente − 2.500 de sacos
@@ -311,5 +313,43 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertSame('QUISPE YAPU RUBEN', $ocr->nombre('‘QUISPE YAPU RUBEN V'));
         $this->assertSame('1175PFT', $ocr->placa('TI7SPFTC'));
         $this->assertSame('2345KLM', $ocr->placa('2345-KLM'));
+    }
+
+    // --- Peso que vale ---------------------------------------------------------
+
+    public function test_peso_que_vale_segun_la_diferencia_con_el_cliente(): void
+    {
+        DB::table('cargas.parametro')->where('clave', 'FOTO_TICKET_OBLIGATORIA')->update(['valor' => 'NO']);
+        Sanctum::actingAs($this->recepcion);
+        $casos = [
+            // nuestro neto, cliente neto, vale, criterio
+            [12000, 11900, 11900, 'CLIENTE'],     // pesamos más: vale el del cliente
+            [12000, 11000, 11000, 'CLIENTE'],     // pesamos mucho más: también el del cliente (el menor)
+            [12000, 12080, 12040, 'PROMEDIO'],    // pesamos menos, hasta 100 kg: promedio
+            [12000, 12300, 12000, 'EMPRESA'],     // pesamos menos por más de 100 kg: vale el nuestro
+            [12000, null, 12000, 'EMPRESA'],      // el cliente no declaró
+        ];
+        foreach ($casos as $i => [$nuestro, $cliente, $vale, $criterio]) {
+            $p = $this->postJson('/api/cargas/lotes', $this->base(['pesaje' => $this->camion([
+                'ticket' => "PV-{$i}", 'peso_bruto_kg' => $nuestro + 8000, 'tara_kg' => 8000, 'peso_cliente_kg' => $cliente])]))
+                ->assertCreated()->json('data');
+            $this->assertEquals($vale, (float) $p['pesajes'][0]['peso_final_kg'], "caso {$i}");
+            $this->assertSame($criterio, $p['pesajes'][0]['criterio_peso'], "caso {$i}");
+            $this->assertEquals($vale, (float) $p['peso_neto_humedo_kg'], "caso {$i}");
+        }
+
+        // Corregir el peso del cliente recalcula el peso que vale.
+        $id = Pesaje::where('ticket', 'PV-4')->value('id');
+        $this->recepcion->givePermissionTo('cargas.recibir');
+        $this->postJson("/api/cargas/pesajes/{$id}/peso-cliente", ['peso_cliente_kg' => 12050, 'peso_cliente_tipo' => 'NETO',
+            'motivo' => 'El cliente presentó su boleta después'])->assertOk();
+        $this->assertEquals(12025, (float) Pesaje::find($id)->peso_final_kg);
+        $this->assertSame('PROMEDIO', Pesaje::find($id)->criterio_peso);
+
+        // El límite es un parámetro: con 50 kg, 80 de diferencia ya no promedia.
+        DB::table('cargas.parametro')->where('clave', 'LIMITE_PROMEDIO_PESO_KG')->update(['valor' => '50']);
+        $p = $this->postJson('/api/cargas/lotes', $this->base(['pesaje' => $this->camion([
+            'ticket' => 'PV-9', 'peso_bruto_kg' => 20000, 'tara_kg' => 8000, 'peso_cliente_kg' => 12080])]))->assertCreated()->json('data');
+        $this->assertSame('EMPRESA', $p['pesajes'][0]['criterio_peso']);
     }
 }

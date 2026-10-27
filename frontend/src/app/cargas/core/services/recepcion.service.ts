@@ -4,7 +4,7 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
   BonoCalculado, BonoPendiente, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, Lote, Pagina, Pesaje,
-  PlantillaBascula, ProductorParecido, RecuadroPlantilla, RespuestaApi, TablaTramos, TipoFoto, Tramo,
+  PlantillaBascula, ProductorParecido, RecuadroPlantilla, SedeRecepcion, RespuestaApi, TablaTramos, TipoFoto, Tramo,
 } from '../models/cargas.model';
 
 export interface ListaPlantillas { data: PlantillaBascula[]; campos: CampoDisponible[]; ocr: boolean; }
@@ -126,5 +126,14 @@ export class RecepcionService {
   productoresParecidos(nombre: string): Observable<ProductorParecido[]> {
     return this.http.get<RespuestaApi<ProductorParecido[]>>(`${this.base}/productores/parecidos`, { params: { nombre } })
       .pipe(map((r) => r.data));
+  }
+
+  // --------------------------------------------------------------- Sedes de recepción
+  sedesRecepcion(): Observable<{ data: SedeRecepcion[]; candidatos: { id: number; name: string; email: string }[] }> {
+    return this.http.get<{ data: SedeRecepcion[]; candidatos: { id: number; name: string; email: string }[] }>(`${this.base}/sedes-recepcion`);
+  }
+
+  asignarRecepcionistas(almacenId: number, usuarios: number[]): Observable<RespuestaApi<SedeRecepcion> & { mensaje: string }> {
+    return this.http.put<RespuestaApi<SedeRecepcion> & { mensaje: string }>(`${this.base}/sedes-recepcion/${almacenId}`, { usuarios });
   }
 }

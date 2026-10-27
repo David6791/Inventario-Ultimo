@@ -76,8 +76,8 @@ class RecibirLoteRequest extends PesajeRequest
             if ($v->errors()->isNotEmpty()) {
                 return;
             }
-            if (! $this->user()->can('cargas.ver-todos-almacenes') && ! $this->user()->accedeAlmacen((int) $this->input('almacen_id'))) {
-                $v->errors()->add('almacen_id', 'Su usuario no tiene acceso a esa sede.');
+            if (! app(\App\Modules\Cargas\Services\SedeRecepcionService::class)->puedeRecibirEn($this->user(), (int) $this->input('almacen_id'))) {
+                $v->errors()->add('almacen_id', 'Su usuario no recibe carga en esa sede: la sede tiene sus propios recepcionistas o no tiene acceso a ella.');
             }
 
             if ($this->input('tipo_recepcion') === 'MIXTA') {
