@@ -83,7 +83,13 @@ import { ESTILOS_CAJA } from '../core/estilos';
             <div class="codigo">{{ c.formato_comprobante }}</div>
             <div class="secundario">{{ etiquetaReinicio(c.reinicio_comprobante) }}</div>
           </td>
-          <td><span class="proximo">{{ c.proximo_numero ?? '—' }}</span></td>
+          <td>
+            <ng-container *ngIf="!c.numeracion_separada"><span class="proximo">{{ c.proximo_numero ?? '—' }}</span></ng-container>
+            <ng-container *ngIf="c.numeracion_separada">
+              <div class="por-tipo"><span class="tipo-e">Egreso</span><span class="proximo">{{ c.proximo_numero }}</span></div>
+              <div class="por-tipo"><span class="tipo-i">Ingreso</span><span class="proximo">{{ c.proximo_numero_ingreso }}</span></div>
+            </ng-container>
+          </td>
           <td>
             <span class="pastilla pastilla-ok" *ngIf="c.sesion_abierta">Abierta · sesión {{ c.sesion_abierta.numero }}</span>
             <span class="pastilla" *ngIf="!c.sesion_abierta && c.activa">Cerrada</span>
@@ -154,7 +160,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
         </div>
 
         <div class="campo span-2">
-          <label for="proximo">Próximo correlativo</label>
+          <label for="proximo">{{ form.value.numeracion_separada ? 'Próximo egreso' : 'Próximo correlativo' }}</label>
           <input id="proximo" pInputText formControlName="proximo_comprobante" inputmode="numeric" maxlength="8" class="codigo"
                  [class.ng-invalid]="proximoInvalido()" [class.ng-dirty]="proximoInvalido()" />
         </div>
@@ -174,11 +180,50 @@ import { ESTILOS_CAJA } from '../core/estilos';
           </small>
         </div>
 
+        <div class="campo span-6 bloque-aprobacion">
+          <div class="check-campo">
+            <p-checkbox formControlName="numeracion_separada" [binary]="true" inputId="separada" />
+            <label for="separada">Numerar ingresos y egresos por separado</label>
+          </div>
+          <small *ngIf="!form.value.numeracion_separada">Todos los comprobantes comparten un solo correlativo.</small>
+          <ng-container *ngIf="form.value.numeracion_separada">
+            <small>Cada tipo lleva su propio correlativo. Si el número vuelve a 1 cada año o cada mes, en realidad vuelve al
+                   número de inicio de cada tipo.</small>
+            <div class="campos-tipo">
+              <div class="campo">
+                <label for="inicio-egreso">Egresos empiezan en</label>
+                <input id="inicio-egreso" pInputText formControlName="inicio_egreso" inputmode="numeric" maxlength="8" class="codigo" />
+              </div>
+              <div class="campo">
+                <label for="inicio-ingreso">Ingresos empiezan en</label>
+                <input id="inicio-ingreso" pInputText formControlName="inicio_ingreso" inputmode="numeric" maxlength="8" class="codigo" />
+              </div>
+              <div class="campo">
+                <label for="proximo-ingreso">Próximo ingreso</label>
+                <input id="proximo-ingreso" pInputText formControlName="proximo_ingreso" inputmode="numeric" maxlength="8" class="codigo"
+                       [class.ng-invalid]="proximoIngresoInvalido()" [class.ng-dirty]="proximoIngresoInvalido()" />
+              </div>
+            </div>
+            <div class="campo">
+              <label for="formato-ingreso">Formato de los ingresos <span class="opcional">(opcional)</span></label>
+              <input id="formato-ingreso" pInputText formControlName="formato_ingreso" maxlength="60" class="codigo"
+                     [placeholder]="'Igual al de egresos: ' + (form.value.formato_comprobante ?? '')" />
+              <small>Con el mismo formato, los rangos no deben cruzarse: si los egresos llegan a {{ form.value.inicio_ingreso || '…' }},
+                     el sistema avisa en vez de repetir un número.</small>
+            </div>
+          </ng-container>
+        </div>
+
         <div class="campo span-6">
           <div class="previa" [class.previa-error]="previa()?.error || (previa()?.repetido && (formatoCambiado() || proximoCambiado()))">
             <span class="rotulo">Así saldrá el próximo comprobante</span>
             <ng-container *ngIf="previa() as p; else calculando">
-              <span class="codigo-grande" *ngIf="p.numero">{{ p.numero }}</span>
+              <span class="codigo-grande" *ngIf="p.numero">
+                <small class="etiqueta-tipo" *ngIf="form.value.numeracion_separada">Egreso</small>{{ p.numero }}</span>
+              <span class="codigo-grande" *ngIf="form.value.numeracion_separada && p.ingreso?.numero">
+                <small class="etiqueta-tipo">Ingreso</small>{{ p.ingreso!.numero }}</span>
+              <span class="mensaje" *ngIf="p.ingreso?.error">Ingresos: {{ p.ingreso!.error }}</span>
+              <span class="mensaje" *ngIf="p.ingreso?.repetido">El próximo ingreso ya existe: se repetiría.</span>
               <span class="mensaje" *ngIf="p.error">{{ p.error }}</span>
               <span class="mensaje" *ngIf="p.repetido && (formatoCambiado() || proximoCambiado())">Ese número ya existe: con este formato se repetirían comprobantes.</span>
             </ng-container>
@@ -228,7 +273,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
       <ng-template pTemplate="footer">
         <p-button label="Cancelar" [text]="true" (onClick)="editorVisible = false" />
         <p-button label="Guardar" icon="pi pi-check" [loading]="guardando()"
-                  [disabled]="form.invalid || proximoInvalido() || !!previa()?.error || (!!previa()?.repetido && (formatoCambiado() || proximoCambiado())) || guardando()"
+                  [disabled]="form.invalid || proximoInvalido() || proximoIngresoInvalido() || !!previa()?.ingreso?.error || !!previa()?.error || (!!previa()?.repetido && (formatoCambiado() || proximoCambiado())) || guardando()"
                   (onClick)="guardar()" />
       </ng-template>
     </p-dialog>
@@ -244,6 +289,12 @@ import { ESTILOS_CAJA } from '../core/estilos';
                          display: flex; flex-direction: column; gap: 0.4rem; }
     .rotulo-aprobadores { margin-top: 0.4rem; }
     .ayuda-proximo { margin-top: -0.4rem; }
+    .campos-tipo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+    @media (max-width: 640px) { .campos-tipo { grid-template-columns: 1fr; } }
+    .por-tipo { display: flex; align-items: baseline; gap: 0.4rem; white-space: nowrap; }
+    .tipo-e, .tipo-i, .etiqueta-tipo { font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+                                       color: var(--text-color-secondary, #6b7280); width: 3.4rem; display: inline-block; }
+    .etiqueta-tipo { font-family: var(--fuente, inherit); margin-right: 0.4rem; }
     .alerta { color: #b91c1c; font-weight: 600; }
     .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
     .marcadores { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -285,6 +336,7 @@ export class CajasComponent implements OnInit {
   aprobadoresElegidos: number[] = [];
   /** Correlativo con que saldría el próximo comprobante al abrir el editor. */
   private proximoOriginal = 1;
+  private proximoIngresoOriginal = 10000;
 
   readonly form = this.fb.group({
     codigo: ['', [Validators.required, Validators.maxLength(10)]],
@@ -296,12 +348,25 @@ export class CajasComponent implements OnInit {
     activa: [true],
     requiere_aprobacion: [false],
     proximo_comprobante: ['1'],
+    numeracion_separada: [false],
+    inicio_egreso: ['1'],
+    inicio_ingreso: ['10000'],
+    formato_ingreso: [''],
+    proximo_ingreso: ['10000'],
     motivo_numeracion: [''],
   });
 
   ngOnInit(): void {
     this.servicio.opciones().subscribe((o) => this.opciones.set(o));
     this.cargar();
+
+    // Mientras no se haya numerado nada con ese tipo, el próximo sigue al número de inicio.
+    this.form.get('inicio_egreso')!.valueChanges.pipe(takeUntilDestroyed(this.destruir)).subscribe((v) => {
+      if (!this.actual()) this.form.patchValue({ proximo_comprobante: v }, { emitEvent: false });
+    });
+    this.form.get('inicio_ingreso')!.valueChanges.pipe(takeUntilDestroyed(this.destruir)).subscribe((v) => {
+      if (!this.actual()?.numeracion_separada) this.form.patchValue({ proximo_ingreso: v }, { emitEvent: false });
+    });
 
     this.form.valueChanges.pipe(
       debounceTime(300),
@@ -311,7 +376,9 @@ export class CajasComponent implements OnInit {
         const proximo = this.proximoCambiado() && !this.proximoInvalido() ? this.proximo() : null;
         return this.servicio.vistaPrevia({
           codigo: v.codigo ?? '', formato_comprobante: v.formato_comprobante ?? '', reinicio_comprobante: v.reinicio_comprobante as any,
-          caja_id: this.actual()?.id ?? null, proximo_comprobante: proximo,
+          caja_id: this.actual()?.id ?? null, proximo_comprobante: proximo ?? this.proximo(),
+          numeracion_separada: !!v.numeracion_separada, formato_ingreso: v.formato_ingreso || null,
+          proximo_ingreso: this.entero(v.proximo_ingreso),
         }).pipe(
           catchError((e) => of({ numero: null, repetido: false, error: mensajeDeError(e) })),
         );
@@ -348,6 +415,24 @@ export class CajasComponent implements OnInit {
     return /^\d{1,8}$/.test(t) && Number(t) >= 1 ? Number(t) : null;
   }
 
+  entero(v: unknown): number | null {
+    const t = String(v ?? '').trim();
+    return /^\d{1,8}$/.test(t) && Number(t) >= 1 ? Number(t) : null;
+  }
+
+  proximoIngresoCambiado(): boolean {
+    const n = this.entero(this.form.value.proximo_ingreso);
+    return !!this.form.value.numeracion_separada && n !== null && n !== this.proximoIngresoOriginal;
+  }
+
+  /** Con numeración separada: vacío, no entero o hacia atrás de lo ya emitido en ingresos. */
+  proximoIngresoInvalido(): boolean {
+    if (!this.form.value.numeracion_separada) return false;
+    const n = this.entero(this.form.value.proximo_ingreso);
+    const ultimo = this.actual()?.numeracion_separada ? (this.actual()?.ultimo_correlativo_ingreso ?? 0) : 0;
+    return n === null || n <= ultimo;
+  }
+
   proximoCambiado(): boolean {
     return this.proximo() !== null && this.proximo() !== this.proximoOriginal;
   }
@@ -367,11 +452,18 @@ export class CajasComponent implements OnInit {
     this.cajerosElegidos = (c?.cajeros ?? []).map((u) => u.id);
     this.aprobadoresElegidos = (c?.aprobadores ?? []).map((u) => u.id);
     this.proximoOriginal = (c?.ultimo_correlativo ?? 0) + 1;
+    this.proximoIngresoOriginal = c?.numeracion_separada ? (c.ultimo_correlativo_ingreso ?? 0) + 1 : (c?.inicio_ingreso ?? 10000);
     this.previa.set(null);
     const sede = this.opciones()?.almacenes.length === 1 ? this.opciones()!.almacenes[0].id : null;
-    this.form.reset(c ? { ...c, proximo_comprobante: String(this.proximoOriginal), motivo_numeracion: '' } as any : {
+    this.form.reset(c ? {
+      ...c, proximo_comprobante: String(this.proximoOriginal), motivo_numeracion: '',
+      numeracion_separada: !!c.numeracion_separada, inicio_egreso: String(c.inicio_egreso ?? 1),
+      inicio_ingreso: String(c.inicio_ingreso && c.numeracion_separada ? c.inicio_ingreso : 10000),
+      formato_ingreso: c.formato_ingreso ?? '', proximo_ingreso: String(this.proximoIngresoOriginal),
+    } as any : {
       almacen_id: sede, maneja_usd: false, formato_comprobante: '{CAJA}-{AAAA}-{N:6}',
       reinicio_comprobante: 'ANUAL', activa: true, requiere_aprobacion: false, proximo_comprobante: '1', motivo_numeracion: '',
+      numeracion_separada: false, inicio_egreso: '1', inicio_ingreso: '10000', formato_ingreso: '', proximo_ingreso: '10000',
     });
 
     for (const campo of ['codigo', 'almacen_id']) {
@@ -405,7 +497,12 @@ export class CajasComponent implements OnInit {
       activa: !!v.activa, requiere_aprobacion: !!v.requiere_aprobacion,
       // El correlativo solo viaja si se cambió: así no se registra un ajuste por cada edición.
       proximo_comprobante: this.proximoCambiado() ? this.proximo() : null,
-      motivo_numeracion: this.proximoCambiado() ? (v.motivo_numeracion || null) : null,
+      motivo_numeracion: this.proximoCambiado() || this.proximoIngresoCambiado() ? (v.motivo_numeracion || null) : null,
+      numeracion_separada: !!v.numeracion_separada,
+      inicio_egreso: this.entero(v.inicio_egreso) ?? 1,
+      inicio_ingreso: this.entero(v.inicio_ingreso) ?? 1,
+      formato_ingreso: v.numeracion_separada ? ((v.formato_ingreso ?? '').trim() || null) : null,
+      proximo_ingreso: this.proximoIngresoCambiado() ? this.entero(v.proximo_ingreso) : null,
     };
     // Primero la caja (puede ser nueva y no tener id); después sus cajeros y aprobadores.
     this.servicio.guardar(datos, this.actual()?.id).pipe(

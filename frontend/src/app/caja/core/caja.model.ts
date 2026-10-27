@@ -158,6 +158,13 @@ export interface Caja {
   proximo_numero?: string | null;
   /** Último correlativo emitido en el período actual (0 si ninguno). */
   ultimo_correlativo?: number;
+  /** Ingresos y egresos con correlativo propio. */
+  numeracion_separada?: boolean;
+  inicio_egreso?: number;
+  inicio_ingreso?: number;
+  formato_ingreso?: string | null;
+  ultimo_correlativo_ingreso?: number | null;
+  proximo_numero_ingreso?: string | null;
   solicitudes_por_pagar?: number;
   cajeros?: UsuarioCorto[];
   aprobadores?: UsuarioCorto[];
@@ -171,7 +178,11 @@ export interface CajaOperacion extends Caja {
   ultima_cerrada: { id: number; numero: number; estado: string; cerrada_en: string; cerrada_por: string | null } | null;
 }
 
-export interface VistaPreviaComprobante { numero: string | null; repetido: boolean; error: string | null; }
+export interface VistaPreviaComprobante {
+  numero: string | null; repetido: boolean; error: string | null;
+  /** Con numeración separada: cómo saldrá el próximo ingreso. */
+  ingreso?: { numero: string | null; repetido: boolean; error: string | null };
+}
 
 export interface DatosCaja {
   codigo: string;
@@ -184,6 +195,11 @@ export interface DatosCaja {
   requiere_aprobacion: boolean;
   /** Desde qué número sigue el comprobante; solo se manda si cambia. */
   proximo_comprobante?: number | null;
+  numeracion_separada?: boolean;
+  inicio_egreso?: number;
+  inicio_ingreso?: number;
+  formato_ingreso?: string | null;
+  proximo_ingreso?: number | null;
   motivo_numeracion?: string | null;
 }
 

@@ -50,8 +50,10 @@ class CajaController extends Controller
                     'aprobadores'     => $this->usuariosDe($caja->aprobadores),
                     'soy_cajero'      => $caja->cajeros->contains('id', $request->user()->id),
                     'tiene_sesiones'  => $caja->tieneSesiones(),
-                    'ultimo_correlativo' => $this->solicitudes->ultimoComprobante($caja),
-                    'proximo_numero'  => $this->cajas->vistaPrevia($caja->only(['codigo', 'formato_comprobante', 'reinicio_comprobante']), $caja)['numero'],
+                    'ultimo_correlativo' => $this->solicitudes->ultimoComprobante($caja, $caja->numeracion_separada ? 'EGRESO' : null),
+                    'ultimo_correlativo_ingreso' => $caja->numeracion_separada ? $this->solicitudes->ultimoComprobante($caja, 'INGRESO') : null,
+                    'proximo_numero_ingreso' => $caja->numeracion_separada ? $this->solicitudes->proximoComprobante($caja, 'INGRESO') : null,
+                    'proximo_numero'  => $this->solicitudes->proximoComprobante($caja, $caja->numeracion_separada ? 'EGRESO' : null),
                     'sesion_abierta'  => $sesion ? [
                         'id'          => $sesion->id,
                         'numero'      => $sesion->numero,
@@ -152,12 +154,25 @@ class CajaController extends Controller
     {
         $caja = $request->filled('caja_id') ? Caja::find($request->integer('caja_id')) : null;
 
-        return response()->json(['data' => $this->cajas->vistaPrevia(
+        $previa = $this->cajas->vistaPrevia(
             $request->only(['codigo', 'formato_comprobante', 'reinicio_comprobante']),
             $caja,
             $request->input('fecha'),
             $request->filled('proximo_comprobante') ? $request->integer('proximo_comprobante') : null,
-        )]);
+        );
+
+        // Numeración separada: también cómo saldrá el próximo ingreso.
+        if ($request->boolean('numeracion_separada')) {
+            $previa['ingreso'] = $this->cajas->vistaPrevia(
+                ['codigo' => $request->input('codigo'), 'reinicio_comprobante' => $request->input('reinicio_comprobante'),
+                 'formato_comprobante' => $request->input('formato_ingreso') ?: $request->input('formato_comprobante')],
+                $caja,
+                $request->input('fecha'),
+                $request->filled('proximo_ingreso') ? $request->integer('proximo_ingreso') : null,
+            );
+        }
+
+        return response()->json(['data' => $previa]);
     }
 
     /** Listas cerradas para los formularios de caja. */
@@ -221,9 +236,16 @@ class CajaController extends Controller
     /** Si el formulario indicó desde qué número sigue el comprobante, se fija. */
     private function fijarNumeracion(CajaRequest $request, Caja $caja): void
     {
+        $separada = $caja->numeracion_separada;
         if ($request->filled('proximo_comprobante')) {
             $this->solicitudes->fijarProximoComprobante(
-                $caja, $request->integer('proximo_comprobante'), $request->user(), $request->input('motivo_numeracion')
+                $caja, $request->integer('proximo_comprobante'), $request->user(), $request->input('motivo_numeracion'),
+                $separada ? 'EGRESO' : null
+            );
+        }
+        if ($separada && $request->filled('proximo_ingreso')) {
+            $this->solicitudes->fijarProximoComprobante(
+                $caja, $request->integer('proximo_ingreso'), $request->user(), $request->input('motivo_numeracion'), 'INGRESO'
             );
         }
     }

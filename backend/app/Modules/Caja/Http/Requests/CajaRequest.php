@@ -41,6 +41,12 @@ class CajaRequest extends FormularioCaja
             // Desde qué número sigue el comprobante (por ejemplo, continuar otro sistema).
             'proximo_comprobante'  => ['nullable', 'integer', 'min:1', 'max:99999999'],
             'motivo_numeracion'    => ['nullable', 'string', 'max:250'],
+            // Numeración separada: egresos e ingresos con correlativo propio.
+            'numeracion_separada'  => ['boolean'],
+            'inicio_egreso'        => ['nullable', 'integer', 'min:1', 'max:99999999'],
+            'inicio_ingreso'       => ['nullable', 'integer', 'min:1', 'max:99999999'],
+            'formato_ingreso'      => ['nullable', 'string', 'max:60'],
+            'proximo_ingreso'      => ['nullable', 'integer', 'min:1', 'max:99999999'],
         ];
     }
 
@@ -76,12 +82,27 @@ class CajaRequest extends FormularioCaja
                     $caja
                 );
 
-                if ($caja && $this->filled('proximo_comprobante')) {
-                    $ultimo = app(\App\Modules\Caja\Services\SolicitudService::class)->ultimoComprobante($caja);
-                    $proximo = $this->integer('proximo_comprobante');
+                // Con numeración separada, «proximo_comprobante» es el de egresos.
+                $separada = $this->boolean('numeracion_separada') && ($caja?->numeracion_separada ?? false);
+                foreach (['proximo_comprobante' => $separada ? 'EGRESO' : null, 'proximo_ingreso' => 'INGRESO'] as $campo => $tipo) {
+                    if (! $caja || ! $this->filled($campo) || ($campo === 'proximo_ingreso' && ! $separada)) {
+                        continue;
+                    }
+                    $ultimo = app(\App\Modules\Caja\Services\SolicitudService::class)->ultimoComprobante($caja, $tipo);
+                    $proximo = $this->integer($campo);
                     if ($proximo !== $ultimo + 1 && $proximo <= $ultimo) {
-                        $validator->errors()->add('proximo_comprobante',
-                            "La caja ya emitió hasta el correlativo {$ultimo}: el próximo no puede ser {$proximo}, se repetirían números.");
+                        $validator->errors()->add($campo,
+                            "La caja ya emitió hasta el correlativo {$ultimo}" . ($tipo ? ' de ' . mb_strtolower($tipo) . 's' : '')
+                            . ": el próximo no puede ser {$proximo}, se repetirían números.");
+                    }
+                }
+
+                if ($this->boolean('numeracion_separada') && filled($this->input('formato_ingreso'))) {
+                    $previaIngreso = app(CajaService::class)->vistaPrevia(
+                        ['codigo' => $this->input('codigo'), 'formato_comprobante' => $this->input('formato_ingreso'),
+                         'reinicio_comprobante' => $this->input('reinicio_comprobante')], null);
+                    if ($previaIngreso['error'] !== null) {
+                        $validator->errors()->add('formato_ingreso', $previaIngreso['error']);
                     }
                 }
 
@@ -98,7 +119,17 @@ class CajaRequest extends FormularioCaja
     /** Solo las columnas de la caja; la numeración se fija aparte. */
     public function datosCaja(): array
     {
-        return collect($this->validated())->except(['proximo_comprobante', 'motivo_numeracion'])->all();
+        $datos = collect($this->validated())->except(['proximo_comprobante', 'motivo_numeracion', 'proximo_ingreso'])->all();
+        foreach (['inicio_egreso', 'inicio_ingreso'] as $campo) {
+            if (array_key_exists($campo, $datos) && $datos[$campo] === null) {
+                unset($datos[$campo]);
+            }
+        }
+        if (array_key_exists('formato_ingreso', $datos) && blank($datos['formato_ingreso'])) {
+            $datos['formato_ingreso'] = null;
+        }
+
+        return $datos;
     }
 
     public function messages(): array

@@ -95,17 +95,23 @@ class SolicitudService
     }
 
     /** Cambia el número con que sale el próximo comprobante del período actual. */
-    public function fijarProximoComprobante(Caja $caja, int $proximo, User $usuario, ?string $motivo = null): ?string
+    /** Con numeración separada, $tipo dice qué correlativo (INGRESO o EGRESO). */
+    public function fijarProximoComprobante(Caja $caja, int $proximo, User $usuario, ?string $motivo = null, ?string $tipo = null): ?string
     {
         return Transaccion::como($usuario->id, fn () => DB::selectOne(
-            'select caja.fijar_proximo_comprobante(?, ?, ?, ?) as numero',
-            [$caja->id, $proximo, $usuario->id, $motivo]
+            'select caja.fijar_proximo_comprobante(?, ?, ?, ?, ?) as numero',
+            [$caja->id, $proximo, $usuario->id, $motivo, $tipo]
         )->numero);
     }
 
-    public function ultimoComprobante(Caja $caja): int
+    public function ultimoComprobante(Caja $caja, ?string $tipo = null): int
     {
-        return (int) DB::selectOne('select caja.ultimo_comprobante(?) as n', [$caja->id])->n;
+        return (int) DB::selectOne('select caja.ultimo_comprobante(?, current_date, ?) as n', [$caja->id, $tipo])->n;
+    }
+
+    public function proximoComprobante(Caja $caja, ?string $tipo = null): ?string
+    {
+        return DB::selectOne('select caja.proximo_comprobante(?, ?) as numero', [$caja->id, $tipo])->numero;
     }
 
     private function resolver(Solicitud $solicitud, User $aprobador, string $estado, ?string $observacion): Solicitud

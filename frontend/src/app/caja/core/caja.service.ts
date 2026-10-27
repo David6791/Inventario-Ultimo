@@ -42,7 +42,7 @@ export class CajaService {
   }
 
   /** Cómo saldrá el próximo comprobante. No guarda ni consume números. */
-  vistaPrevia(datos: Partial<DatosCaja> & { caja_id?: number | null }): Observable<VistaPreviaComprobante> {
+  vistaPrevia(datos: Partial<DatosCaja> & { caja_id?: number | null; proximo_ingreso?: number | null }): Observable<VistaPreviaComprobante> {
     return this.http
       .post<Respuesta<VistaPreviaComprobante>>(`${this.base}/cajas/vista-previa`, datos)
       .pipe(map((r) => r.data));

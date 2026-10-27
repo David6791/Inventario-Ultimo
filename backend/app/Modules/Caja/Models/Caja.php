@@ -21,6 +21,7 @@ class Caja extends CajaModel
     protected $fillable = [
         'codigo', 'nombre', 'almacen_id', 'maneja_usd',
         'formato_comprobante', 'reinicio_comprobante', 'activa', 'requiere_aprobacion',
+        'numeracion_separada', 'inicio_egreso', 'inicio_ingreso', 'formato_ingreso',
     ];
 
     protected $casts = [
@@ -28,6 +29,9 @@ class Caja extends CajaModel
         'maneja_usd' => 'boolean',
         'activa'     => 'boolean',
         'requiere_aprobacion' => 'boolean',
+        'numeracion_separada' => 'boolean',
+        'inicio_egreso'       => 'integer',
+        'inicio_ingreso'      => 'integer',
     ];
 
     public const REINICIOS = ['NUNCA', 'ANUAL', 'MENSUAL', 'DIARIO'];
