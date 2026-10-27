@@ -51,6 +51,7 @@ class OpcionesController extends Controller
                 ->when(! $usuario->can('cargas.ver-todos-almacenes'), fn ($q) => $q->whereIn('id', $usuario->almacenesIds()))
                 ->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
             'almacen_predeterminado' => $usuario->almacenPredeterminado()?->id,
+            'foto_ticket_obligatoria' => \App\Modules\Cargas\Http\Requests\PesajeRequest::fotoObligatoria(),
         ]]);
     }
 

@@ -16,7 +16,7 @@ class Pesaje extends CargasModel
 
     protected $fillable = [
         'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'peso_cliente_kg', 'peso_cliente_tipo', 'num_sacos',
-        'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por',
+        'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por', 'modalidad', 'descuento_sacos_kg', 'pesaje_viaje_id',
     ];
 
     protected $casts = [
@@ -25,12 +25,15 @@ class Pesaje extends CargasModel
         'tara_kg'       => 'decimal:2',
         'peso_cliente_kg' => 'decimal:2',
         'peso_neto_kg'  => 'decimal:2',
+        'descuento_sacos_kg' => 'decimal:2',
+        'pesaje_viaje_id' => 'integer',
         'num_sacos'     => 'integer',
         'anulado'       => 'boolean',
         'fecha'         => 'datetime',
     ];
 
     public const TIPOS = ['INGRESO', 'CONTROL'];
+    public const MODALIDADES = ['BASCULA', 'SACOS'];
 
     public function lote(): BelongsTo { return $this->belongsTo(Lote::class, 'lote_id'); }
     public function registradoPor(): BelongsTo { return $this->belongsTo(User::class, 'registrado_por'); }
@@ -44,5 +47,23 @@ class Pesaje extends CargasModel
     public function bono(): HasOne
     {
         return $this->hasOne(BonoTransporte::class, 'pesaje_id');
+    }
+
+    /** Fotos de los tickets (interior y exterior). */
+    public function fotos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(RecepcionFoto::class, 'pesaje_id')->orderBy('id');
+    }
+
+    /** Pesadas en la balanza manual (pesaje de SACOS). */
+    public function sacos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PesajeSaco::class, 'pesaje_id')->orderBy('orden');
+    }
+
+    /** Recepción mixta: el pesaje de báscula del camión en que vinieron estos sacos. */
+    public function viaje(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'pesaje_viaje_id');
     }
 }

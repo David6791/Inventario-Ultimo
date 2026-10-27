@@ -114,6 +114,13 @@ export const CARGAS_ROUTES: Routes = [
     loadComponent: () => import('./configuracion/series.component').then((m) => m.SeriesComponent),
   },
   {
+    path: 'plantillas-bascula',
+    title: 'Plantillas de báscula',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () =>
+      import('./configuracion/plantillas-bascula.component').then((m) => m.PlantillasBasculaComponent),
+  },
+  {
     path: 'estado',
     title: 'Estado del módulo',
     canMatch: [conPermiso('cargas.ver')],

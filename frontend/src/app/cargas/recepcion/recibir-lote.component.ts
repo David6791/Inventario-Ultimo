@@ -9,14 +9,19 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { DropdownModule } from 'primeng/dropdown';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputTextareaModule } from 'primeng/inputtextarea';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToastModule } from 'primeng/toast';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
-import { Bocamina, DatosPesaje, DatosRecepcion, Mina, Opciones, Productor, SerieLote } from '../core/models/cargas.model';
+import { formatoDinero } from '../../caja/core/dinero';
+import { Bocamina, DatosPesaje, DatosRecepcion, Mina, Opciones, PlantillaBascula, Productor, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
 import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { SeriesService } from '../core/services/series.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
+import { SacosCamposComponent, datosSacos, grupoSacos } from './sacos-campos.component';
+
+const CLAVE_TIPO = 'cargas.tipo-recepcion';
 
 /**
  * Recepción de un lote. La serie decide el origen: de compra pide productor;
@@ -28,7 +33,8 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
   selector: 'app-recibir-lote',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, CheckboxModule,
-            DropdownModule, InputTextModule, InputTextareaModule, ToastModule, PesajeCamposComponent],
+            DropdownModule, InputTextModule, InputTextareaModule, SelectButtonModule, ToastModule, PesajeCamposComponent,
+            SacosCamposComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -118,14 +124,51 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
       </div>
     </form>
 
-    <section class="tarjeta">
+    <section class="tarjeta tipo">
+      <h3>Tipo de recepción</h3>
+      <p-selectButton [options]="tipos" [(ngModel)]="tipoRecepcion" (onChange)="cambiarTipo()" optionLabel="etiqueta" optionValue="valor"
+                      [ngModelOptions]="{ standalone: true }" styleClass="tipos">
+        <ng-template let-t pTemplate="item"><i [class]="t.icono"></i><span>{{ t.etiqueta }}</span></ng-template>
+      </p-selectButton>
+      <p class="secundario explicacion">{{ explicacion() }}</p>
+    </section>
+
+    <section class="tarjeta" *ngIf="tipoRecepcion !== 'SACOS'">
       <div class="titulo-pesaje">
-        <h3>Pesaje de ingreso</h3>
-        <span class="check"><p-checkbox [(ngModel)]="conPesaje" [binary]="true" inputId="con-pesaje" />
+        <h3>{{ tipoRecepcion === 'MIXTA' ? 'Pesaje del camión en báscula' : 'Pesaje de ingreso' }}</h3>
+        <span class="check" *ngIf="tipoRecepcion === 'BASCULA'"><p-checkbox [(ngModel)]="conPesaje" [binary]="true" inputId="con-pesaje" />
           <label for="con-pesaje">El camión ya pasó por la báscula</label></span>
       </div>
-      <app-pesaje-campos *ngIf="conPesaje" [grupo]="pesaje" />
-      <p class="secundario" *ngIf="!conPesaje">Podrá agregar los pesajes después, desde la ficha del lote.</p>
+      <app-pesaje-campos *ngIf="conPesaje || tipoRecepcion === 'MIXTA'" [grupo]="pesaje" [plantillas]="plantillas()"
+                         [fotoObligatoria]="!!opciones()?.foto_ticket_obligatoria" [sinSacos]="tipoRecepcion === 'MIXTA'" />
+      <p class="secundario" *ngIf="!conPesaje && tipoRecepcion === 'BASCULA'">Podrá agregar los pesajes después, desde la ficha del lote.</p>
+    </section>
+
+    <section class="tarjeta" *ngIf="tipoRecepcion !== 'BASCULA'">
+      <h3>{{ tipoRecepcion === 'MIXTA' ? 'Sacos (van en otro lote)' : 'Sacos en balanza manual' }}</h3>
+      <app-sacos-campos [grupo]="sacos" [conTransporte]="tipoRecepcion === 'SACOS'" />
+
+      <ng-container *ngIf="tipoRecepcion === 'MIXTA'">
+        <div class="reparto" *ngIf="reparto() as r" [class.error]="r.granel <= 0">
+          <div><span>Neto del ticket</span><strong class="codigo">{{ fmt(r.neto) }} kg</strong></div>
+          <div><span>− Sacos</span><strong class="codigo">{{ fmt(r.sacos) }} kg</strong></div>
+          <div class="igual"><span>= Granel (este lote)</span><strong class="codigo">{{ fmt(r.granel) }} kg</strong></div>
+        </div>
+        <div class="campos lote-sacos">
+          <div class="campo span-2">
+            <label for="material-sacos">Material de los sacos <span class="opcional">(opcional)</span></label>
+            <p-dropdown inputId="material-sacos" [(ngModel)]="materialSacos" [ngModelOptions]="{ standalone: true }"
+                        [options]="opciones()?.materiales ?? []" optionLabel="etiqueta" optionValue="valor"
+                        placeholder="Elementos que trae" [showClear]="true" appendTo="body" [style]="{ width: '100%' }" />
+          </div>
+          <div class="campo span-4">
+            <label for="obs-sacos">Observaciones del lote de sacos <span class="opcional">(opcional)</span></label>
+            <input id="obs-sacos" pInputText [(ngModel)]="observacionesSacos" [ngModelOptions]="{ standalone: true }" maxlength="1000" />
+          </div>
+        </div>
+        <p class="secundario">Se crean dos lotes de la misma serie y productor: el de granel con el neto del ticket menos los sacos,
+          y el de sacos con sus pesadas. El bono de transporte es uno solo, por el camión completo.</p>
+      </ng-container>
     </section>
 
     <div class="pie">
@@ -147,6 +190,17 @@ import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-ca
     .pie { display: flex; justify-content: flex-end; gap: 0.5rem; max-width: 60rem; }
     .sugerencia { display: flex; flex-direction: column; }
     .opcion-serie { display: flex; gap: 0.5rem; align-items: center; }
+    :host ::ng-deep .tipos .p-button { gap: 0.45rem; }
+    .explicacion { margin: 0.6rem 0 0; font-size: 0.85rem; }
+    .reparto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin: 1rem 0 0.8rem; padding: 0.7rem 0.9rem;
+               border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; }
+    .reparto div { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; color: var(--text-color-secondary, #475569); }
+    .reparto strong { font-size: 1.05rem; color: var(--text-color, #0f172a); }
+    .reparto .igual strong { color: #1d4ed8; }
+    .reparto.error { background: #fef2f2; border-color: #fecaca; }
+    .reparto.error .igual strong { color: #b91c1c; }
+    @media (max-width: 560px) { .reparto { grid-template-columns: 1fr; } }
+    .lote-sacos { margin-bottom: 0.6rem; }
   `],
 })
 export class RecibirLoteComponent implements OnInit {
@@ -168,6 +222,24 @@ export class RecibirLoteComponent implements OnInit {
 
   productorTexto: string | Productor | null = null;
   conPesaje = true;
+  tipoRecepcion: TipoRecepcion = RecibirLoteComponent.tipoGuardado();
+  materialSacos: string | null = null;
+  observacionesSacos: string | null = null;
+  readonly plantillas = signal<PlantillaBascula[]>([]);
+  readonly tipos = [
+    { valor: 'BASCULA', etiqueta: 'Báscula', icono: 'pi pi-truck' },
+    { valor: 'SACOS', etiqueta: 'Solo sacos', icono: 'pi pi-box' },
+    { valor: 'MIXTA', etiqueta: 'Mixta (granel + sacos)', icono: 'pi pi-clone' },
+  ];
+  readonly fmt = formatoDinero;
+  private readonly tipoActual = signal<TipoRecepcion>(this.tipoRecepcion);
+  readonly explicacion = computed(() => ({
+    BASCULA: 'El camión se pesa en la báscula. Tome la foto del ticket interior (y del exterior, si el cliente trae el suyo): los datos se leen solos.',
+    SACOS: 'Los sacos se pesan en la balanza manual: un total o pesada por pesada, cada una con la foto del momento del pesaje.',
+    MIXTA: 'La volqueta trae mineral a granel y sacos: se pesa el camión en báscula y los sacos en la balanza manual. Salen dos lotes.',
+  })[this.tipoActual()]);
+  readonly sacos = grupoSacos(this.fb);
+  private readonly valoresMixta = signal(0);
 
   readonly form = this.fb.group({
     serie_id: [null as number | null, Validators.required],
@@ -180,11 +252,32 @@ export class RecibirLoteComponent implements OnInit {
   });
   readonly pesaje = grupoPesaje(this.fb);
 
+  readonly reparto = computed(() => {
+    this.valoresMixta();
+    const p = this.pesaje.getRawValue();
+    const neto = (p.peso_bruto_kg ?? 0) - (p.tara_kg ?? 0);
+    const sacos = (this.sacos.getRawValue().pesadas as { peso_kg: number | null }[]).reduce((t, x) => t + (x.peso_kg ?? 0), 0);
+    if (!p.peso_bruto_kg || p.tara_kg == null) return null;
+    return { neto, sacos, granel: Math.round((neto - sacos) * 100) / 100 };
+  });
+
+  private static tipoGuardado(): TipoRecepcion {
+    try { return (localStorage.getItem(CLAVE_TIPO) as TipoRecepcion) || 'BASCULA'; } catch { return 'BASCULA'; }
+  }
+
+  cambiarTipo(): void {
+    this.tipoActual.set(this.tipoRecepcion);
+    try { localStorage.setItem(CLAVE_TIPO, this.tipoRecepcion); } catch { /* sin almacenamiento */ }
+  }
+
   readonly serie = computed(() => this.series().find((s) => s.id === this.serieId()) ?? null);
   readonly minasCompra = computed(() => this.minas().filter((m) => !m.propia));
   readonly minasPropias = computed(() => this.minas().filter((m) => m.propia));
 
   ngOnInit(): void {
+    this.servicio.plantillas(true).subscribe((r) => this.plantillas.set(r.data));
+    this.pesaje.valueChanges.subscribe(() => this.valoresMixta.update((n) => n + 1));
+    this.sacos.valueChanges.subscribe(() => this.valoresMixta.update((n) => n + 1));
     this.seriesSrv.listar().subscribe((r) => this.series.set(r.data.filter((s) => s.activa)));
     this.catalogos.listarMinas({ solo_activas: true }).subscribe((m) => this.minas.set(m));
     this.catalogos.opciones$.subscribe((o) => {
@@ -218,7 +311,10 @@ export class RecibirLoteComponent implements OnInit {
     if (!s || this.form.invalid) return false;
     if (s.origen === 'COMPRA' && !this.productor()) return false;
     if (s.origen === 'PROPIA' && (!this.form.value.mina_id || !this.form.value.bocamina_id)) return false;
-    if (this.conPesaje && this.pesaje.invalid) return false;
+    const t = this.tipoRecepcion;
+    if ((t === 'MIXTA' || (t === 'BASCULA' && this.conPesaje)) && this.pesaje.invalid) return false;
+    if (t !== 'BASCULA' && this.sacos.invalid) return false;
+    if (t === 'MIXTA' && (this.reparto()?.granel ?? 0) <= 0) return false;
     return true;
   }
 
@@ -228,7 +324,11 @@ export class RecibirLoteComponent implements OnInit {
       serie_id: v.serie_id!, almacen_id: v.almacen_id!,
       productor_id: this.serie()?.origen === 'COMPRA' ? this.productor()?.id ?? null : null,
       mina_id: v.mina_id, bocamina_id: v.bocamina_id, guia_transporte: v.guia_transporte, material: v.material, observaciones: v.observaciones,
-      pesaje: this.conPesaje ? (this.pesaje.getRawValue() as DatosPesaje) : null,
+      tipo_recepcion: this.tipoRecepcion,
+      pesaje: this.tipoRecepcion === 'MIXTA' || (this.tipoRecepcion === 'BASCULA' && this.conPesaje)
+        ? (this.pesaje.getRawValue() as DatosPesaje) : null,
+      sacos: this.tipoRecepcion === 'BASCULA' ? null : datosSacos(this.sacos, this.tipoRecepcion === 'SACOS'),
+      lote_sacos: this.tipoRecepcion === 'MIXTA' ? { material: this.materialSacos, observaciones: this.observacionesSacos } : null,
     };
 
     this.guardando.set(true);

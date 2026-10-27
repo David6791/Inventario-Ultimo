@@ -4,6 +4,7 @@ RUN apk add --no-cache \
         postgresql-dev libzip-dev icu-dev oniguruma-dev \
         libpng-dev libjpeg-turbo-dev freetype-dev \
         git unzip bash tzdata \
+        tesseract-ocr tesseract-ocr-data-eng \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo pdo_pgsql pgsql zip intl bcmath opcache gd \
     && cp /usr/share/zoneinfo/America/La_Paz /etc/localtime \

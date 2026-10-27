@@ -3,8 +3,11 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
-  BonoCalculado, BonoPendiente, DatosPesaje, DatosRecepcion, Lote, Pagina, Pesaje, RespuestaApi, TablaTramos, Tramo,
+  BonoCalculado, BonoPendiente, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, Lote, Pagina, Pesaje,
+  PlantillaBascula, RecuadroPlantilla, RespuestaApi, TablaTramos, TipoFoto, Tramo,
 } from '../models/cargas.model';
+
+export interface ListaPlantillas { data: PlantillaBascula[]; campos: CampoDisponible[]; ocr: boolean; }
 
 export interface FiltroLotes { buscar?: string; estado?: string | null; serie_id?: number | null; desde?: string; hasta?: string; page?: number; }
 
@@ -74,5 +77,48 @@ export class RecepcionService {
   pagarBono(bonoId: number, cajaId: number): Observable<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }> {
     return this.http.post<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }>(
       `${this.base}/bonos/${bonoId}/pagar`, { caja_id: cajaId });
+  }
+
+  // --------------------------------------------------------------- Fotos y plantillas
+  plantillas(soloActivas = false): Observable<ListaPlantillas> {
+    return this.http.get<ListaPlantillas>(`${this.base}/plantillas-bascula`, { params: soloActivas ? { solo_activas: 1 } : {} });
+  }
+
+  guardarPlantilla(id: number | null, datos: Omit<PlantillaBascula, 'id' | 'tiene_muestra'>, muestra: Blob | null)
+    : Observable<RespuestaApi<PlantillaBascula> & { mensaje: string }> {
+    const f = new FormData();
+    f.append('nombre', datos.nombre);
+    f.append('bascula', datos.bascula);
+    f.append('uso', datos.uso);
+    f.append('proporcion', String(datos.proporcion));
+    f.append('activa', datos.activa ? '1' : '0');
+    f.append('campos', JSON.stringify(datos.campos));
+    if (muestra) f.append('muestra', muestra, 'muestra.jpg');
+    const url = id ? `${this.base}/plantillas-bascula/${id}` : `${this.base}/plantillas-bascula`;
+    return this.http.post<RespuestaApi<PlantillaBascula> & { mensaje: string }>(url, f);
+  }
+
+  muestraPlantilla(id: number): Observable<Blob> {
+    return this.http.get(`${this.base}/plantillas-bascula/${id}/muestra`, { responseType: 'blob' });
+  }
+
+  probarPlantilla(imagen: Blob, campos: RecuadroPlantilla[]): Observable<LecturaTicket> {
+    const f = new FormData();
+    f.append('imagen', imagen, 'prueba.jpg');
+    f.append('campos', JSON.stringify(campos));
+    return this.http.post<RespuestaApi<LecturaTicket>>(`${this.base}/plantillas-bascula/probar`, f).pipe(map((r) => r.data));
+  }
+
+  subirFoto(tipo: TipoFoto, imagen: Blob, original: Blob | null, plantillaId: number | null): Observable<FotoRecepcion> {
+    const f = new FormData();
+    f.append('tipo', tipo);
+    f.append('imagen', imagen, 'foto.jpg');
+    if (original) f.append('original', original, 'original.jpg');
+    if (plantillaId) f.append('plantilla_id', String(plantillaId));
+    return this.http.post<RespuestaApi<FotoRecepcion>>(`${this.base}/fotos`, f).pipe(map((r) => r.data));
+  }
+
+  foto(id: number, original = false): Observable<Blob> {
+    return this.http.get(`${this.base}/fotos/${id}`, { responseType: 'blob', params: original ? { original: 1 } : {} });
   }
 }

@@ -19,8 +19,11 @@ class Lote extends CargasModel
 
     protected $fillable = [
         'serie_id', 'almacen_id', 'fecha_recepcion', 'productor_id', 'mina_id', 'bocamina_id',
-        'guia_transporte', 'material', 'observaciones', 'registrado_por',
+        'guia_transporte', 'material', 'observaciones', 'registrado_por', 'tipo_recepcion', 'lote_par_id',
     ];
+
+    /** BASCULA, SACOS (balanza manual) o MIXTA (granel + sacos en dos lotes). */
+    public const TIPOS_RECEPCION = ['BASCULA', 'SACOS', 'MIXTA'];
 
     /** Elementos que trae el mineral, como en el sistema anterior. */
     public const MATERIALES = ['ZN', 'AG', 'PB', 'ZN-AG', 'PB-AG', 'ZN-PB', 'ZN-AG-PB'];
@@ -37,6 +40,7 @@ class Lote extends CargasModel
         'mina_id'           => 'integer',
         'bocamina_id'       => 'integer',
         'municipio_id'      => 'integer',
+        'lote_par_id'       => 'integer',
         'fecha_recepcion'   => 'datetime',
         'anulado_en'        => 'datetime',
     ];
@@ -92,5 +96,11 @@ class Lote extends CargasModel
     public function esDelAmbitoDe(User $usuario): bool
     {
         return $usuario->can('cargas.ver-todos-almacenes') || $usuario->accedeAlmacen($this->almacen_id);
+    }
+
+    /** Recepción mixta: el otro lote del mismo viaje. */
+    public function lotePar(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'lote_par_id');
     }
 }

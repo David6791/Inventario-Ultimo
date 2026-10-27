@@ -32,6 +32,8 @@ export interface Opciones {
   materiales: Opcion[];
   almacenes: { id: number; codigo: string; nombre: string }[];
   almacen_predeterminado: number | null;
+  /** Parámetro FOTO_TICKET_OBLIGATORIA. */
+  foto_ticket_obligatoria?: boolean;
 }
 
 export type TipoProductor = 'COOPERATIVISTA' | 'PARTICULAR' | 'EMPRESA' | 'INGENIO';
@@ -230,8 +232,16 @@ export interface Pesaje {
   lote_id: number;
   tipo: 'INGRESO' | 'CONTROL';
   bascula: string;
-  ticket: string;
+  ticket: string | null;
   fecha: string;
+  /** BASCULA (ticket) o SACOS (balanza manual). */
+  modalidad?: ModalidadPesaje;
+  /** Mixta: kg de sacos que van en el otro lote y se restan del neto del ticket. */
+  descuento_sacos_kg?: string;
+  pesaje_viaje_id?: number | null;
+  viaje?: { id: number; lote_id: number; ticket: string | null; bascula: string; lote?: { id: number; codigo: string } } | null;
+  fotos?: FotoRecepcion[];
+  sacos?: PesadaSaco[];
   peso_bruto_kg: string;
   tara_kg: string;
   peso_neto_kg: string;
@@ -292,6 +302,9 @@ export interface Lote extends ResumenLote {
   anulado_en: string | null;
   motivo_anulacion: string | null;
   pesajes?: Pesaje[];
+  tipo_recepcion?: TipoRecepcion;
+  lote_par_id?: number | null;
+  lote_par?: { id: number; codigo: string; material: string | null; estado: EstadoLote } | null;
   /** URL pública del QR del rótulo (solo en la ficha). */
   url_verificacion?: string;
   eventos?: { id: number; estado_anterior: string | null; estado_nuevo: string; ocurrido_en: string; detalle: string | null; usuario?: Usuario }[];
@@ -309,6 +322,18 @@ export interface DatosPesaje {
   placa: string | null;
   chofer_nombre: string | null;
   chofer_ci: string | null;
+  foto_interior_id?: number | null;
+  foto_exterior_id?: number | null;
+}
+
+export interface DatosPesadaSaco { sacos: number; peso_kg: number; foto_id: number; }
+
+export interface DatosSacos {
+  bascula: string;
+  pesadas: DatosPesadaSaco[];
+  placa?: string | null;
+  chofer_nombre?: string | null;
+  chofer_ci?: string | null;
 }
 
 export interface DatosRecepcion {
@@ -320,8 +345,62 @@ export interface DatosRecepcion {
   guia_transporte: string | null;
   material: string | null;
   observaciones: string | null;
+  tipo_recepcion?: TipoRecepcion;
   pesaje: DatosPesaje | null;
+  sacos?: DatosSacos | null;
+  lote_sacos?: { material: string | null; observaciones: string | null } | null;
 }
+
+// ------------------------------------------------------- Recepción con fotos
+export type TipoRecepcion = 'BASCULA' | 'SACOS' | 'MIXTA';
+export type ModalidadPesaje = 'BASCULA' | 'SACOS';
+export type TipoFoto = 'TICKET_INTERIOR' | 'TICKET_EXTERIOR' | 'BALANZA_MANUAL';
+export type CampoTicket = 'ticket' | 'peso_bruto_kg' | 'tara_kg' | 'peso_neto_kg' | 'placa' | 'fecha';
+
+/** Recuadro de un dato en el ticket enderezado, en fracciones (0–1). */
+export interface RecuadroPlantilla {
+  campo: CampoTicket;
+  x: number; y: number; w: number; h: number;
+  etiqueta?: string | null;
+  decimales?: number | null;
+  desenfoque?: number | null;
+  letras?: boolean | null;
+}
+
+export interface PlantillaBascula {
+  id: number;
+  nombre: string;
+  bascula: string;
+  uso: 'INTERIOR' | 'EXTERIOR' | 'AMBAS';
+  proporcion: number;
+  campos: RecuadroPlantilla[];
+  activa: boolean;
+  tiene_muestra: boolean;
+}
+
+export interface CampoDisponible { campo: CampoTicket; etiqueta: string; tipo: 'numero' | 'digitos' | 'texto'; }
+
+export interface LecturaCampo { texto: string; valor: number | string | null; confianza: number; metodo: 'recuadro' | 'etiqueta' | 'calculado' | 'corregido'; }
+
+export interface LecturaTicket {
+  campos: Partial<Record<CampoTicket, LecturaCampo>>;
+  coherente: boolean | null;
+  avisos: string[];
+}
+
+export interface FotoRecepcion {
+  id: number;
+  tipo: TipoFoto;
+  plantilla_id?: number | null;
+  lectura?: LecturaTicket | null;
+  pesaje_id?: number | null;
+  pesaje_saco_id?: number | null;
+  created_at?: string;
+  /** Báscula de la plantilla con que se leyó (al subir). */
+  bascula?: string | null;
+}
+
+export interface PesadaSaco { id: number; orden: number; sacos: number; peso_kg: string; fotos?: FotoRecepcion[]; }
 
 export interface Tramo {
   id?: number;

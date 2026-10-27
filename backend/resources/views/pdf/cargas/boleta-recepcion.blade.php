@@ -91,6 +91,11 @@
             <tr><td class="rotulo">Material</td><td class="valor">{{ $lote->material }}</td></tr>
           @endif
           <tr><td class="rotulo">Guía</td><td class="valor">{{ $lote->guia_transporte ?? '—' }}</td></tr>
+          @if ($lote->tipo_recepcion === 'SACOS')
+            <tr><td class="rotulo">Recepción</td><td class="valor">Solo sacos (balanza manual)</td></tr>
+          @elseif ($lote->tipo_recepcion === 'MIXTA')
+            <tr><td class="rotulo">Recepción</td><td class="valor">Mixta · lote par {{ $lote->lotePar?->codigo ?? '—' }}</td></tr>
+          @endif
           <tr><td class="rotulo">Observ.</td><td class="valor">{{ $lote->observaciones ?: '—' }}</td></tr>
         </table>
       </td>
@@ -107,14 +112,14 @@
     <tbody>
       @forelse ($ingresos as $p)
         <tr class="{{ $p->anulado ? 'anulado' : '' }}">
-          <td class="num" style="text-align: left">{{ $p->ticket }}</td>
+          <td class="num" style="text-align: left">{{ $p->modalidad === 'SACOS' ? 'Manual' : $p->ticket }}</td>
           <td>{{ $p->bascula }}</td>
           <td>{{ $p->placa ?? '—' }}</td>
           <td>{{ $p->chofer_nombre }}</td>
           <td class="num">{{ $p->num_sacos ?? '' }}</td>
           <td class="num">{{ $kg($p->peso_bruto_kg) }}</td>
-          <td class="num">{{ $kg($p->tara_kg) }}</td>
-          <td class="num">{{ $kg($p->peso_neto_kg) }}</td>
+          <td class="num">{{ $p->modalidad === 'SACOS' ? '—' : $kg($p->tara_kg) }}</td>
+          <td class="num">{{ $kg($p->peso_neto_kg) }}@if ((float) $p->descuento_sacos_kg > 0)<br><span style="font-size: 5.6pt;">− {{ $kg($p->descuento_sacos_kg) }} sacos</span>@endif</td>
           @if ($conCliente)<td class="num">@if ($p->peso_cliente_kg === null)—@elseif ($p->peso_cliente_tipo === 'BRUTO'){{ $kg($p->peso_cliente_kg - $p->tara_kg) }}<br><span style="font-size: 5.6pt;">bruto {{ $kg($p->peso_cliente_kg) }}</span>@else{{ $kg($p->peso_cliente_kg) }}@endif</td>@endif
           <td class="num">{{ $p->bono && $p->bono->estado !== 'ANULADO' ? ($p->bono->moneda === 'USD' ? 'US$' : 'Bs') . ' ' . $kg($p->bono->monto) . ($p->bono->estado === 'PAGADO' ? ' ✓' : '') : '—' }}</td>
         </tr>

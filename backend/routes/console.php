@@ -15,3 +15,8 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Muestra una cita inspiradora');
+
+Artisan::command('cargas:limpiar-fotos {--horas=24}', function (\App\Modules\Cargas\Services\FotoRecepcionService $fotos) {
+    $n = $fotos->limpiarSueltas((int) $this->option('horas'));
+    $this->info("Fotos sin pesaje eliminadas: {$n}.");
+})->purpose('Borra las fotos de recepción que nunca se ligaron a un pesaje');

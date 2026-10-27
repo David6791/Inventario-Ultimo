@@ -23,6 +23,17 @@ class RecibirLoteRequest extends PesajeRequest
     {
         $this->mayusculas('guia_transporte');
         $this->colapsarEspacios('observaciones');
+        $this->merge(['tipo_recepcion' => $this->input('tipo_recepcion') ?: 'BASCULA']);
+        $sacos = $this->input('sacos');
+        if (is_array($sacos)) {
+            foreach (['bascula' => ' ', 'placa' => '', 'chofer_ci' => '', 'chofer_nombre' => ' '] as $c => $sep) {
+                if (isset($sacos[$c]) && is_string($sacos[$c])) {
+                    $sacos[$c] = mb_strtoupper(preg_replace('/\s+/u', $sep, trim($sacos[$c]))) ?: null;
+                }
+            }
+            $sacos['bascula'] ??= 'BALANZA MANUAL';
+            $this->merge(['sacos' => $sacos]);
+        }
         if (! array_filter((array) $this->input('pesaje', []), fn ($v) => $v !== null && $v !== '')) {
             $this->merge(['pesaje' => null]);
         } else {
@@ -41,8 +52,21 @@ class RecibirLoteRequest extends PesajeRequest
             'guia_transporte' => ['nullable', 'string', 'max:40'],
             'material'        => ['nullable', \Illuminate\Validation\Rule::in(\App\Modules\Cargas\Models\Lote::MATERIALES)],
             'observaciones'   => ['nullable', 'string', 'max:1000'],
-            'pesaje'          => ['nullable', 'array'],
+            'tipo_recepcion'  => ['required', Rule::in(\App\Modules\Cargas\Models\Lote::TIPOS_RECEPCION)],
+            'pesaje'          => ['nullable', 'array', 'required_if:tipo_recepcion,MIXTA', 'prohibited_if:tipo_recepcion,SACOS'],
             ...self::reglas('pesaje.', false),
+            'sacos'                   => ['nullable', 'array', 'required_if:tipo_recepcion,SACOS,MIXTA', 'prohibited_if:tipo_recepcion,BASCULA'],
+            'sacos.bascula'           => ['required_with:sacos', 'string', 'max:40'],
+            'sacos.placa'             => ['nullable', 'string', 'max:15'],
+            'sacos.chofer_nombre'     => ['nullable', 'string', 'max:150'],
+            'sacos.chofer_ci'         => ['nullable', 'string', 'max:15'],
+            'sacos.pesadas'           => ['required_with:sacos', 'array', 'min:1', 'max:500'],
+            'sacos.pesadas.*.sacos'   => ['required', 'integer', 'min:1', 'max:10000'],
+            'sacos.pesadas.*.peso_kg' => ['required', 'numeric', 'gt:0', 'max:999999', 'decimal:0,2'],
+            'sacos.pesadas.*.foto_id' => ['required', 'integer', 'distinct', self::fotoSuelta('BALANZA_MANUAL')],
+            'lote_sacos'              => ['nullable', 'array', 'prohibited_unless:tipo_recepcion,MIXTA'],
+            'lote_sacos.material'     => ['nullable', Rule::in(\App\Modules\Cargas\Models\Lote::MATERIALES)],
+            'lote_sacos.observaciones' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
@@ -54,6 +78,16 @@ class RecibirLoteRequest extends PesajeRequest
             }
             if (! $this->user()->can('cargas.ver-todos-almacenes') && ! $this->user()->accedeAlmacen((int) $this->input('almacen_id'))) {
                 $v->errors()->add('almacen_id', 'Su usuario no tiene acceso a esa sede.');
+            }
+
+            if ($this->input('tipo_recepcion') === 'MIXTA') {
+                $p = (array) $this->input('pesaje');
+                $neto = (float) ($p['peso_bruto_kg'] ?? 0) - (float) ($p['tara_kg'] ?? 0);
+                $kgSacos = array_sum(array_map(fn ($x) => (float) ($x['peso_kg'] ?? 0), (array) $this->input('sacos.pesadas')));
+                if ($kgSacos >= $neto) {
+                    $v->errors()->add('sacos.pesadas', sprintf('Los sacos (%s kg) deben pesar menos que el neto del ticket (%s kg): la diferencia es el granel.',
+                        number_format($kgSacos, 2, ',', '.'), number_format($neto, 2, ',', '.')));
+                }
             }
 
             $serie = SerieLote::find($this->integer('serie_id'));
@@ -80,6 +114,12 @@ class RecibirLoteRequest extends PesajeRequest
         return [
             'serie_id.exists'     => 'Elija una serie de lotes activa.',
             'productor_id.exists' => 'El productor no existe o está inactivo.',
+            'pesaje.required_if'  => 'La recepción mixta necesita el pesaje del camión en la báscula.',
+            'sacos.required_if'   => 'Registre las pesadas de los sacos en la balanza manual.',
+            'sacos.pesadas.min'   => 'Registre al menos una pesada de sacos.',
+            'sacos.pesadas.*.foto_id.required' => 'Cada pesada en la balanza manual necesita su foto.',
+            'sacos.pesadas.*.foto_id.exists'   => 'Una foto de la balanza manual no es válida o ya está en otro pesaje: tómela de nuevo.',
+            'sacos.pesadas.*.foto_id.distinct' => 'Cada pesada lleva su propia foto.',
             ...self::mensajes('pesaje.'),
         ];
     }
@@ -87,7 +127,22 @@ class RecibirLoteRequest extends PesajeRequest
     /** Solo los datos del lote. */
     public function datosLote(): array
     {
-        return collect($this->validated())->except('pesaje')->all();
+        return collect($this->validated())->except(['pesaje', 'sacos', 'lote_sacos', 'tipo_recepcion'])->all();
+    }
+
+    public function tipoRecepcion(): string
+    {
+        return $this->validated()['tipo_recepcion'];
+    }
+
+    public function datosSacos(): ?array
+    {
+        return $this->validated()['sacos'] ?? null;
+    }
+
+    public function datosLoteSacos(): ?array
+    {
+        return $this->validated()['lote_sacos'] ?? null;
     }
 
     public function datosPesaje(): ?array

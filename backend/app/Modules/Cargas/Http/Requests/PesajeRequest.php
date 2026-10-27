@@ -54,7 +54,25 @@ class PesajeRequest extends CatalogoRequest
             "{$p}placa"         => ['nullable', 'string', 'max:15'],
             "{$p}chofer_nombre" => ["required_if:{$p}tipo,INGRESO", 'nullable', 'string', 'max:150'],
             "{$p}chofer_ci"     => ['nullable', 'string', 'max:15'],
+            "{$p}foto_interior_id" => [self::fotoObligatoria() ? "required_with:{$p}peso_bruto_kg" : 'nullable', 'nullable', 'integer',
+                                       self::fotoSuelta('TICKET_INTERIOR')],
+            "{$p}foto_exterior_id" => ['nullable', 'integer', self::fotoSuelta('TICKET_EXTERIOR')],
         ];
+    }
+
+    /** Parámetro FOTO_TICKET_OBLIGATORIA: el pesaje de báscula exige la foto del ticket interior. */
+    public static function fotoObligatoria(): bool
+    {
+        return mb_strtoupper((string) app(\App\Modules\Cargas\Services\ParametroService::class)
+            ->vigente('FOTO_TICKET_OBLIGATORIA')?->valor) !== 'NO';
+    }
+
+    /** Foto de ese tipo, subida por este usuario y que todavía no es de ningún pesaje. */
+    public static function fotoSuelta(string $tipo): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists(\App\Modules\Cargas\Models\RecepcionFoto::class, 'id')
+            ->where('tipo', $tipo)->whereNull('pesaje_id')->whereNull('pesaje_saco_id')
+            ->where('subida_por', auth()->id());
     }
 
     public static function mensajes(string $p = ''): array
@@ -67,6 +85,9 @@ class PesajeRequest extends CatalogoRequest
             "{$p}bascula.required_with"     => 'Indique la báscula.',
             "{$p}tara_kg.required_with"     => 'Indique la tara.',
             "{$p}peso_cliente_kg.gt"        => 'El peso del cliente debe ser mayor que cero; déjelo vacío si no lo declaró.',
+            "{$p}foto_interior_id.required_with" => 'Suba la foto del ticket de la báscula interior: es el respaldo del pesaje.',
+            "{$p}foto_interior_id.exists"   => 'La foto del ticket interior no es válida o ya está en otro pesaje: tómela de nuevo.',
+            "{$p}foto_exterior_id.exists"   => 'La foto del ticket exterior no es válida o ya está en otro pesaje: tómela de nuevo.',
         ];
     }
 

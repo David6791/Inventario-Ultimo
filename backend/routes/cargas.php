@@ -11,6 +11,8 @@ use App\Modules\Cargas\Http\Controllers\PrecioController;
 use App\Modules\Cargas\Http\Controllers\RetencionController;
 use App\Modules\Cargas\Http\Controllers\ElementoController;
 use App\Modules\Cargas\Http\Controllers\EstadoController;
+use App\Modules\Cargas\Http\Controllers\FotoRecepcionController;
+use App\Modules\Cargas\Http\Controllers\PlantillaBasculaController;
 use App\Modules\Cargas\Http\Controllers\LaboratorioController;
 use App\Modules\Cargas\Http\Controllers\LineaProductoController;
 use App\Modules\Cargas\Http\Controllers\MinaController;
@@ -71,6 +73,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('muestras/{muestra}/etiquetas', [AnalisisController::class, 'etiquetas'])->whereNumber('muestra');
         Route::get('analisis/{analisis}/certificado', [AnalisisController::class, 'certificado'])->whereNumber('analisis');
         Route::get('bono-tramos',              [BonoController::class, 'tramos']);
+        Route::get('plantillas-bascula',       [PlantillaBasculaController::class, 'index']);
+        Route::get('plantillas-bascula/{plantilla}/muestra', [PlantillaBasculaController::class, 'muestra'])->whereNumber('plantilla');
+        Route::get('fotos/{foto}',             [FotoRecepcionController::class, 'imagen'])->whereNumber('foto');
         Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
         Route::get('series/{serie}',          [SerieLoteController::class, 'show'])->whereNumber('serie');
     });
@@ -135,6 +140,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('pesajes/{pesaje}/anular',      [PesajeController::class, 'anular'])->whereNumber('pesaje');
     Route::post('pesajes/{pesaje}/peso-cliente', [PesajeController::class, 'corregirPesoCliente'])->whereNumber('pesaje');
     Route::put('lotes/{lote}/lectura-estimada', [AnalisisController::class, 'lecturaEstimada'])->whereNumber('lote');
+    Route::post('fotos',                        [FotoRecepcionController::class, 'store']);
+
+    // --- Plantillas de báscula (cargas.catalogos) ----------------------------
+    Route::post('plantillas-bascula/probar',    [PlantillaBasculaController::class, 'probar']);
+    Route::post('plantillas-bascula',           [PlantillaBasculaController::class, 'store']);
+    Route::post('plantillas-bascula/{plantilla}', [PlantillaBasculaController::class, 'update'])->whereNumber('plantilla');
 
     // --- Precios, cotizaciones y retenciones (permisos en FormRequest o controlador)
     Route::post('precios',                    [PrecioController::class, 'store']);

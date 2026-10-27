@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnChanges, OnInit, inject, input, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
@@ -17,7 +17,8 @@ import { formatoDinero } from '../../caja/core/dinero';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
-import { DatosPesaje, Lote, Pesaje } from '../core/models/cargas.model';
+import { DatosPesaje, FotoRecepcion, Lote, Pesaje, PlantillaBascula } from '../core/models/cargas.model';
+import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
 import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.component';
@@ -38,7 +39,8 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
       <header class="encabezado">
         <div>
           <h2><span class="codigo-lote">{{ l.codigo }}</span>
-            <span class="pastilla estado" [ngClass]="'estado-' + l.estado.toLowerCase()">{{ etiquetaEstado(l.estado) }}</span></h2>
+            <span class="pastilla estado" [ngClass]="'estado-' + l.estado.toLowerCase()">{{ etiquetaEstado(l.estado) }}</span>
+            <span class="pastilla estado pastilla-acento" *ngIf="l.tipo_recepcion && l.tipo_recepcion !== 'BASCULA'">{{ etiquetaTipo(l) }}</span></h2>
           <p class="subtitulo">{{ l.linea?.nombre }} · recibido el {{ l.fecha_recepcion | date: 'dd/MM/yyyy HH:mm' }}
             por {{ nombre(l.registrado_por) }} · {{ l.almacen?.nombre }}</p>
         </div>
@@ -59,6 +61,12 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
       <div class="nota nota-aviso nota-encabezado" *ngIf="l.estado === 'ANULADO'">
         <i class="pi pi-ban"></i>
         <span>Anulado el {{ l.anulado_en | date: 'dd/MM/yyyy HH:mm' }} por {{ nombre(l.anulado_por) }}: {{ l.motivo_anulacion }}</span>
+      </div>
+
+      <div class="nota nota-par" *ngIf="l.lote_par as par">
+        <i class="pi pi-clone"></i>
+        <span>Recepción mixta: {{ esGranel(l) ? 'los sacos de este viaje están en el lote' : 'el granel de este viaje está en el lote' }}
+          <a [routerLink]="['/cargas/lotes', par.id]" class="codigo">{{ par.codigo }}</a>{{ par.material ? ' (' + par.material + ')' : '' }}.</span>
       </div>
 
       <section class="resumen">
@@ -106,7 +114,8 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
         <ng-template pTemplate="body" let-p>
           <tr [class.anulado]="p.anulado">
             <td>
-              <span class="codigo">{{ p.ticket }}</span>
+              <span class="codigo" *ngIf="p.modalidad !== 'SACOS'">{{ p.ticket }}</span>
+              <span *ngIf="p.modalidad === 'SACOS'">Balanza manual</span>
               <span class="pastilla" *ngIf="p.tipo === 'CONTROL'" pTooltip="Repesaje de control: no suma al peso del lote">Control</span>
               <div class="secundario">{{ p.bascula }} · {{ p.fecha | date: 'dd/MM HH:mm' }}</div>
             </td>
@@ -114,10 +123,15 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
               {{ p.placa ?? 'Sin placa' }} · {{ p.chofer_nombre ?? '—' }}
               <div class="secundario" *ngIf="p.num_sacos">{{ p.num_sacos }} sacos</div>
               <div class="secundario" *ngIf="p.anulado">Anulado: {{ p.motivo_anulacion }}</div>
+              <div class="secundario" *ngIf="p.viaje as v">Mismo camión que el ticket {{ v.ticket }}
+                <ng-container *ngIf="v.lote">(<a [routerLink]="['/cargas/lotes', v.lote.id]">{{ v.lote.codigo }}</a>)</ng-container></div>
+              <button type="button" class="enlace fotos" *ngIf="numFotos(p) as n" (click)="verFotos(p)">
+                <i class="pi pi-images"></i> {{ n }} foto{{ n === 1 ? '' : 's' }}{{ p.sacos?.length ? ' · ' + p.sacos!.length + ' pesada' + (p.sacos!.length === 1 ? '' : 's') : '' }}</button>
             </td>
             <td class="derecha monto">{{ kg(p.peso_bruto_kg) }}</td>
-            <td class="derecha monto">{{ kg(p.tara_kg) }}</td>
-            <td class="derecha monto fuerte">{{ kg(p.peso_neto_kg) }}</td>
+            <td class="derecha monto">{{ p.modalidad === 'SACOS' ? '—' : kg(p.tara_kg) }}</td>
+            <td class="derecha monto fuerte">{{ kg(p.peso_neto_kg) }}
+              <div class="secundario" *ngIf="+(p.descuento_sacos_kg ?? 0) > 0">− {{ kg(p.descuento_sacos_kg) }} de sacos</div></td>
             <td class="derecha monto">
               <ng-container *ngIf="p.peso_cliente_kg !== null; else sinCliente">
                 {{ kg(netoCliente(p)) }}
@@ -174,12 +188,25 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
         <small class="secundario">{{ tipoPesaje === 'INGRESO' ? 'Otro camión del mismo lote: suma al peso y genera su bono.' :
           'Repesaje para verificar: no suma al peso ni genera bono.' }}</small>
       </div>
-      <app-pesaje-campos [grupo]="pesaje" />
+      <app-pesaje-campos *ngIf="pesajeVisible" [grupo]="pesaje" [plantillas]="plantillas()" [fotoObligatoria]="fotoObligatoria()" />
       <ng-template pTemplate="footer">
         <p-button label="Cancelar" [text]="true" (onClick)="pesajeVisible = false" />
         <p-button label="Registrar pesaje" icon="pi pi-check" [loading]="guardando()" [disabled]="pesaje.invalid || guardando()"
                   (onClick)="guardarPesaje()" />
       </ng-template>
+    </p-dialog>
+
+    <!-- Fotos de un pesaje -->
+    <p-dialog [(visible)]="fotosVisible" [header]="'Fotos del pesaje ' + (fotosDe()?.ticket ?? '')" [modal]="true"
+              [style]="{ width: '56rem', maxWidth: '96vw' }" [draggable]="false" (onHide)="soltarFotos()">
+      <div class="galeria">
+        <figure *ngFor="let f of galeria()">
+          <a *ngIf="f.url" [href]="f.url" target="_blank" rel="noopener"><img [src]="f.url" [alt]="f.titulo" /></a>
+          <div *ngIf="!f.url" class="cargando"><i class="pi pi-spin pi-spinner"></i></div>
+          <figcaption>{{ f.titulo }}
+            <button *ngIf="f.ticket" type="button" class="enlace" (click)="verOriginal(f.id)">· foto original</button></figcaption>
+        </figure>
+      </div>
     </p-dialog>
 
     <!-- Anular -->
@@ -226,6 +253,14 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     .codigo-lote { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
     .estado { vertical-align: middle; margin-left: 0.5rem; font-size: 0.75rem; }
     .estado-recibido { background: #e0f2fe; color: #075985; }
+    .nota-par { display: flex; gap: 0.5rem; align-items: center; padding: 0.55rem 0.8rem; border-radius: 8px; background: #eff6ff;
+                color: #1e3a8a; margin-bottom: 1rem; font-size: 0.88rem; }
+    .enlace.fotos { display: inline-flex; gap: 0.3rem; align-items: center; margin-top: 0.2rem; font-size: 0.8rem; }
+    .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.8rem; }
+    .galeria figure { margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+    .galeria img { width: 100%; max-height: 20rem; object-fit: contain; border-radius: 6px; border: 1px solid var(--surface-border, #e5e7eb); background: #f8fafc; }
+    .galeria .cargando { height: 10rem; display: grid; place-items: center; background: #f8fafc; border-radius: 6px; }
+    .galeria figcaption { font-size: 0.8rem; color: var(--text-color-secondary, #6b7280); }
     .estado-anulado { background: #fee2e2; color: #991b1b; }
     .resumen { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.8rem; margin-bottom: 0.6rem; }
     .dato { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--surface-border, #e5e7eb);
@@ -251,12 +286,19 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     .campo textarea { width: 100%; }
   `],
 })
-export class LoteFichaComponent implements OnInit {
+export class LoteFichaComponent implements OnInit, OnChanges {
   readonly id = input.required<string>();
 
   private readonly servicio = inject(RecepcionService);
   private readonly toast = inject(MessageService);
   private readonly fb = inject(FormBuilder);
+  private readonly catalogos = inject(CatalogosCargasService);
+
+  readonly plantillas = signal<PlantillaBascula[]>([]);
+  readonly fotoObligatoria = signal(false);
+  readonly fotosDe = signal<Pesaje | null>(null);
+  readonly galeria = signal<{ id: number; titulo: string; ticket: boolean; url: string | null }[]>([]);
+  fotosVisible = false;
 
   readonly lote = signal<Lote | null>(null);
   readonly guardando = signal(false);
@@ -277,7 +319,52 @@ export class LoteFichaComponent implements OnInit {
   ngOnInit(): void {
     const mensaje = history.state?.mensaje;
     if (mensaje) setTimeout(() => this.toast.add({ severity: 'success', summary: 'Lote recibido', detail: mensaje, life: 8000 }));
-    this.cargar();
+    this.servicio.plantillas(true).subscribe((r) => this.plantillas.set(r.data));
+    this.catalogos.opciones$.subscribe((o) => this.fotoObligatoria.set(!!o.foto_ticket_obligatoria));
+  }
+
+  /** También al pasar de un lote a su par: la ruta es la misma y solo cambia el id. */
+  ngOnChanges(): void { this.cargar(); }
+
+  etiquetaTipo(l: Lote): string {
+    if (l.tipo_recepcion === 'SACOS') return 'Solo sacos';
+    return this.esGranel(l) ? 'Mixta · granel' : 'Mixta · sacos';
+  }
+
+  /** En la mixta, el lote de granel es el que tiene el pesaje de báscula. */
+  esGranel(l: Lote): boolean {
+    return (l.pesajes ?? []).some((p) => p.modalidad !== 'SACOS');
+  }
+
+  numFotos(p: Pesaje): number {
+    return (p.fotos?.length ?? 0) + (p.sacos ?? []).reduce((n, s) => n + (s.fotos?.length ?? 0), 0);
+  }
+
+  verFotos(p: Pesaje): void {
+    const lista: { id: number; titulo: string; ticket: boolean }[] = [
+      ...(p.fotos ?? []).map((f: FotoRecepcion) => ({ id: f.id, ticket: true, titulo: f.tipo === 'TICKET_EXTERIOR' ? 'Ticket exterior (cliente)' : 'Ticket interior (empresa)' })),
+      ...(p.sacos ?? []).flatMap((s) => (s.fotos ?? []).map((f) => ({
+        id: f.id, ticket: false, titulo: `Pesada ${s.orden}: ${s.sacos} saco${s.sacos === 1 ? '' : 's'}, ${formatoDinero(s.peso_kg)} kg` }))),
+    ];
+    this.fotosDe.set(p);
+    this.galeria.set(lista.map((f) => ({ ...f, url: null })));
+    this.fotosVisible = true;
+    for (const f of lista) {
+      this.servicio.foto(f.id).subscribe((b) => {
+        const url = URL.createObjectURL(b);
+        this.galeria.update((g) => g.map((x) => (x.id === f.id ? { ...x, url } : x)));
+      });
+    }
+  }
+
+  /** La foto tal como salió de la cámara, antes de enderezarla. */
+  verOriginal(id: number): void {
+    this.servicio.foto(id, true).subscribe((b) => window.open(URL.createObjectURL(b), '_blank'));
+  }
+
+  soltarFotos(): void {
+    for (const f of this.galeria()) if (f.url) URL.revokeObjectURL(f.url);
+    this.galeria.set([]);
   }
 
   cargar(): void {

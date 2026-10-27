@@ -31,6 +31,9 @@ trait PreparaBaseCargas
         $this->ajustarSecuencia('users');
 
         $this->filaConId('almacenes', 1);
+
+        // Las pruebas anteriores a las fotos registran pesajes sin foto del ticket.
+        DB::table('cargas.parametro')->where('clave', 'FOTO_TICKET_OBLIGATORIA')->update(['valor' => 'NO']);
     }
 
     protected function filaConId(string $tabla, int $id): void

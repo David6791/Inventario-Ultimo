@@ -7,8 +7,9 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
 import { formatoDinero } from '../../caja/core/dinero';
-import { BonoCalculado } from '../core/models/cargas.model';
+import { BonoCalculado, PlantillaBascula } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
+import { FotoTicketComponent, TicketLeido } from './fotos/foto-ticket.component';
 
 const CLAVE_BASCULA = 'cargas.ultima-bascula';
 
@@ -28,6 +29,8 @@ export function grupoPesaje(fb: FormBuilder): FormGroup {
     placa: [null as string | null],
     chofer_nombre: ['' as string | null, [Validators.required, Validators.maxLength(150)]],
     chofer_ci: [null as string | null],
+    foto_interior_id: [null as number | null],
+    foto_exterior_id: [null as number | null],
   });
 }
 
@@ -43,18 +46,26 @@ export function recordarBascula(valor: string | null | undefined): void {
 @Component({
   selector: 'app-pesaje-campos',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, InputNumberModule, InputTextModule, SelectButtonModule],
+  imports: [CommonModule, ReactiveFormsModule, InputNumberModule, InputTextModule, SelectButtonModule, FotoTicketComponent],
   template: `
+    <div class="fotos" *ngIf="conFotos()">
+      <app-foto-ticket tipo="TICKET_INTERIOR" [plantillas]="plantillas()" [obligatoria]="fotoObligatoria()"
+                       (listo)="ticketInterior($event)" (quitado)="quitarFoto('foto_interior_id')" />
+      <app-foto-ticket tipo="TICKET_EXTERIOR" [plantillas]="plantillas()"
+                       (listo)="ticketExterior($event)" (quitado)="quitarFoto('foto_exterior_id')" />
+    </div>
     <div class="campos" [formGroup]="grupo()">
       <div class="campo span-2">
         <label for="bascula">Báscula</label>
         <input id="bascula" pInputText formControlName="bascula" maxlength="40" placeholder="Potosí 1" />
+        <small class="de-foto" *ngIf="deFoto().has('bascula')"><i class="pi pi-camera"></i> de la plantilla</small>
       </div>
       <div class="campo span-2">
         <label for="ticket">N.º de ticket</label>
         <input id="ticket" pInputText formControlName="ticket" maxlength="30" class="codigo" />
+        <small class="de-foto" *ngIf="deFoto().has('ticket')"><i class="pi pi-camera"></i> leído de la foto</small>
       </div>
-      <div class="campo span-2">
+      <div class="campo span-2" *ngIf="!sinSacos()">
         <label for="sacos">Sacos <span class="opcional">(opcional)</span></label>
         <p-inputNumber inputId="sacos" formControlName="num_sacos" [min]="0" [useGrouping]="false" />
       </div>
@@ -62,10 +73,12 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-2">
         <label for="bruto">Peso bruto (kg)</label>
         <p-inputNumber inputId="bruto" formControlName="peso_bruto_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
+        <small class="de-foto" *ngIf="deFoto().has('peso_bruto_kg')"><i class="pi pi-camera"></i> leído de la foto</small>
       </div>
       <div class="campo span-2">
         <label for="tara">Tara (kg)</label>
         <p-inputNumber inputId="tara" formControlName="tara_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
+        <small class="de-foto" *ngIf="deFoto().has('tara_kg')"><i class="pi pi-camera"></i> leído de la foto</small>
       </div>
       <div class="campo span-2">
         <label>Peso neto (kg)</label>
@@ -110,7 +123,7 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-6" *ngIf="neto() !== null && neto()! > 0">
         <div class="bono" [class.sin-bono]="!bono()">
           <i class="pi" [class.pi-truck]="bono()" [class.pi-info-circle]="!bono()"></i>
-          <span *ngIf="bono() as b">Bono de transporte: <strong>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</strong>
+          <span *ngIf="bono() as b">Bono de transporte{{ sinSacos() ? ' (camión completo)' : '' }}: <strong>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</strong>
             ({{ b.tipo_vehiculo }}). Lo cobra el chofer en caja.</span>
           <span *ngIf="!bono()">Para este peso no corresponde bono de transporte.</span>
         </div>
@@ -118,6 +131,9 @@ export function recordarBascula(valor: string | null | undefined): void {
     </div>
   `,
   styles: [`
+    .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
+    @media (max-width: 720px) { .fotos { grid-template-columns: 1fr; } }
+    .de-foto { color: #047857; font-size: 0.72rem; display: flex; gap: 0.25rem; align-items: center; }
     .campos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.9rem 1rem; }
     .campo { display: flex; flex-direction: column; gap: 0.35rem; }
     .campo label { font-size: 0.8rem; font-weight: 550; }
@@ -141,6 +157,14 @@ export function recordarBascula(valor: string | null | undefined): void {
 })
 export class PesajeCamposComponent implements OnInit {
   readonly grupo = input.required<FormGroup>();
+  /** Fotos de los tickets (interior y exterior) con lectura. */
+  readonly conFotos = input(true);
+  readonly plantillas = input<PlantillaBascula[]>([]);
+  readonly fotoObligatoria = input(false);
+  /** Mixta: los sacos van en el otro lote. */
+  readonly sinSacos = input(false);
+
+  readonly deFoto = signal<Set<string>>(new Set());
 
   private readonly servicio = inject(RecepcionService);
   private readonly destruir = inject(DestroyRef);
@@ -172,10 +196,45 @@ export class PesajeCamposComponent implements OnInit {
   });
 
   marcarBruto(): void { this.grupo().patchValue({ peso_cliente_tipo: 'BRUTO' }); }
+
+  /** Ticket interior leído: llena báscula, ticket, pesos y placa; la persona revisa. */
+  ticketInterior(t: TicketLeido): void {
+    const c = t.lectura?.campos ?? {};
+    const cambios: Record<string, unknown> = { foto_interior_id: t.foto.id };
+    const marcados = new Set<string>();
+    if (t.plantilla?.bascula) { cambios['bascula'] = t.plantilla.bascula; marcados.add('bascula'); }
+    if (c.ticket?.valor != null) { cambios['ticket'] = String(c.ticket.valor); marcados.add('ticket'); }
+    if (typeof c.peso_bruto_kg?.valor === 'number') { cambios['peso_bruto_kg'] = c.peso_bruto_kg.valor; marcados.add('peso_bruto_kg'); }
+    if (typeof c.tara_kg?.valor === 'number') { cambios['tara_kg'] = c.tara_kg.valor; marcados.add('tara_kg'); }
+    if (c.placa?.valor != null && !this.grupo().value.placa) { cambios['placa'] = String(c.placa.valor).replace(/[^A-Z0-9]/g, ''); }
+    this.grupo().patchValue(cambios);
+    this.deFoto.set(marcados);
+  }
+
+  /** Ticket exterior: su neto (o su bruto, si no se leyó el neto) es el peso del cliente. */
+  ticketExterior(t: TicketLeido): void {
+    const c = t.lectura?.campos ?? {};
+    const cambios: Record<string, unknown> = { foto_exterior_id: t.foto.id };
+    if (typeof c.peso_neto_kg?.valor === 'number') {
+      cambios['peso_cliente_kg'] = c.peso_neto_kg.valor; cambios['peso_cliente_tipo'] = 'NETO';
+    } else if (typeof c.peso_bruto_kg?.valor === 'number') {
+      cambios['peso_cliente_kg'] = c.peso_bruto_kg.valor; cambios['peso_cliente_tipo'] = 'BRUTO';
+    }
+    this.grupo().patchValue(cambios);
+  }
+
+  quitarFoto(control: 'foto_interior_id' | 'foto_exterior_id'): void {
+    this.grupo().patchValue({ [control]: null });
+    if (control === 'foto_interior_id') this.deFoto.set(new Set());
+  }
   readonly fmt = formatoDinero;
 
   ngOnInit(): void {
     const g = this.grupo();
+    if (this.conFotos() && this.fotoObligatoria()) {
+      g.get('foto_interior_id')!.setValidators(Validators.required);
+      g.get('foto_interior_id')!.updateValueAndValidity({ emitEvent: false });
+    }
     g.valueChanges.pipe(takeUntilDestroyed(this.destruir)).subscribe((v) => {
       this.cliente.set(v.peso_cliente_kg ?? null);
       this.tipo.set(v.peso_cliente_tipo ?? 'NETO');

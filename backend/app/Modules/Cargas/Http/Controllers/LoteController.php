@@ -56,11 +56,13 @@ class LoteController extends Controller
 
     public function store(RecibirLoteRequest $request): JsonResponse
     {
-        $r = $this->recepcion->recibir($request->datosLote(), $request->datosPesaje(), $request->user());
+        $r = $this->recepcion->recibir($request->datosLote(), $request->datosPesaje(), $request->user(),
+            $request->tipoRecepcion(), $request->datosSacos(), $request->datosLoteSacos());
 
         return response()->json([
             'data'    => $this->ficha($r['lote']),
-            'mensaje' => "Lote {$r['lote']->codigo} recibido."
+            'mensaje' => ($r['lote_sacos'] ? "Lotes {$r['lote']->codigo} (granel) y {$r['lote_sacos']->codigo} (sacos) recibidos."
+                                           : "Lote {$r['lote']->codigo} recibido.")
                 . ($r['bono'] ? " Bono de transporte: " . self::monto($r['bono']) . ", por pagar en caja." : ''),
         ], 201);
     }
@@ -80,7 +82,7 @@ class LoteController extends Controller
 
         return Pdf::loadView('pdf.cargas.boleta-recepcion', [
             'lote'        => $lote->load(['productor', 'cooperativa', 'linea', 'serie', 'mina', 'bocamina', 'municipio',
-                                          'almacen', 'registradoPor:id,name', 'pesajes.bono']),
+                                          'almacen', 'registradoPor:id,name', 'pesajes.bono', 'lotePar:id,codigo']),
             'resumen'     => $this->resumen([$lote->id])[$lote->id] ?? [],
             'barras'      => CodigoBarras::dataUri($lote->codigo, 1.3, 46),
             'institucion' => config('app.empresa'),
@@ -116,6 +118,8 @@ class LoteController extends Controller
             'almacen:id,nombre', 'registradoPor:id,name', 'anuladoPor:id,name',
             'pesajes.registradoPor:id,name', 'pesajes.bono.movimiento:id,numero,caja_id,fecha',
             'pesajes.correccionesCliente.corregidoPor:id,name',
+            'pesajes.fotos:id,tipo,plantilla_id,pesaje_id,lectura,created_at', 'pesajes.sacos.fotos:id,tipo,pesaje_saco_id,created_at',
+            'pesajes.viaje:id,lote_id,ticket,bascula', 'pesajes.viaje.lote:id,codigo', 'lotePar:id,codigo,material,estado',
             'eventos.usuario:id,name',
         ]);
 

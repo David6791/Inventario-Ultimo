@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // Lectura de tickets de báscula (recepción de cargas).
+    'tesseract' => [
+        'bin'    => env('TESSERACT_BIN', 'tesseract'),
+        'idioma' => env('TESSERACT_IDIOMA', 'eng'),
+    ],
+
 ];
