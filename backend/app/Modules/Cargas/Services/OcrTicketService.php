@@ -222,13 +222,86 @@ class OcrTicketService
                 $tinta[$y * $W + $x] = (imagecolorat($bin, $x, $y) & 0xFF) < 128;
             }
         }
-        $visto = [];
         $blanco = imagecolorallocate($bin, 255, 255, 255);
+        $borrar = function (array $puntos) use (&$tinta, $bin, $W, $blanco): void {
+            foreach ($puntos as $k) {
+                $tinta[$k] = false;
+                imagesetpixel($bin, $k % $W, intdiv($k, $W), $blanco);
+            }
+        };
+
+        // 1) Rayas horizontales: una corrida de tinta más larga que el alto del dato
+        //    no es un número (los dígitos están separados). Se borran solo esos
+        //    puntos, así un dígito que toca el borde de la caja queda entero.
+        $puntos = [];
+        $largo = (int) ceil($alto);
+        for ($y = 0; $y < $H; $y++) {
+            $x = 0;
+            while ($x < $W) {
+                if (! $tinta[$y * $W + $x]) { $x++; continue; }
+                $ini = $x;
+                while ($x < $W && $tinta[$y * $W + $x]) { $x++; }
+                if ($x - $ini >= $largo) {
+                    for ($k = $ini; $k < $x; $k++) { $puntos[] = $y * $W + $k; }
+                }
+            }
+        }
+        $borrar($puntos);
+
+        // 2) Manchas y alto típico de los caracteres.
+        $manchas = $this->manchas($tinta, $W, $H);
+        // Alto de los números: la mancha más alta que no sea una raya fina (los
+        // lados de una caja son finos; los dígitos, aunque estén pegados entre sí,
+        // no). Si hay duda se queda corto de borrar, nunca de más.
+        $altoLetra = 0;
+        foreach ($manchas as $m) {
+            if ($m['w'] > 0.2 * $m['h'] && $m['h'] <= 1.6 * $alto && $m['h'] >= 0.3 * $alto) {
+                $altoLetra = max($altoLetra, $m['h']);
+            }
+        }
+        if ($altoLetra === 0) {
+            $altoLetra = $alto;
+        }
+
+        // 3) Rayas verticales: los lados de la caja son más altos que los números
+        //    que encierran. Otra vez solo los puntos de la raya.
+        $puntos = [];
+        $largo = (int) ceil(1.12 * $altoLetra);
+        for ($x = 0; $x < $W; $x++) {
+            $y = 0;
+            while ($y < $H) {
+                if (! $tinta[$y * $W + $x]) { $y++; continue; }
+                $ini = $y;
+                while ($y < $H && $tinta[$y * $W + $x]) { $y++; }
+                if ($y - $ini >= $largo) {
+                    for ($k = $ini; $k < $y; $k++) { $puntos[] = $k * $W + $x; }
+                }
+            }
+        }
+        $borrar($puntos);
+
+        // 4) Restos de marcos: manchas que cruzan todo el recorte, grandes y casi
+        //    vacías, rayas cortas o restos más finos que un trazo.
+        foreach ($this->manchas($tinta, $W, $H) as $m) {
+            $relleno = count($m['puntos']) / ($m['w'] * $m['h']);
+            if ($m['w'] >= 0.9 * $W || $m['h'] >= 0.9 * $H
+                || ($relleno < 0.2 && ($m['w'] > 1.8 * $altoLetra || $m['h'] > 1.25 * $altoLetra))
+                || ($m['h'] <= max(3, 0.08 * $altoLetra) && $m['w'] > 0.6 * $altoLetra)
+                || ($m['w'] <= max(3, 0.08 * $altoLetra) && $m['h'] > 1.12 * $altoLetra)) {
+                $borrar($m['puntos']);
+            }
+        }
+    }
+
+    /** Manchas de tinta conectadas (8 vecinos), con su caja y sus puntos. */
+    private function manchas(array $tinta, int $W, int $H): array
+    {
+        $visto = [];
+        $res = [];
         for ($i = 0; $i < $W * $H; $i++) {
             if (! $tinta[$i] || isset($visto[$i])) {
                 continue;
             }
-            // Mancha conectada (8 vecinos).
             $pila = [$i];
             $visto[$i] = true;
             $puntos = [];
@@ -252,19 +325,10 @@ class OcrTicketService
                     }
                 }
             }
-            $w = $x1 - $x0 + 1;
-            $h = $y1 - $y0 + 1;
-            $relleno = count($puntos) / ($w * $h);
-            $marco = $w >= 0.9 * $W || $h >= 0.9 * $H                               // cruza todo el recorte
-                || ($relleno < 0.2 && ($w > 1.8 * $alto || $h > 1.25 * $alto))       // marco o esquina de caja
-                || ($h <= max(3, 0.08 * $alto) && $w > 0.6 * $alto)                  // raya horizontal
-                || ($w <= max(3, 0.06 * $alto) && $h > 1.15 * $alto);                // raya vertical, más alta que el dato
-            if ($marco) {
-                foreach ($puntos as $k) {
-                    imagesetpixel($bin, $k % $W, intdiv($k, $W), $blanco);
-                }
-            }
+            $res[] = ['w' => $x1 - $x0 + 1, 'h' => $y1 - $y0 + 1, 'puntos' => $puntos];
         }
+
+        return $res;
     }
 
     /**
@@ -792,16 +856,16 @@ class OcrTicketService
         }
     }
 
-    /** Mismo largo y un solo dígito distinto. */
+    /**
+     * Un solo dígito de diferencia: cambiado (9129 por 9120), de más (34950 por
+     * 4950, un borde leído como 3) o de menos (1097 por 10970, un 0 cortado).
+     */
     private function unDigito(float $a, float $b): bool
     {
-        $x = (string) (int) round($a * 100);
-        $y = (string) (int) round($b * 100);
-        if (strlen($x) !== strlen($y)) {
-            return false;
-        }
+        $x = (string) (int) round($a);
+        $y = (string) (int) round($b);
 
-        return count(array_diff_assoc(str_split($x), str_split($y))) === 1;
+        return $x !== $y && levenshtein($x, $y) === 1;
     }
 
     /** Bruto − tara = neto. Si falta uno de los tres y hay los otros dos, se calcula. */
