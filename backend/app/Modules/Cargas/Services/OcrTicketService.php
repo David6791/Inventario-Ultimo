@@ -61,7 +61,7 @@ class OcrTicketService
                 }
 
                 // Los pesos se leen con varios suavizados: luego se elige la combinación que cuadra.
-                $variantes = $tipo === 'numero'
+                $variantes = $tipo === 'numero' || $campo === 'placa'
                     ? array_values(array_unique([(int) ($c['desenfoque'] ?? 1), 0, 2]))
                     : [(int) ($c['desenfoque'] ?? 1)];
                 $lecturas = [];
@@ -80,6 +80,10 @@ class OcrTicketService
                     }
                 }
                 usort($lecturas, fn ($a, $b) => $b['confianza'] <=> $a['confianza']);
+                if ($campo === 'placa') {
+                    // Primero las lecturas con forma de placa (1175PFT).
+                    usort($lecturas, fn ($a, $b) => (int) $this->esPlaca($b['valor']) <=> (int) $this->esPlaca($a['valor']));
+                }
                 $candidatos[$campo] = $lecturas;
                 $resultado[$campo] = $lecturas[0] ?? ['texto' => '', 'valor' => null, 'confianza' => 0, 'metodo' => 'recuadro'];
             }
@@ -158,9 +162,12 @@ class OcrTicketService
 
         $lista = match ($tipo) {
             'numero'  => '0123456789.,',
-            'digitos' => '0123456789',
+            'digitos' => '0123456789:',   // con «:» para reconocer el de «N.º: 2140» y quitarlo
             default   => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/:.',
         };
+        if ($dir = env('OCR_DEPURAR')) {            // carpeta para ver qué recibe Tesseract
+            imagepng($linea, rtrim($dir, '/') . "/{$c['campo']}-d" . ($c['desenfoque'] ?? 1) . '.png');
+        }
         $palabras = $this->tesseract($linea, 7, $lista);
         imagedestroy($linea);
         if (! $palabras) {
@@ -177,6 +184,9 @@ class OcrTicketService
             'digitos' => preg_replace('/\D/', '', $texto) ?: null,
             default   => $this->limpiarTexto($texto) ?: null,
         };
+        if ($c['campo'] === 'placa' && $valor !== null) {
+            $valor = $this->placa($valor) ?? $valor;
+        }
 
         return ['texto' => $texto, 'valor' => $valor, 'confianza' => $confianza, 'metodo' => 'recuadro'];
     }
@@ -243,10 +253,13 @@ class OcrTicketService
             }
         }
         $hueco = max(4, (int) (($y1 - $y0) * 0.45));
-        $estirar = function (int $desde, int $paso) use ($col, $W, $hueco): int {
+        // Hasta un 25 % del ancho del recuadro: basta para no cortar un dígito y
+        // no se sigue de largo por un visto hecho con bolígrafo pegado al dato.
+        $tope = max(8, (int) (($bx1 - $bx0) * 0.25));
+        $estirar = function (int $desde, int $paso) use ($col, $W, $hueco, $tope): int {
             $xx = $desde;
             $blancos = 0;
-            while ($xx > 0 && $xx < $W - 1) {
+            while ($xx > 0 && $xx < $W - 1 && abs($xx - $desde) < $tope) {
                 $blancos = $col[$xx] ? 0 : $blancos + 1;
                 if ($blancos >= $hueco) {
                     return $xx - $paso * ($blancos - 1);
@@ -273,7 +286,7 @@ class OcrTicketService
      */
     private function preparar(GdImage $recorte, int $desenfoque, float $escala): array
     {
-        imagefilter($recorte, IMG_FILTER_GRAYSCALE);
+        $this->canalRojo($recorte);
         for ($i = 0; $i < max(0, min(4, $desenfoque)); $i++) {
             imagefilter($recorte, IMG_FILTER_GAUSSIAN_BLUR);
         }
@@ -319,6 +332,24 @@ class OcrTicketService
         imagedestroy($img);
 
         return [$salida, $borde];
+    }
+
+    /**
+     * Gris tomado del canal rojo, no del brillo: la tinta negra y la azul de
+     * las boletas quedan oscuras y las marcas de bolígrafo rojo (los vistos
+     * que se hacen sobre los pesos) quedan casi blancas y desaparecen.
+     */
+    private function canalRojo(GdImage $img): void
+    {
+        imagepalettetotruecolor($img);
+        $w = imagesx($img);
+        $h = imagesy($img);
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $r = (imagecolorat($img, $x, $y) >> 16) & 0xFF;
+                imagesetpixel($img, $x, $y, ($r << 16) | ($r << 8) | $r);
+            }
+        }
     }
 
     private function otsu(array $hist, int $total): int
@@ -407,7 +438,7 @@ class OcrTicketService
     {
         $copia = imagecreatetruecolor(imagesx($img), imagesy($img));
         imagecopy($copia, $img, 0, 0, 0, 0, imagesx($img), imagesy($img));
-        imagefilter($copia, IMG_FILTER_GRAYSCALE);
+        $this->canalRojo($copia);
 
         $tmp = tempnam(sys_get_temp_dir(), 'ocr');
         $png = $tmp . '.png';
@@ -489,6 +520,35 @@ class OcrTicketService
         }
 
         return round(((int) $mejor) / (10 ** $decimales), $decimales);
+    }
+
+    /**
+     * Placa boliviana: 3 o 4 números y 3 letras (1175PFT). Corrige las
+     * confusiones típicas según la posición (T/I/l → 1 en los números,
+     * 0 → O en las letras) y descarta lo que sobra, como un visto al final.
+     */
+    public function placa(string $texto): ?string
+    {
+        $t = preg_replace('/[^A-Z0-9]/', '', mb_strtoupper($texto));
+        $aNumero = ['T' => '1', 'I' => '1', 'L' => '1', 'J' => '1', 'S' => '5', 'O' => '0', 'D' => '0', 'Q' => '0',
+                    'B' => '8', 'Z' => '2', 'G' => '6', 'A' => '4'];
+        $aLetra = ['0' => 'O', '1' => 'I', '5' => 'S', '8' => 'B', '2' => 'Z', '6' => 'G', '4' => 'A', '7' => 'T'];
+        foreach ([4, 3] as $n) {
+            for ($i = 0; $i + $n + 3 <= strlen($t); $i++) {
+                $num = strtr(substr($t, $i, $n), $aNumero);
+                $let = strtr(substr($t, $i + $n, 3), $aLetra);
+                if (ctype_digit($num) && ctype_alpha($let)) {
+                    return $num . $let;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function esPlaca(mixed $v): bool
+    {
+        return is_string($v) && preg_match('/^\d{3,4}[A-Z]{3}$/', $v) === 1;
     }
 
     private function limpiarTexto(string $texto): string
@@ -592,7 +652,13 @@ class OcrTicketService
         }
         if ($b !== null && $t !== null && $n !== null) {
             $ok = abs(($b - $t) - $n) < 0.005;
-            if (! $ok) {
+            if ($ok) {
+                // La cuenta cuadra: es la mejor señal de que los tres se leyeron bien
+                // (con lista de caracteres, Tesseract suele informar confianza 0).
+                foreach (['peso_bruto_kg', 'tara_kg', 'peso_neto_kg'] as $k) {
+                    $r[$k]['verificado'] = true;
+                }
+            } else {
                 $avisos[] = 'Bruto − tara no da el neto leído: revise los tres pesos contra el ticket.';
             }
 

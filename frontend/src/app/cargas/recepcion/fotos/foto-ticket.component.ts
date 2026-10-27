@@ -153,8 +153,9 @@ export class FotoTicketComponent implements OnDestroy {
         nombre: NOMBRES[k] ?? k,
         valor: c.valor === null ? null : numero ? (c.valor as number).toLocaleString('es-BO') : c.valor,
         confianza: c.confianza,
-        metodo: c.metodo === 'calculado' ? 'calculado' : c.metodo === 'corregido' ? 'corregido' : c.valor === null ? 'no se leyó' : `${c.confianza} %`,
-        dudoso: c.valor === null || c.metodo !== 'recuadro' || c.confianza < 70,
+        metodo: c.valor === null ? 'no se leyó' : c.metodo === 'calculado' ? 'calculado' : c.metodo === 'corregido' ? 'corregido'
+          : c.verificado ? 'cuadra' : c.confianza > 0 ? `${c.confianza} %` : 'revisar',
+        dudoso: !c.verificado && (c.valor === null || c.metodo !== 'recuadro' || c.confianza < 70),
       };
     });
   }

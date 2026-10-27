@@ -291,7 +291,9 @@ export class PlantillasBasculaComponent implements OnInit {
   metodo(l: LecturaTicket, c: CampoTicket): string {
     const x = l.campos[c];
     if (!x) return '';
-    return x.metodo === 'recuadro' ? `${x.confianza} %` : x.metodo;
+    if (x.valor === null) return '';
+    if (x.metodo !== 'recuadro') return x.metodo;
+    return x.verificado ? 'cuadra' : x.confianza > 0 ? `${x.confianza} %` : 'revisar';
   }
 
   nueva(): void {

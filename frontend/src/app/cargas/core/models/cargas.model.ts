@@ -380,7 +380,7 @@ export interface PlantillaBascula {
 
 export interface CampoDisponible { campo: CampoTicket; etiqueta: string; tipo: 'numero' | 'digitos' | 'texto'; }
 
-export interface LecturaCampo { texto: string; valor: number | string | null; confianza: number; metodo: 'recuadro' | 'etiqueta' | 'calculado' | 'corregido'; }
+export interface LecturaCampo { texto: string; valor: number | string | null; confianza: number; metodo: 'recuadro' | 'etiqueta' | 'calculado' | 'corregido'; verificado?: boolean; }
 
 export interface LecturaTicket {
   campos: Partial<Record<CampoTicket, LecturaCampo>>;
