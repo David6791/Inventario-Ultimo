@@ -57,7 +57,7 @@ export function datosSacos(g: FormGroup, conTransporte: boolean): DatosSacos {
   template: `
     <div [formGroup]="grupo()" class="sacos">
       <div class="fila-cabeza">
-        <p-selectButton [options]="modos" formControlName="modo" optionLabel="etiqueta" optionValue="valor" (onChange)="cambiarModo()" />
+        <p-selectButton [options]="modos" [allowEmpty]="false" formControlName="modo" optionLabel="etiqueta" optionValue="valor" (onChange)="cambiarModo()" />
         <div class="campo balanza">
           <label for="balanza-manual">Balanza</label>
           <input id="balanza-manual" pInputText formControlName="bascula" maxlength="40" />

@@ -47,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('opciones', OpcionesController::class);
 
         Route::get('productores',             [ProductorController::class, 'index']);
+        Route::get('productores/parecidos',   [ProductorController::class, 'parecidos']);
         Route::get('productores/{productor}', [ProductorController::class, 'show'])->whereNumber('productor');
 
         Route::get('cooperativas',            [CooperativaController::class, 'index']);

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -7,7 +7,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { debounceTime, distinctUntilChanged, map, of, switchMap } from 'rxjs';
 import { formatoDinero } from '../../caja/core/dinero';
-import { BonoCalculado, PlantillaBascula } from '../core/models/cargas.model';
+import { BonoCalculado, LecturaTicket, PlantillaBascula } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { FotoTicketComponent, TicketLeido } from './fotos/foto-ticket.component';
 
@@ -31,6 +31,8 @@ export function grupoPesaje(fb: FormBuilder): FormGroup {
     chofer_ci: [null as string | null],
     foto_interior_id: [null as number | null],
     foto_exterior_id: [null as number | null],
+    numero_orden: [null as string | null, Validators.maxLength(30)],
+    fecha_ticket: [null as string | null],
   });
 }
 
@@ -89,7 +91,7 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-2">
         <label for="cliente">Peso del cliente (kg) <span class="opcional">(opcional)</span></label>
         <p-inputNumber inputId="cliente" formControlName="peso_cliente_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
-        <p-selectButton [options]="tiposCliente" formControlName="peso_cliente_tipo" optionLabel="etiqueta" optionValue="valor"
+        <p-selectButton [options]="tiposCliente" [allowEmpty]="false" formControlName="peso_cliente_tipo" optionLabel="etiqueta" optionValue="valor"
                         styleClass="tipo-cliente" />
       </div>
       <div class="campo span-4 diferencia">
@@ -114,10 +116,26 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-3">
         <label for="chofer">Chofer</label>
         <input id="chofer" pInputText formControlName="chofer_nombre" maxlength="150" />
+        <small class="de-foto" *ngIf="deFoto().has('chofer_nombre')"><i class="pi pi-camera"></i> leído de la foto</small>
       </div>
       <div class="campo span-1">
         <label for="chofer_ci">CI</label>
         <input id="chofer_ci" pInputText formControlName="chofer_ci" maxlength="15" />
+      </div>
+
+      <div class="campo span-2">
+        <label for="orden">N.º de orden <span class="opcional">(opcional)</span></label>
+        <input id="orden" pInputText formControlName="numero_orden" maxlength="30" class="codigo" />
+        <small class="de-foto" *ngIf="deFoto().has('numero_orden')"><i class="pi pi-camera"></i> leído de la foto</small>
+      </div>
+      <div class="campo span-2">
+        <label for="fecha-ticket">Fecha de la boleta <span class="opcional">(opcional)</span></label>
+        <input id="fecha-ticket" pInputText type="datetime-local" formControlName="fecha_ticket" step="1" />
+        <small class="de-foto" *ngIf="deFoto().has('fecha_ticket')"><i class="pi pi-camera"></i> leída de la foto</small>
+      </div>
+      <div class="campo span-2" *ngIf="productorLeido() as pl">
+        <label>Productor en la boleta</label>
+        <div class="leido">{{ pl }}</div>
       </div>
 
       <div class="campo span-6" *ngIf="neto() !== null && neto()! > 0">
@@ -133,6 +151,7 @@ export function recordarBascula(valor: string | null | undefined): void {
   styles: [`
     .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
     @media (max-width: 720px) { .fotos { grid-template-columns: 1fr; } }
+    .leido { font-size: 0.9rem; padding: 0.5rem 0; font-weight: 550; }
     .de-foto { color: #047857; font-size: 0.72rem; display: flex; gap: 0.25rem; align-items: center; }
     .campos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.9rem 1rem; }
     .campo { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -165,6 +184,14 @@ export class PesajeCamposComponent implements OnInit {
   readonly sinSacos = input(false);
 
   readonly deFoto = signal<Set<string>>(new Set());
+  /** Lo leído de cada boleta, para buscar el productor y avisar diferencias. */
+  readonly lecturaInterior = signal<LecturaTicket | null>(null);
+  readonly lecturaExterior = signal<LecturaTicket | null>(null);
+  readonly leido = output<{ interior: LecturaTicket | null; exterior: LecturaTicket | null }>();
+  readonly productorLeido = computed(() => {
+    const v = this.lecturaInterior()?.campos.productor?.valor ?? this.lecturaExterior()?.campos.productor?.valor;
+    return v ? String(v) : null;
+  });
 
   private readonly servicio = inject(RecepcionService);
   private readonly destruir = inject(DestroyRef);
@@ -207,8 +234,19 @@ export class PesajeCamposComponent implements OnInit {
     if (typeof c.peso_bruto_kg?.valor === 'number') { cambios['peso_bruto_kg'] = c.peso_bruto_kg.valor; marcados.add('peso_bruto_kg'); }
     if (typeof c.tara_kg?.valor === 'number') { cambios['tara_kg'] = c.tara_kg.valor; marcados.add('tara_kg'); }
     if (c.placa?.valor != null && !this.grupo().value.placa) { cambios['placa'] = String(c.placa.valor).replace(/[^A-Z0-9]/g, ''); }
+    if (c.numero_orden?.valor != null) { cambios['numero_orden'] = String(c.numero_orden.valor); marcados.add('numero_orden'); }
+    if (t.lectura?.fecha_ticket) { cambios['fecha_ticket'] = t.lectura.fecha_ticket.replace(' ', 'T'); marcados.add('fecha_ticket'); }
+    if (c.chofer?.valor != null && !this.grupo().value.chofer_nombre) {
+      cambios['chofer_nombre'] = String(c.chofer.valor); marcados.add('chofer_nombre');
+    }
     this.grupo().patchValue(cambios);
     this.deFoto.set(marcados);
+    this.lecturaInterior.set(t.lectura);
+    this.avisarLecturas();
+  }
+
+  private avisarLecturas(): void {
+    this.leido.emit({ interior: this.lecturaInterior(), exterior: this.lecturaExterior() });
   }
 
   /** Ticket exterior: su neto (o su bruto, si no se leyó el neto) es el peso del cliente. */
@@ -220,12 +258,17 @@ export class PesajeCamposComponent implements OnInit {
     } else if (typeof c.peso_bruto_kg?.valor === 'number') {
       cambios['peso_cliente_kg'] = c.peso_bruto_kg.valor; cambios['peso_cliente_tipo'] = 'BRUTO';
     }
+    if (c.chofer?.valor != null && !this.grupo().value.chofer_nombre) cambios['chofer_nombre'] = String(c.chofer.valor);
     this.grupo().patchValue(cambios);
+    this.lecturaExterior.set(t.lectura);
+    this.avisarLecturas();
   }
 
   quitarFoto(control: 'foto_interior_id' | 'foto_exterior_id'): void {
     this.grupo().patchValue({ [control]: null });
-    if (control === 'foto_interior_id') this.deFoto.set(new Set());
+    if (control === 'foto_interior_id') { this.deFoto.set(new Set()); this.lecturaInterior.set(null); }
+    else this.lecturaExterior.set(null);
+    this.avisarLecturas();
   }
   readonly fmt = formatoDinero;
 

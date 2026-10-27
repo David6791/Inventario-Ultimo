@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DropdownModule } from 'primeng/dropdown';
@@ -7,12 +7,14 @@ import { mensajeDeError } from '../../core/errores';
 import { Esquinas, abrirFoto, aBlob, detectarEsquinas, enderezar, proporcionDe, reducir } from '../../core/imagen';
 import { CampoTicket, FotoRecepcion, LecturaTicket, PlantillaBascula, TipoFoto } from '../../core/models/cargas.model';
 import { RecepcionService } from '../../core/services/recepcion.service';
+import { EscanerService } from '../../core/services/escaner.service';
 import { EsquinasFotoComponent } from './esquinas-foto.component';
 
 export interface TicketLeido { foto: FotoRecepcion; plantilla: PlantillaBascula | null; lectura: LecturaTicket | null; }
 
 const NOMBRES: Record<CampoTicket, string> = {
   ticket: 'Ticket', peso_bruto_kg: 'Bruto', tara_kg: 'Tara', peso_neto_kg: 'Neto', placa: 'Placa', fecha: 'Fecha',
+  numero_orden: 'Orden', productor: 'Productor', chofer: 'Chofer', hora: 'Hora',
 };
 const CLAVE_PLANTILLA = 'cargas.plantilla.';
 
@@ -37,11 +39,17 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
       </div>
 
       <!-- 1. Sin foto -->
-      <label class="elegir" *ngIf="!foto() && !leido()">
-        <input type="file" accept="image/*" capture="environment" (change)="elegir($event)" />
-        <i class="pi pi-camera"></i>
-        <span>Tomar o elegir la foto del ticket</span>
-      </label>
+      <div class="origenes" *ngIf="!foto() && !leido()">
+        <button type="button" class="elegir escanear" *ngIf="escaner.estado()?.escaneres?.length" (click)="escanear()" [disabled]="escaneando()">
+          <i class="pi" [class.pi-print]="!escaneando()" [class.pi-spin]="escaneando()" [class.pi-spinner]="escaneando()"></i>
+          <span>{{ escaneando() ? 'Escaneando…' : 'Escanear la boleta' }}</span>
+        </button>
+        <label class="elegir">
+          <input type="file" accept="image/*" capture="environment" (change)="elegir($event)" />
+          <i class="pi pi-camera"></i>
+          <span>{{ escaner.estado()?.escaneres?.length ? 'O tomar o elegir una foto' : 'Tomar o elegir la foto del ticket' }}</span>
+        </label>
+      </div>
 
       <!-- 2. Ajustar esquinas -->
       <ng-container *ngIf="foto() as f">
@@ -88,6 +96,10 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
     .elegir { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 1.2rem 0.5rem; cursor: pointer;
               border-radius: 8px; color: var(--primary-color, #2563eb); font-weight: 600; font-size: 0.9rem; text-align: center; }
     .elegir:hover { background: rgba(37, 99, 235, 0.06); }
+    .origenes { display: flex; gap: 0.5rem; }
+    .origenes > * { flex: 1; }
+    button.elegir { border: 0; background: none; font: inherit; }
+    .escanear { background: rgba(37, 99, 235, 0.07) !important; }
     .elegir i { font-size: 1.6rem; }
     .elegir input { position: absolute; width: 1px; height: 1px; opacity: 0; }
     .acciones { display: flex; justify-content: flex-end; gap: 0.4rem; margin-top: 0.4rem; }
@@ -109,7 +121,7 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
     @media (max-width: 520px) { .resultado { grid-template-columns: 1fr; } .resultado img { max-height: 14rem; object-fit: contain; } }
   `],
 })
-export class FotoTicketComponent implements OnDestroy {
+export class FotoTicketComponent implements OnInit, OnDestroy {
   readonly tipo = input.required<TipoFoto>();
   readonly plantillas = input<PlantillaBascula[]>([]);
   readonly obligatoria = input(false);
@@ -117,6 +129,10 @@ export class FotoTicketComponent implements OnDestroy {
   readonly quitado = output<void>();
 
   private readonly servicio = inject(RecepcionService);
+  readonly escaner = inject(EscanerService);
+  readonly escaneando = signal(false);
+  /** De dónde salió la imagen: del escáner se recuerdan las esquinas (el ticket va siempre en el mismo lugar). */
+  private origen: 'foto' | 'escaner' = 'foto';
 
   readonly foto = signal<HTMLCanvasElement | null>(null);
   readonly leido = signal<TicketLeido | null>(null);
@@ -164,6 +180,39 @@ export class FotoTicketComponent implements OnDestroy {
     try { if (this.plantillaId) localStorage.setItem(CLAVE_PLANTILLA + this.tipo(), String(this.plantillaId)); } catch { /* sin almacenamiento */ }
   }
 
+  ngOnInit(): void { this.escaner.revisar(); }
+
+  async escanear(): Promise<void> {
+    this.escaneando.set(true);
+    this.error.set(null);
+    try {
+      const blob = await this.escaner.escanear(300, true);
+      const c = await abrirFoto(blob, 2600);
+      this.origen = 'escaner';
+      this.esquinas = this.esquinasGuardadas(c) ?? detectarEsquinas(c);
+      this.foto.set(c);
+    } catch (e) {
+      this.error.set((e as Error).message);
+    } finally {
+      this.escaneando.set(false);
+    }
+  }
+
+  private claveEsquinas(): string { return `cargas.esquinas-escaner.${this.plantillaId ?? 'sin-plantilla'}`; }
+
+  private esquinasGuardadas(c: HTMLCanvasElement): Esquinas | null {
+    try {
+      const g = JSON.parse(localStorage.getItem(this.claveEsquinas()) ?? 'null') as { x: number; y: number }[] | null;
+      return g?.length === 4 ? (g.map((p) => ({ x: p.x * c.width, y: p.y * c.height })) as Esquinas) : null;
+    } catch { return null; }
+  }
+
+  private guardarEsquinas(c: HTMLCanvasElement): void {
+    try {
+      localStorage.setItem(this.claveEsquinas(), JSON.stringify(this.esquinas.map((p) => ({ x: p.x / c.width, y: p.y / c.height }))));
+    } catch { /* sin almacenamiento */ }
+  }
+
   async elegir(ev: Event): Promise<void> {
     const archivo = (ev.target as HTMLInputElement).files?.[0];
     (ev.target as HTMLInputElement).value = '';
@@ -171,6 +220,7 @@ export class FotoTicketComponent implements OnDestroy {
     this.error.set(null);
     try {
       const c = await abrirFoto(archivo);
+      this.origen = 'foto';
       this.esquinas = detectarEsquinas(c);
       this.foto.set(c);
     } catch (e) {
@@ -186,6 +236,7 @@ export class FotoTicketComponent implements OnDestroy {
     this.error.set(null);
     try {
       const recto = enderezar(c, this.esquinas, plantilla?.proporcion ?? proporcionDe(this.esquinas));
+      if (this.origen === 'escaner') this.guardarEsquinas(c);
       const [imagen, original] = await Promise.all([aBlob(recto), aBlob(reducir(c, 1600), 0.8)]);
       this.servicio.subirFoto(this.tipo(), imagen, original, plantilla?.id ?? null).subscribe({
         next: (foto) => {

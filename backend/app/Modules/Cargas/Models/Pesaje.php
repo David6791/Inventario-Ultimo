@@ -16,7 +16,7 @@ class Pesaje extends CargasModel
 
     protected $fillable = [
         'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'peso_cliente_kg', 'peso_cliente_tipo', 'num_sacos',
-        'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por', 'modalidad', 'descuento_sacos_kg', 'pesaje_viaje_id',
+        'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por', 'modalidad', 'descuento_sacos_kg', 'pesaje_viaje_id', 'numero_orden', 'fecha_ticket',
     ];
 
     protected $casts = [
@@ -30,6 +30,7 @@ class Pesaje extends CargasModel
         'num_sacos'     => 'integer',
         'anulado'       => 'boolean',
         'fecha'         => 'datetime',
+        'fecha_ticket'  => 'datetime',
     ];
 
     public const TIPOS = ['INGRESO', 'CONTROL'];

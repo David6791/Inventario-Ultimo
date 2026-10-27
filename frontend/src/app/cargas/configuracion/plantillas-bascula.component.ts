@@ -14,6 +14,7 @@ import { ESTILOS_CARGAS } from '../core/estilos';
 import { Esquinas, abrirFoto, aBlob, detectarEsquinas, enderezar, proporcionDe } from '../core/imagen';
 import { CampoDisponible, CampoTicket, LecturaTicket, PlantillaBascula, RecuadroPlantilla } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
+import { EscanerService } from '../core/services/escaner.service';
 import { EsquinasFotoComponent } from '../recepcion/fotos/esquinas-foto.component';
 
 type Uso = PlantillaBascula['uso'];
@@ -21,6 +22,7 @@ interface Borrador { id: number | null; nombre: string; bascula: string; uso: Us
 
 const COLORES: Record<CampoTicket, string> = {
   ticket: '#7c3aed', peso_bruto_kg: '#2563eb', tara_kg: '#ea580c', peso_neto_kg: '#059669', placa: '#db2777', fecha: '#0891b2',
+  numero_orden: '#6d28d9', productor: '#b45309', chofer: '#0f766e', hora: '#0e7490',
 };
 
 /**
@@ -92,6 +94,8 @@ const COLORES: Record<CampoTicket, string> = {
           <i class="pi pi-camera"></i>
           <span>1. Tome o elija una foto clara de un ticket de esta balanza</span>
         </label>
+        <p-button *ngIf="escaner.estado()?.escaneres?.length" label="O escanear un ticket" icon="pi pi-print" [text]="true"
+                  [loading]="escaneando()" (onClick)="escanearFoto('muestra')" />
       </div>
 
       <div class="paso" *ngIf="fotoCruda() as f">
@@ -153,6 +157,8 @@ const COLORES: Record<CampoTicket, string> = {
                 <input type="file" accept="image/*" capture="environment" (change)="elegirFoto($event, 'prueba')" />
                 <i class="pi pi-camera"></i>&nbsp;Con otra foto
               </label>
+              <p-button *ngIf="escaner.estado()?.escaneres?.length" label="Escanear otra" icon="pi pi-print" size="small" [outlined]="true"
+                        [loading]="escaneando()" (onClick)="escanearFoto('prueba')" />
             </div>
             <ng-container *ngIf="lectura() as l">
               <div class="resultado" *ngFor="let r of b.campos">
@@ -229,6 +235,8 @@ const COLORES: Record<CampoTicket, string> = {
 export class PlantillasBasculaComponent implements OnInit {
   private readonly servicio = inject(RecepcionService);
   private readonly toast = inject(MessageService);
+  readonly escaner = inject(EscanerService);
+  readonly escaneando = signal(false);
 
   @ViewChild('lienzo') private lienzo?: ElementRef<HTMLDivElement>;
 
@@ -267,7 +275,21 @@ export class PlantillasBasculaComponent implements OnInit {
     { valor: 3, etiqueta: 'Matricial fuerte (3)' },
   ];
 
-  ngOnInit(): void { this.cargar(); }
+  ngOnInit(): void { this.cargar(); this.escaner.revisar(); }
+
+  async escanearFoto(para: 'muestra' | 'prueba'): Promise<void> {
+    this.escaneando.set(true);
+    try {
+      const c = await abrirFoto(await this.escaner.escanear(300, true), 2600);
+      this.esquinas = detectarEsquinas(c);
+      this.fotoPara.set(para);
+      this.fotoCruda.set(c);
+    } catch (e) {
+      this.toast.add({ severity: 'error', summary: 'No se pudo escanear', detail: (e as Error).message, life: 9000 });
+    } finally {
+      this.escaneando.set(false);
+    }
+  }
 
   private cargar(): void {
     this.servicio.plantillas().subscribe((r) => {

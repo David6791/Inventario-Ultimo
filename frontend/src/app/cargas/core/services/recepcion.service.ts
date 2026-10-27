@@ -4,7 +4,7 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
   BonoCalculado, BonoPendiente, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, Lote, Pagina, Pesaje,
-  PlantillaBascula, RecuadroPlantilla, RespuestaApi, TablaTramos, TipoFoto, Tramo,
+  PlantillaBascula, ProductorParecido, RecuadroPlantilla, RespuestaApi, TablaTramos, TipoFoto, Tramo,
 } from '../models/cargas.model';
 
 export interface ListaPlantillas { data: PlantillaBascula[]; campos: CampoDisponible[]; ocr: boolean; }
@@ -120,5 +120,11 @@ export class RecepcionService {
 
   foto(id: number, original = false): Observable<Blob> {
     return this.http.get(`${this.base}/fotos/${id}`, { responseType: 'blob', params: original ? { original: 1 } : {} });
+  }
+
+  /** Productores cuyo nombre se parece al leído de la boleta (palabras en cualquier orden). */
+  productoresParecidos(nombre: string): Observable<ProductorParecido[]> {
+    return this.http.get<RespuestaApi<ProductorParecido[]>>(`${this.base}/productores/parecidos`, { params: { nombre } })
+      .pipe(map((r) => r.data));
   }
 }

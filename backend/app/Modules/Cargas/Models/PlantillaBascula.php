@@ -17,7 +17,11 @@ class PlantillaBascula extends CargasModel
         'tara_kg'       => ['etiqueta' => 'Tara',          'tipo' => 'numero'],
         'peso_neto_kg'  => ['etiqueta' => 'Peso neto',     'tipo' => 'numero'],
         'placa'         => ['etiqueta' => 'Placa',         'tipo' => 'texto'],
-        'fecha'         => ['etiqueta' => 'Fecha',         'tipo' => 'texto'],
+        'numero_orden'  => ['etiqueta' => 'N.º de orden',  'tipo' => 'digitos'],
+        'productor'     => ['etiqueta' => 'Productor / socio', 'tipo' => 'nombre'],
+        'chofer'        => ['etiqueta' => 'Chofer / transportista', 'tipo' => 'nombre'],
+        'fecha'         => ['etiqueta' => 'Fecha',         'tipo' => 'fecha'],
+        'hora'          => ['etiqueta' => 'Hora',          'tipo' => 'fecha'],
     ];
 
     public const USOS = ['INTERIOR', 'EXTERIOR', 'AMBAS'];

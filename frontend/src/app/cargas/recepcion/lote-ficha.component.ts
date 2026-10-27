@@ -17,8 +17,9 @@ import { formatoDinero } from '../../caja/core/dinero';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
-import { DatosPesaje, FotoRecepcion, Lote, Pesaje, PlantillaBascula } from '../core/models/cargas.model';
+import { DatosPesaje, FotoRecepcion, LecturaTicket, Lote, Pesaje, PlantillaBascula } from '../core/models/cargas.model';
 import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
+import { diferenciasBoleta } from '../core/diferencias';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
 import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.component';
@@ -118,6 +119,8 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
               <span *ngIf="p.modalidad === 'SACOS'">Balanza manual</span>
               <span class="pastilla" *ngIf="p.tipo === 'CONTROL'" pTooltip="Repesaje de control: no suma al peso del lote">Control</span>
               <div class="secundario">{{ p.bascula }} · {{ p.fecha | date: 'dd/MM HH:mm' }}</div>
+              <div class="secundario" *ngIf="p.numero_orden">Orden <span class="codigo">{{ p.numero_orden }}</span></div>
+              <div class="secundario" *ngIf="p.fecha_ticket">Boleta del {{ p.fecha_ticket | date: 'dd/MM/yyyy HH:mm' }}</div>
             </td>
             <td>
               {{ p.placa ?? 'Sin placa' }} · {{ p.chofer_nombre ?? '—' }}
@@ -184,11 +187,17 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     <!-- Agregar pesaje -->
     <p-dialog [(visible)]="pesajeVisible" header="Agregar pesaje" [modal]="true" [style]="{ width: '46rem' }" [draggable]="false">
       <div class="tipo-pesaje">
-        <p-selectButton [options]="tipos" [(ngModel)]="tipoPesaje" optionLabel="etiqueta" optionValue="valor" (onChange)="cambiarTipo()" />
+        <p-selectButton [options]="tipos" [allowEmpty]="false" [(ngModel)]="tipoPesaje" optionLabel="etiqueta" optionValue="valor" (onChange)="cambiarTipo()" />
         <small class="secundario">{{ tipoPesaje === 'INGRESO' ? 'Otro camión del mismo lote: suma al peso y genera su bono.' :
           'Repesaje para verificar: no suma al peso ni genera bono.' }}</small>
       </div>
-      <app-pesaje-campos *ngIf="pesajeVisible" [grupo]="pesaje" [plantillas]="plantillas()" [fotoObligatoria]="fotoObligatoria()" />
+      <app-pesaje-campos *ngIf="pesajeVisible" [grupo]="pesaje" [plantillas]="plantillas()" [fotoObligatoria]="fotoObligatoria()"
+                         (leido)="lecturas = $event" />
+      <div class="nota-diferencias" *ngIf="diferencias().length">
+        <b>Lo leído de la boleta no coincide con lo anotado:</b>
+        <ul><li *ngFor="let d of diferencias()">{{ d }}</li></ul>
+        <span>Corrija lo que haga falta, o pulse otra vez «Registrar pesaje» para guardar igual.</span>
+      </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancelar" [text]="true" (onClick)="pesajeVisible = false" />
         <p-button label="Registrar pesaje" icon="pi pi-check" [loading]="guardando()" [disabled]="pesaje.invalid || guardando()"
@@ -218,7 +227,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
       <div class="campo">
         <label>Peso que declaró el cliente (kg) <span class="secundario">vacío si no declaró</span></label>
         <p-inputNumber [(ngModel)]="correccion.kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
-        <p-selectButton [options]="tiposCliente" [(ngModel)]="correccion.tipo" optionLabel="etiqueta" optionValue="valor" />
+        <p-selectButton [options]="tiposCliente" [allowEmpty]="false" [(ngModel)]="correccion.tipo" optionLabel="etiqueta" optionValue="valor" />
       </div>
       <div class="campo">
         <label for="motivo-c">Motivo</label>
@@ -253,6 +262,8 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     .codigo-lote { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
     .estado { vertical-align: middle; margin-left: 0.5rem; font-size: 0.75rem; }
     .estado-recibido { background: #e0f2fe; color: #075985; }
+    .nota-diferencias { margin-top: 0.8rem; padding: 0.6rem 0.8rem; border-radius: 8px; background: #fef3c7; color: #92400e; font-size: 0.86rem; }
+    .nota-diferencias ul { margin: 0.3rem 0; padding-left: 1.1rem; }
     .nota-par { display: flex; gap: 0.5rem; align-items: center; padding: 0.55rem 0.8rem; border-radius: 8px; background: #eff6ff;
                 color: #1e3a8a; margin-bottom: 1rem; font-size: 0.88rem; }
     .enlace.fotos { display: inline-flex; gap: 0.3rem; align-items: center; margin-top: 0.2rem; font-size: 0.8rem; }
@@ -297,6 +308,8 @@ export class LoteFichaComponent implements OnInit, OnChanges {
   readonly plantillas = signal<PlantillaBascula[]>([]);
   readonly fotoObligatoria = signal(false);
   readonly fotosDe = signal<Pesaje | null>(null);
+  lecturas: { interior: LecturaTicket | null; exterior: LecturaTicket | null } = { interior: null, exterior: null };
+  readonly diferencias = signal<string[]>([]);
   readonly galeria = signal<{ id: number; titulo: string; ticket: boolean; url: string | null }[]>([]);
   fotosVisible = false;
 
@@ -404,6 +417,8 @@ export class LoteFichaComponent implements OnInit, OnChanges {
   nuevoPesaje(): void {
     const bascula = this.pesaje.value.bascula;
     this.pesaje.reset({ tipo: 'INGRESO', bascula, peso_cliente_tipo: 'NETO' });
+    this.lecturas = { interior: null, exterior: null };
+    this.diferencias.set([]);
     this.tipoPesaje = 'INGRESO';
     this.cambiarTipo();
     this.pesajeVisible = true;
@@ -420,6 +435,13 @@ export class LoteFichaComponent implements OnInit, OnChanges {
   guardarPesaje(): void {
     const l = this.lote();
     if (!l) return;
+    const p = this.pesaje.getRawValue();
+    const d = diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
+      { placa: p.placa, chofer_nombre: p.chofer_nombre }, l.productor?.nombre ?? null);
+    if (d.length && d.join('|') !== this.diferencias().join('|')) {
+      this.diferencias.set(d);           // segunda vez con las mismas diferencias: se guarda igual
+      return;
+    }
     this.guardando.set(true);
     const datos = this.pesaje.getRawValue() as DatosPesaje;
     this.servicio.agregarPesaje(l.id, datos).subscribe({

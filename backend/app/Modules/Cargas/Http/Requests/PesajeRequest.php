@@ -28,7 +28,7 @@ class PesajeRequest extends CatalogoRequest
             return;
         }
         // Ticket, placa y CI sin espacios; báscula y chofer con un solo espacio. Todo en mayúsculas.
-        foreach (['ticket' => '', 'placa' => '', 'chofer_ci' => '', 'bascula' => ' ', 'chofer_nombre' => ' '] as $c => $sep) {
+        foreach (['ticket' => '', 'numero_orden' => '', 'placa' => '', 'chofer_ci' => '', 'bascula' => ' ', 'chofer_nombre' => ' '] as $c => $sep) {
             if (isset($datos[$c]) && is_string($datos[$c])) {
                 $datos[$c] = mb_strtoupper(preg_replace('/\s+/u', $sep, trim($datos[$c]))) ?: null;
             }
@@ -54,6 +54,8 @@ class PesajeRequest extends CatalogoRequest
             "{$p}placa"         => ['nullable', 'string', 'max:15'],
             "{$p}chofer_nombre" => ["required_if:{$p}tipo,INGRESO", 'nullable', 'string', 'max:150'],
             "{$p}chofer_ci"     => ['nullable', 'string', 'max:15'],
+            "{$p}numero_orden"  => ['nullable', 'string', 'max:30'],
+            "{$p}fecha_ticket"  => ['nullable', 'date', 'before_or_equal:' . now()->addDay()->toDateString(), 'after:2020-01-01'],
             "{$p}foto_interior_id" => [self::fotoObligatoria() ? "required_with:{$p}peso_bruto_kg" : 'nullable', 'nullable', 'integer',
                                        self::fotoSuelta('TICKET_INTERIOR')],
             "{$p}foto_exterior_id" => ['nullable', 'integer', self::fotoSuelta('TICKET_EXTERIOR')],
@@ -85,6 +87,8 @@ class PesajeRequest extends CatalogoRequest
             "{$p}bascula.required_with"     => 'Indique la báscula.',
             "{$p}tara_kg.required_with"     => 'Indique la tara.',
             "{$p}peso_cliente_kg.gt"        => 'El peso del cliente debe ser mayor que cero; déjelo vacío si no lo declaró.',
+            "{$p}fecha_ticket.before_or_equal" => 'La fecha de la boleta no puede ser posterior a mañana: revísela.',
+            "{$p}fecha_ticket.after"        => 'La fecha de la boleta no es válida: revísela.',
             "{$p}foto_interior_id.required_with" => 'Suba la foto del ticket de la báscula interior: es el respaldo del pesaje.',
             "{$p}foto_interior_id.exists"   => 'La foto del ticket interior no es válida o ya está en otro pesaje: tómela de nuevo.',
             "{$p}foto_exterior_id.exists"   => 'La foto del ticket exterior no es válida o ya está en otro pesaje: tómela de nuevo.',

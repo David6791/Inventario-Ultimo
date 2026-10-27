@@ -60,15 +60,22 @@ class OcrTicketService
                     $tipo = 'texto';            // tickets con letras («A-004512»)
                 }
 
-                // Los pesos se leen con varios suavizados: luego se elige la combinación que cuadra.
-                $variantes = $tipo === 'numero' || $campo === 'placa'
-                    ? array_values(array_unique([(int) ($c['desenfoque'] ?? 1), 0, 2]))
-                    : [(int) ($c['desenfoque'] ?? 1)];
+                // Los pesos (y la placa) se leen con varios suavizados y los dos umbrales;
+                // luego se elige la combinación que cuadra. Los demás datos, con el umbral
+                // global y, si no salen bien, con el local (sombras).
+                $d = (int) ($c['desenfoque'] ?? 1);
+                $varios = $tipo === 'numero' || $campo === 'placa';
+                $variantes = $varios
+                    ? array_values(array_unique([[$d, 'otsu'], [0, 'otsu'], [2, 'otsu'], [1, 'local']], SORT_REGULAR))
+                    : [[$d, 'otsu'], [1, 'local']];
                 $lecturas = [];
-                foreach ($variantes as $d) {
-                    $l = $this->leerRecuadro($imagen, [...$c, 'desenfoque' => $d], $tipo);
+                foreach ($variantes as [$dv, $metodo]) {
+                    $l = $this->leerRecuadro($imagen, [...$c, 'desenfoque' => $dv, 'umbral' => $metodo], $tipo);
                     if ($l['valor'] !== null) {
                         $lecturas[] = $l;
+                        if (! $varios && $this->valido($campo, $l['valor'])) {
+                            break;
+                        }
                     }
                 }
 
@@ -93,8 +100,9 @@ class OcrTicketService
 
         $this->elegirCombinacion($candidatos, $resultado);
         $coherente = $this->revisarPesos($resultado, $avisos);
+        $fecha = $this->fechaHora($resultado['fecha']['valor'] ?? null, $resultado['hora']['valor'] ?? null);
 
-        return ['campos' => $resultado, 'coherente' => $coherente, 'avisos' => $avisos];
+        return ['campos' => $resultado, 'coherente' => $coherente, 'avisos' => $avisos, 'fecha_ticket' => $fecha];
     }
 
     // -----------------------------------------------------------------------
@@ -139,7 +147,7 @@ class OcrTicketService
 
         $recorte = imagecrop($img, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
         $escala = self::ALTO_RECORTE / max(1.0, $c['h'] * $H);       // el recuadro queda de ~96 px de alto
-        [$bin, $borde] = $this->preparar($recorte, (int) ($c['desenfoque'] ?? 1), $escala);
+        [$bin, $borde] = $this->preparar($recorte, (int) ($c['desenfoque'] ?? 1), $escala, $c['umbral'] ?? 'otsu');
         imagedestroy($recorte);
 
         // Recuadro original dentro de la imagen binaria.
@@ -162,11 +170,13 @@ class OcrTicketService
 
         $lista = match ($tipo) {
             'numero'  => '0123456789.,',
+            'nombre'  => null,      // con lista de caracteres Tesseract pega las palabras
+            'fecha'   => '0123456789/-:.',
             'digitos' => '0123456789:',   // con «:» para reconocer el de «N.º: 2140» y quitarlo
             default   => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/:.',
         };
         if ($dir = env('OCR_DEPURAR')) {            // carpeta para ver qué recibe Tesseract
-            imagepng($linea, rtrim($dir, '/') . "/{$c['campo']}-d" . ($c['desenfoque'] ?? 1) . '.png');
+            imagepng($linea, rtrim($dir, '/') . "/{$c['campo']}-d" . ($c['desenfoque'] ?? 1) . '-' . ($c['umbral'] ?? 'otsu') . '.png');
         }
         $palabras = $this->tesseract($linea, 7, $lista);
         imagedestroy($linea);
@@ -176,12 +186,18 @@ class OcrTicketService
 
         $texto = trim(implode(' ', array_column($palabras, 'texto')), " .,:-/");
         $confianza = (int) round(max(0, array_sum(array_column($palabras, 'conf')) / count($palabras)));
-        if (in_array($c['campo'], ['ticket', 'placa'], true)) {
-            $texto = preg_replace('/^[^:]*:\s*/', '', $texto);     // «N: 004512» → «004512»
+        if ($tipo === 'digitos') {
+            $texto = preg_replace('/^.*:\s*/u', '', $texto);        // «N. Orden: 458670» → «458670»
+        } elseif ($tipo !== 'numero') {
+            // La etiqueta impresa dentro del recuadro: «N: 004512», «Socio : QUISPE…»,
+            // «Fecha : 2026-10-23». Solo si antes de «:» no hay números (08:18:23 queda).
+            $texto = preg_replace('/^[^\d:]*:\s*/u', '', $texto);
         }
         $valor = match ($tipo) {
             'numero'  => $this->numero($texto, (int) ($c['decimales'] ?? 0)),
             'digitos' => preg_replace('/\D/', '', $texto) ?: null,
+            'nombre'  => $this->nombre($texto),
+            'fecha'   => trim(preg_replace('/[^\d\/\-:. ]/', '', $texto)) ?: null,
             default   => $this->limpiarTexto($texto) ?: null,
         };
         if ($c['campo'] === 'placa' && $valor !== null) {
@@ -284,7 +300,7 @@ class OcrTicketService
      *
      * @return array{0: GdImage, 1: int} la imagen y el borde agregado
      */
-    private function preparar(GdImage $recorte, int $desenfoque, float $escala): array
+    private function preparar(GdImage $recorte, int $desenfoque, float $escala, string $umbral = 'otsu'): array
     {
         $this->canalRojo($recorte);
         for ($i = 0; $i < max(0, min(4, $desenfoque)); $i++) {
@@ -295,25 +311,13 @@ class OcrTicketService
         $h = max(8, (int) round(imagesy($recorte) * $escala));
         $img = imagescale($recorte, $w, $h, IMG_BICUBIC);
 
-        // Histograma y umbral de Otsu.
-        $hist = array_fill(0, 256, 0);
         $grises = [];
         for ($yy = 0; $yy < $h; $yy++) {
             for ($xx = 0; $xx < $w; $xx++) {
-                $g = imagecolorat($img, $xx, $yy) & 0xFF;
-                $grises[] = $g;
-                $hist[$g]++;
+                $grises[] = imagecolorat($img, $xx, $yy) & 0xFF;
             }
         }
-        $total = $w * $h;
-        $umbral = $this->otsu($hist, $total);
-        $oscuros = 0;
-        foreach ($grises as $g) {
-            if ($g <= $umbral) {
-                $oscuros++;
-            }
-        }
-        $invertir = $oscuros > $total / 2;   // ticket o pantalla con fondo oscuro
+        $tinta = $umbral === 'local' ? $this->umbralLocal($grises, $w, $h) : $this->umbralOtsu($grises);
 
         $borde = 24;
         $salida = imagecreatetruecolor($w + 2 * $borde, $h + 2 * $borde);
@@ -323,8 +327,7 @@ class OcrTicketService
         $i = 0;
         for ($yy = 0; $yy < $h; $yy++) {
             for ($xx = 0; $xx < $w; $xx++) {
-                $tinta = ($grises[$i++] <= $umbral) !== $invertir;
-                if ($tinta) {
+                if ($tinta[$i++]) {
                     imagesetpixel($salida, $xx + $borde, $yy + $borde, $negro);
                 }
             }
@@ -350,6 +353,53 @@ class OcrTicketService
                 imagesetpixel($img, $x, $y, ($r << 16) | ($r << 8) | $r);
             }
         }
+    }
+
+    /** Umbral único (Otsu); si la mayor parte queda oscura, el fondo es oscuro y se invierte. */
+    private function umbralOtsu(array $grises): array
+    {
+        $hist = array_fill(0, 256, 0);
+        foreach ($grises as $g) {
+            $hist[$g]++;
+        }
+        $u = $this->otsu($hist, count($grises));
+        $tinta = array_map(fn ($g) => $g <= $u, $grises);
+        $oscuros = count(array_filter($tinta));
+        if ($oscuros > count($grises) / 2) {
+            $tinta = array_map(fn ($t) => ! $t, $tinta);
+        }
+
+        return $tinta;
+    }
+
+    private function umbralLocal(array $grises, int $w, int $h): array
+    {
+        // Umbral local (Bradley): cada punto se compara con el promedio de su
+        // vecindario, no con un umbral único. Así una sombra sobre parte del
+        // ticket (la foto del celular, la mano) no vuelve negra toda la zona.
+        $integral = array_fill(0, ($w + 1) * ($h + 1), 0);
+        for ($yy = 0; $yy < $h; $yy++) {
+            $fila = 0;
+            for ($xx = 0; $xx < $w; $xx++) {
+                $fila += $grises[$yy * $w + $xx];
+                $integral[($yy + 1) * ($w + 1) + $xx + 1] = $integral[$yy * ($w + 1) + $xx + 1] + $fila;
+            }
+        }
+        $r = max(8, (int) round(self::ALTO_RECORTE * 0.4));
+        $tinta = [];
+        for ($yy = 0; $yy < $h; $yy++) {
+            $y0 = max(0, $yy - $r); $y1 = min($h, $yy + $r + 1);
+            for ($xx = 0; $xx < $w; $xx++) {
+                $x0 = max(0, $xx - $r); $x1 = min($w, $xx + $r + 1);
+                $suma = $integral[$y1 * ($w + 1) + $x1] - $integral[$y0 * ($w + 1) + $x1]
+                      - $integral[$y1 * ($w + 1) + $x0] + $integral[$y0 * ($w + 1) + $x0];
+                $media = $suma / (($y1 - $y0) * ($x1 - $x0));
+                $g = $grises[$yy * $w + $xx];
+                $tinta[] = $g <= $media * 0.85 && $media - $g >= 20;
+            }
+        }
+
+        return $tinta;
     }
 
     private function otsu(array $hist, int $total): int
@@ -546,6 +596,62 @@ class OcrTicketService
         return null;
     }
 
+    /** Nombre en mayúsculas, sin signos sueltos ni letras aisladas al final («RUBEN V» de un visto). */
+    public function nombre(string $texto): ?string
+    {
+        $t = trim(preg_replace('/[^A-ZÑÁÉÍÓÚ ]+/u', ' ', mb_strtoupper($texto)));
+        $palabras = array_values(array_filter(preg_split('/\s+/', $t), fn ($p) => $p !== ''));
+        while ($palabras && mb_strlen(end($palabras)) === 1) {
+            array_pop($palabras);
+        }
+
+        return $palabras ? implode(' ', $palabras) : null;
+    }
+
+    /**
+     * Fecha y hora de la boleta en formato Y-m-d H:i:s: «2026-10-23» + «08:18:23»,
+     * o «23/10/2026 8:34:13» en un solo recuadro. Null si no se entiende.
+     */
+    public function fechaHora(?string $fecha, ?string $hora = null): ?string
+    {
+        $texto = trim(($fecha ?? '') . ' ' . ($hora ?? ''));
+        if ($texto === '') {
+            return null;
+        }
+        $d = $m = $a = null;
+        if (preg_match('/(\d{4})[\-\/.](\d{1,2})[\-\/.](\d{1,2})/', $texto, $x)) {
+            [$a, $m, $d] = [(int) $x[1], (int) $x[2], (int) $x[3]];
+        } elseif (preg_match('/(\d{1,2})[\-\/.](\d{1,2})[\-\/.](\d{2,4})/', $texto, $x)) {
+            [$d, $m, $a] = [(int) $x[1], (int) $x[2], (int) $x[3]];
+            $a += $a < 100 ? 2000 : 0;
+        }
+        if (! $a || ! checkdate($m, $d, $a)) {
+            return null;
+        }
+        $h = $i = $s = 0;
+        $resto = str_replace($x[0], ' ', $texto);
+        if (preg_match('/(\d{1,2}):(\d{2})(?::(\d{2}))?/', $resto, $t)) {
+            [$h, $i, $s] = [(int) $t[1], (int) $t[2], (int) ($t[3] ?? 0)];
+            if ($h > 23 || $i > 59 || $s > 59) {
+                $h = $i = $s = 0;
+            }
+        }
+
+        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $a, $m, $d, $h, $i, $s);
+    }
+
+    /** Si un dato leído tiene la forma esperada (para probar el otro umbral si no). */
+    private function valido(string $campo, mixed $v): bool
+    {
+        return match ($campo) {
+            'placa'           => $this->esPlaca($v),
+            'fecha'           => $this->fechaHora((string) $v) !== null,
+            'hora'            => is_string($v) && preg_match('/\d{1,2}:\d{2}/', $v) === 1,
+            'productor', 'chofer' => is_string($v) && count(explode(' ', $v)) >= 2,
+            default           => $v !== null && $v !== '',
+        };
+    }
+
     private function esPlaca(mixed $v): bool
     {
         return is_string($v) && preg_match('/^\d{3,4}[A-Z]{3}$/', $v) === 1;
@@ -652,13 +758,14 @@ class OcrTicketService
         }
         if ($b !== null && $t !== null && $n !== null) {
             $ok = abs(($b - $t) - $n) < 0.005;
-            if ($ok) {
+            $corregido = in_array('corregido', array_column(array_intersect_key($r, array_flip(['peso_bruto_kg', 'tara_kg', 'peso_neto_kg'])), 'metodo'), true);
+            if ($ok && ! $corregido) {
                 // La cuenta cuadra: es la mejor señal de que los tres se leyeron bien
                 // (con lista de caracteres, Tesseract suele informar confianza 0).
                 foreach (['peso_bruto_kg', 'tara_kg', 'peso_neto_kg'] as $k) {
                     $r[$k]['verificado'] = true;
                 }
-            } else {
+            } elseif (! $ok) {
                 $avisos[] = 'Bruto − tara no da el neto leído: revise los tres pesos contra el ticket.';
             }
 

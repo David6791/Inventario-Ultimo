@@ -11,10 +11,12 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputTextareaModule } from 'primeng/inputtextarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToastModule } from 'primeng/toast';
+import { DialogModule } from 'primeng/dialog';
+import { diferenciasBoleta } from '../core/diferencias';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
 import { formatoDinero } from '../../caja/core/dinero';
-import { Bocamina, DatosPesaje, DatosRecepcion, Mina, Opciones, PlantillaBascula, Productor, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
+import { Bocamina, DatosPesaje, DatosRecepcion, LecturaTicket, Mina, Opciones, PlantillaBascula, Productor, ProductorParecido, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
 import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { SeriesService } from '../core/services/series.service';
@@ -33,7 +35,7 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
   selector: 'app-recibir-lote',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, CheckboxModule,
-            DropdownModule, InputTextModule, InputTextareaModule, SelectButtonModule, ToastModule, PesajeCamposComponent,
+            DropdownModule, InputTextModule, InputTextareaModule, SelectButtonModule, ToastModule, DialogModule, PesajeCamposComponent,
             SacosCamposComponent],
   providers: [MessageService],
   template: `
@@ -89,7 +91,15 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
                   <span class="secundario">{{ p.ci ? 'CI ' + p.ci : p.nit ? 'NIT ' + p.nit : '' }} {{ p.cooperativa?.nombre ? '· ' + p.cooperativa.nombre : '' }}</span></div>
               </ng-template>
             </p-autoComplete>
-            <small *ngIf="productor() as p">{{ p.cooperativa?.nombre ?? 'Sin cooperativa' }}</small>
+            <small *ngIf="productor() as p">{{ p.cooperativa?.nombre ?? 'Sin cooperativa' }}
+              <span class="de-boleta" *ngIf="productorDeBoleta()"><i class="pi pi-camera"></i> elegido por la boleta</span></small>
+            <div class="parecidos" *ngIf="!productor() && parecidos().length">
+              <small>En la boleta: <b>{{ nombreLeido() }}</b>. ¿Es alguno de estos?</small>
+              <button type="button" class="parecido" *ngFor="let x of parecidos()" (click)="usarParecido(x)">
+                {{ x.nombre }} <span class="secundario">{{ x.ci ? 'CI ' + x.ci : '' }} · {{ x.parecido * 100 | number: '1.0-0' }} %</span></button>
+            </div>
+            <small class="aviso-texto" *ngIf="!productor() && nombreLeido() && !parecidos().length && buscado()">
+              «{{ nombreLeido() }}» no está en el catálogo de productores: búsquelo o regístrelo.</small>
           </div>
           <div class="campo span-3">
             <label for="mina">Mina <span class="opcional">(opcional)</span></label>
@@ -126,7 +136,7 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
 
     <section class="tarjeta tipo">
       <h3>Tipo de recepción</h3>
-      <p-selectButton [options]="tipos" [(ngModel)]="tipoRecepcion" (onChange)="cambiarTipo()" optionLabel="etiqueta" optionValue="valor"
+      <p-selectButton [options]="tipos" [allowEmpty]="false" [(ngModel)]="tipoRecepcion" (onChange)="cambiarTipo()" optionLabel="etiqueta" optionValue="valor"
                       [ngModelOptions]="{ standalone: true }" styleClass="tipos">
         <ng-template let-t pTemplate="item"><i [class]="t.icono"></i><span>{{ t.etiqueta }}</span></ng-template>
       </p-selectButton>
@@ -140,7 +150,8 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
           <label for="con-pesaje">El camión ya pasó por la báscula</label></span>
       </div>
       <app-pesaje-campos *ngIf="conPesaje || tipoRecepcion === 'MIXTA'" [grupo]="pesaje" [plantillas]="plantillas()"
-                         [fotoObligatoria]="!!opciones()?.foto_ticket_obligatoria" [sinSacos]="tipoRecepcion === 'MIXTA'" />
+                         [fotoObligatoria]="!!opciones()?.foto_ticket_obligatoria" [sinSacos]="tipoRecepcion === 'MIXTA'"
+                         (leido)="boletasLeidas($event)" />
       <p class="secundario" *ngIf="!conPesaje && tipoRecepcion === 'BASCULA'">Podrá agregar los pesajes después, desde la ficha del lote.</p>
     </section>
 
@@ -170,6 +181,17 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
           y el de sacos con sus pesadas. El bono de transporte es uno solo, por el camión completo.</p>
       </ng-container>
     </section>
+
+    <p-dialog [(visible)]="revisarVisible" header="Revise las diferencias con la boleta" [modal]="true" [style]="{ width: '34rem', maxWidth: '95vw' }"
+              [draggable]="false">
+      <p class="secundario">Lo leído de la boleta no coincide con lo anotado:</p>
+      <ul class="diferencias"><li *ngFor="let d of diferencias()"><i class="pi pi-exclamation-triangle"></i> {{ d }}</li></ul>
+      <p class="secundario">Corrija lo que haga falta, o guarde igual si lo anotado es lo correcto.</p>
+      <ng-template pTemplate="footer">
+        <p-button label="Volver a revisar" [text]="true" (onClick)="revisarVisible = false" />
+        <p-button label="Guardar igual" icon="pi pi-check" severity="warning" (onClick)="revisarVisible = false; guardar(true)" />
+      </ng-template>
+    </p-dialog>
 
     <div class="pie">
       <p-button label="Cancelar" [text]="true" routerLink="/cargas/lotes" />
@@ -201,6 +223,14 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
     .reparto.error .igual strong { color: #b91c1c; }
     @media (max-width: 560px) { .reparto { grid-template-columns: 1fr; } }
     .lote-sacos { margin-bottom: 0.6rem; }
+    .parecidos { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.3rem; }
+    .parecido { text-align: left; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 6px; padding: 0.35rem 0.6rem;
+                cursor: pointer; font-size: 0.85rem; }
+    .parecido:hover { background: #dbeafe; }
+    .de-boleta { color: #047857; margin-left: 0.4rem; }
+    .aviso-texto { color: #b45309; }
+    .diferencias { list-style: none; padding: 0; margin: 0.5rem 0 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
+    .diferencias li { display: flex; gap: 0.45rem; color: #92400e; font-size: 0.9rem; }
   `],
 })
 export class RecibirLoteComponent implements OnInit {
@@ -226,6 +256,13 @@ export class RecibirLoteComponent implements OnInit {
   materialSacos: string | null = null;
   observacionesSacos: string | null = null;
   readonly plantillas = signal<PlantillaBascula[]>([]);
+  private lecturas: { interior: LecturaTicket | null; exterior: LecturaTicket | null } = { interior: null, exterior: null };
+  readonly nombreLeido = signal<string | null>(null);
+  readonly parecidos = signal<ProductorParecido[]>([]);
+  readonly buscado = signal(false);
+  readonly productorDeBoleta = signal(false);
+  readonly diferencias = signal<string[]>([]);
+  revisarVisible = false;
   readonly tipos = [
     { valor: 'BASCULA', etiqueta: 'Báscula', icono: 'pi pi-truck' },
     { valor: 'SACOS', etiqueta: 'Solo sacos', icono: 'pi pi-box' },
@@ -298,6 +335,7 @@ export class RecibirLoteComponent implements OnInit {
 
   elegirProductor(p: Productor | null): void {
     this.productor.set(p);
+    this.productorDeBoleta.set(false);
   }
 
   cargarBocaminas(): void {
@@ -318,8 +356,49 @@ export class RecibirLoteComponent implements OnInit {
     return true;
   }
 
-  guardar(): void {
+  /**
+   * Boletas leídas: si traen el productor y todavía no se eligió, se busca en
+   * el catálogo; con un parecido alto se elige solo, si no se ofrecen opciones.
+   */
+  boletasLeidas(l: { interior: LecturaTicket | null; exterior: LecturaTicket | null }): void {
+    this.lecturas = l;
+    const nombre = l.interior?.campos.productor?.valor ?? l.exterior?.campos.productor?.valor;
+    const texto = nombre ? String(nombre) : null;
+    if (texto === this.nombreLeido()) return;
+    this.nombreLeido.set(texto);
+    this.parecidos.set([]);
+    this.buscado.set(false);
+    if (!texto || this.serie()?.origen !== 'COMPRA' || this.productor()) return;
+    this.servicio.productoresParecidos(texto).subscribe((lista) => {
+      this.buscado.set(true);
+      if (lista.length && lista[0].parecido >= 0.75 && (lista.length === 1 || lista[1].parecido < lista[0].parecido - 0.15)) {
+        this.usarParecido(lista[0]);
+      } else {
+        this.parecidos.set(lista);
+      }
+    });
+  }
+
+  usarParecido(x: ProductorParecido): void {
+    const p = { id: x.id, nombre: x.nombre, ci: x.ci, cooperativa: x.cooperativa, activo: true } as unknown as Productor;
+    this.productorTexto = p;
+    this.elegirProductor(p);
+    this.productorDeBoleta.set(true);
+    this.parecidos.set([]);
+  }
+
+  guardar(revisado = false): void {
     const v = this.form.getRawValue();
+    if (!revisado && this.tipoRecepcion !== 'SACOS') {
+      const p = this.pesaje.getRawValue();
+      const d = diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
+        { placa: p.placa, chofer_nombre: p.chofer_nombre }, this.productor()?.nombre ?? null);
+      if (d.length) {
+        this.diferencias.set(d);
+        this.revisarVisible = true;
+        return;
+      }
+    }
     const datos: DatosRecepcion = {
       serie_id: v.serie_id!, almacen_id: v.almacen_id!,
       productor_id: this.serie()?.origen === 'COMPRA' ? this.productor()?.id ?? null : null,

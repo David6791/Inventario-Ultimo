@@ -239,6 +239,8 @@ export interface Pesaje {
   /** Mixta: kg de sacos que van en el otro lote y se restan del neto del ticket. */
   descuento_sacos_kg?: string;
   pesaje_viaje_id?: number | null;
+  numero_orden?: string | null;
+  fecha_ticket?: string | null;
   viaje?: { id: number; lote_id: number; ticket: string | null; bascula: string; lote?: { id: number; codigo: string } } | null;
   fotos?: FotoRecepcion[];
   sacos?: PesadaSaco[];
@@ -324,6 +326,8 @@ export interface DatosPesaje {
   chofer_ci: string | null;
   foto_interior_id?: number | null;
   foto_exterior_id?: number | null;
+  numero_orden?: string | null;
+  fecha_ticket?: string | null;
 }
 
 export interface DatosPesadaSaco { sacos: number; peso_kg: number; foto_id: number; }
@@ -355,7 +359,7 @@ export interface DatosRecepcion {
 export type TipoRecepcion = 'BASCULA' | 'SACOS' | 'MIXTA';
 export type ModalidadPesaje = 'BASCULA' | 'SACOS';
 export type TipoFoto = 'TICKET_INTERIOR' | 'TICKET_EXTERIOR' | 'BALANZA_MANUAL';
-export type CampoTicket = 'ticket' | 'peso_bruto_kg' | 'tara_kg' | 'peso_neto_kg' | 'placa' | 'fecha';
+export type CampoTicket = 'ticket' | 'peso_bruto_kg' | 'tara_kg' | 'peso_neto_kg' | 'placa' | 'numero_orden' | 'productor' | 'chofer' | 'fecha' | 'hora';
 
 /** Recuadro de un dato en el ticket enderezado, en fracciones (0–1). */
 export interface RecuadroPlantilla {
@@ -378,7 +382,9 @@ export interface PlantillaBascula {
   tiene_muestra: boolean;
 }
 
-export interface CampoDisponible { campo: CampoTicket; etiqueta: string; tipo: 'numero' | 'digitos' | 'texto'; }
+export interface CampoDisponible { campo: CampoTicket; etiqueta: string; tipo: 'numero' | 'digitos' | 'texto' | 'nombre' | 'fecha'; }
+
+export interface ProductorParecido { id: number; nombre: string; ci: string | null; parecido: number; cooperativa: { id: number; nombre: string | null } | null; }
 
 export interface LecturaCampo { texto: string; valor: number | string | null; confianza: number; metodo: 'recuadro' | 'etiqueta' | 'calculado' | 'corregido'; verificado?: boolean; }
 
@@ -386,6 +392,8 @@ export interface LecturaTicket {
   campos: Partial<Record<CampoTicket, LecturaCampo>>;
   coherente: boolean | null;
   avisos: string[];
+  /** Fecha y hora de la boleta (Y-m-d H:i:s), si se pudo leer. */
+  fecha_ticket?: string | null;
 }
 
 export interface FotoRecepcion {

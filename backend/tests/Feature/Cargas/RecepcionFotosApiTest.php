@@ -271,4 +271,45 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertTrue(Pesaje::find($sacos['pesajes'][0]['id'])->anulado);
         $this->reglasDiferidas();
     }
+
+    // --- Datos para identificar la carga --------------------------------------
+
+    public function test_numero_de_orden_y_fecha_de_la_boleta_quedan_en_el_pesaje(): void
+    {
+        $interior = $this->foto('TICKET_INTERIOR');
+        $lote = $this->postJson('/api/cargas/lotes', $this->base(['pesaje' => $this->camion([
+            'foto_interior_id' => $interior['id'], 'numero_orden' => ' 458 670 ', 'fecha_ticket' => '2026-10-23T08:18:23'])]))
+            ->assertCreated()->json('data');
+        $this->assertSame('458670', $lote['pesajes'][0]['numero_orden']);
+        $this->assertSame('2026-10-23 08:18:23', \Illuminate\Support\Carbon::parse($lote['pesajes'][0]['fecha_ticket'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s'));
+
+        $otra = $this->foto('TICKET_INTERIOR');
+        $this->postJson('/api/cargas/lotes', $this->base(['pesaje' => $this->camion([
+            'ticket' => '7009', 'foto_interior_id' => $otra['id'], 'fecha_ticket' => now()->addDays(3)->toDateString()])]))
+            ->assertStatus(422)->assertJsonValidationErrors('pesaje.fecha_ticket');
+    }
+
+    public function test_productores_parecidos_al_nombre_de_la_boleta(): void
+    {
+        Productor::create(['tipo' => 'PARTICULAR', 'nombre' => 'Rubén Quispe Yapu', 'ci' => '2000002']);
+        Productor::create(['tipo' => 'PARTICULAR', 'nombre' => 'Rosa Choque', 'ci' => '3000003']);
+        Sanctum::actingAs($this->recepcion);
+
+        $r = $this->getJson('/api/cargas/productores/parecidos?nombre=' . urlencode('QUISPE YAPU RUBEN'))->assertOk()->json('data');
+        $this->assertSame('Rubén Quispe Yapu', $r[0]['nombre']);
+        $this->assertGreaterThan(0.9, $r[0]['parecido']);
+        $this->assertNotContains('Rosa Choque', array_column($r, 'nombre'));
+    }
+
+    public function test_lectura_de_nombres_fechas_y_placas(): void
+    {
+        $ocr = app(OcrTicketService::class);
+        $this->assertSame('2026-10-23 08:18:23', $ocr->fechaHora('2026-10-23', '08:18:23'));
+        $this->assertSame('2026-10-23 08:34:13', $ocr->fechaHora('23/10/20268:34:13'));
+        $this->assertSame('2026-10-23 00:00:00', $ocr->fechaHora('23-10-26'));
+        $this->assertNull($ocr->fechaHora('31/02/2026'));
+        $this->assertSame('QUISPE YAPU RUBEN', $ocr->nombre('‘QUISPE YAPU RUBEN V'));
+        $this->assertSame('1175PFT', $ocr->placa('TI7SPFTC'));
+        $this->assertSame('2345KLM', $ocr->placa('2345-KLM'));
+    }
 }

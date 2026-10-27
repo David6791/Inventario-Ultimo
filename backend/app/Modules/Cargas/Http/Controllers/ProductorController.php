@@ -36,6 +36,43 @@ class ProductorController extends Controller
         return response()->json($pagina);
     }
 
+    /**
+     * Productores cuyo nombre se parece al leído de una boleta. Las palabras se
+     * comparan sin acentos y en cualquier orden («QUISPE YAPU RUBEN» encuentra a
+     * «Rubén Quispe Yapu»), con similitud de trigramas (pg_trgm).
+     */
+    public function parecidos(Request $request): JsonResponse
+    {
+        $request->validate(['nombre' => ['required', 'string', 'min:3', 'max:150']]);
+        $palabras = preg_split('/\s+/', mb_strtolower(trim($request->input('nombre'))));
+        sort($palabras);
+
+        $filas = \Illuminate\Support\Facades\DB::select(<<<'SQL'
+            with p as (
+                select id, nombre, ci, cooperativa_id,
+                       array_to_string(array(
+                           select w from unnest(regexp_split_to_array(lower(public.inmutable_unaccent(nombre)), '\s+')) w
+                            where w <> '' order by w), ' ') as ordenado
+                  from cargas.productor
+                 where activo
+            )
+            select id, nombre, ci, cooperativa_id,
+                   round(public.similarity(ordenado, lower(public.inmutable_unaccent(?)))::numeric, 2) as parecido
+              from p
+             where public.similarity(ordenado, lower(public.inmutable_unaccent(?))) >= 0.3
+             order by parecido desc, nombre
+             limit 5
+        SQL, [implode(' ', $palabras), implode(' ', $palabras)]);
+
+        $cooperativas = \App\Modules\Cargas\Models\Cooperativa::whereIn('id', array_filter(array_column($filas, 'cooperativa_id')))
+            ->pluck('nombre', 'id');
+
+        return response()->json(['data' => array_map(fn ($f) => [
+            'id' => $f->id, 'nombre' => $f->nombre, 'ci' => $f->ci, 'parecido' => (float) $f->parecido,
+            'cooperativa' => $f->cooperativa_id ? ['id' => $f->cooperativa_id, 'nombre' => $cooperativas[$f->cooperativa_id] ?? null] : null,
+        ], $filas)]);
+    }
+
     public function show(Productor $productor): JsonResponse
     {
         return response()->json(['data' => $productor->load('cooperativa:id,nombre')]);
