@@ -15,3 +15,4 @@
 /data/
 # Producción con Cloudflare (token del túnel y credenciales)
 /docker-activos/.env.ingenio
+/docker-activos/.env.ingenio-pruebas
