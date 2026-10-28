@@ -14,6 +14,7 @@ use App\Modules\Cargas\Services\OcrTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -351,5 +352,67 @@ class RecepcionFotosApiTest extends TestCase
         $p = $this->postJson('/api/cargas/lotes', $this->base(['pesaje' => $this->camion([
             'ticket' => 'PV-9', 'peso_bruto_kg' => 20000, 'tara_kg' => 8000, 'peso_cliente_kg' => 12080])]))->assertCreated()->json('data');
         $this->assertSame('EMPRESA', $p['pesajes'][0]['criterio_peso']);
+    }
+
+    // --- Lectura con Claude --------------------------------------------------
+
+    private function respuestaClaude(array $entrada): array
+    {
+        return ['id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-5-5',
+                'content' => [['type' => 'tool_use', 'id' => 'tu_1', 'name' => 'registrar_boleta', 'input' => $entrada]],
+                'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 1650, 'output_tokens' => 210]];
+    }
+
+    public function test_lectura_con_claude_llena_los_campos_sin_plantilla(): void
+    {
+        config(['services.anthropic.key' => 'sk-prueba']);
+        Http::fake(['api.anthropic.com/*' => Http::response($this->respuestaClaude([
+            'balanza' => 'Victoria', 'ticket' => '0010970', 'numero_orden' => '552', 'peso_bruto_kg' => 18660, 'tara_kg' => 7690,
+            'peso_neto_kg' => 10970, 'placa' => '2261-DKE', 'productor' => 'juan  perez', 'chofer' => 'pedro mamani',
+            'fecha' => '2026-10-20', 'hora' => '09:15:00', 'dudosos' => ['tara_kg'], 'notas' => null,
+        ]))]);
+
+        Sanctum::actingAs($this->recepcion);
+        $this->getJson('/api/cargas/opciones')->assertOk()->assertJsonPath('data.lector_claude', true);
+
+        $r = $this->post('/api/cargas/fotos', ['tipo' => 'TICKET_INTERIOR', 'lector' => 'claude',
+            'imagen' => UploadedFile::fake()->image('t.jpg', 800, 1100)], ['Accept' => 'application/json'])->assertCreated();
+        $r->assertJsonPath('data.bascula', 'VICTORIA')
+          ->assertJsonPath('data.lectura.lector', 'claude')
+          ->assertJsonPath('data.lectura.campos.ticket.valor', '0010970')
+          ->assertJsonPath('data.lectura.campos.peso_neto_kg.valor', 10970)
+          ->assertJsonPath('data.lectura.campos.placa.valor', '2261DKE')
+          ->assertJsonPath('data.lectura.campos.productor.valor', 'JUAN PEREZ')
+          ->assertJsonPath('data.lectura.campos.tara_kg.confianza', 50)
+          ->assertJsonPath('data.lectura.coherente', true)
+          ->assertJsonPath('data.lectura.uso.entrada', 1650);
+        $this->assertArrayNotHasKey('verificado', $r->json('data.lectura.campos.tara_kg'));
+
+        Http::assertSent(fn ($req) => $req->hasHeader('x-api-key', 'sk-prueba')
+            && $req['tool_choice']['name'] === 'registrar_boleta'
+            && $req['messages'][0]['content'][0]['source']['media_type'] === 'image/jpeg');
+    }
+
+    public function test_si_claude_falla_la_foto_se_guarda_y_se_avisa(): void
+    {
+        config(['services.anthropic.key' => 'sk-prueba']);
+        Http::fake(['api.anthropic.com/*' => Http::response(['type' => 'error', 'error' => ['type' => 'billing_error',
+            'message' => 'Your credit balance is too low']], 400)]);
+
+        Sanctum::actingAs($this->recepcion);
+        $r = $this->post('/api/cargas/fotos', ['tipo' => 'TICKET_INTERIOR', 'lector' => 'claude',
+            'imagen' => UploadedFile::fake()->image('t.jpg', 800, 1100)], ['Accept' => 'application/json'])->assertCreated();
+        $this->assertStringContainsString('credit balance', $r->json('data.lectura.avisos.0'));
+        $this->assertSame([], $r->json('data.lectura.campos'));
+    }
+
+    public function test_sin_clave_claude_no_se_ofrece(): void
+    {
+        config(['services.anthropic.key' => null]);
+        Sanctum::actingAs($this->recepcion);
+        $this->getJson('/api/cargas/opciones')->assertOk()->assertJsonPath('data.lector_claude', false);
+        $this->post('/api/cargas/fotos', ['tipo' => 'BALANZA_MANUAL', 'lector' => 'claude',
+            'imagen' => UploadedFile::fake()->image('t.jpg', 600, 800)], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('lector');
     }
 }

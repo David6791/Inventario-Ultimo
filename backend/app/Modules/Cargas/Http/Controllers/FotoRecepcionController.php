@@ -26,9 +26,12 @@ class FotoRecepcionController extends Controller
     {
         $plantilla = $request->filled('plantilla_id') ? PlantillaBascula::find($request->integer('plantilla_id')) : null;
         $foto = $this->fotos->subir($request->file('imagen'), $request->file('original'), $request->input('tipo'),
-            $plantilla, $request->user());
+            $plantilla, $request->user(), $request->input('lector') ?: 'tesseract');
 
-        return response()->json(['data' => [...$foto->toArray(), 'bascula' => $plantilla?->bascula]], 201);
+        // La báscula: la de la plantilla elegida o, con Claude, la que dice la boleta.
+        $bascula = $plantilla?->bascula ?? ($foto->lectura['bascula'] ?? null);
+
+        return response()->json(['data' => [...$foto->toArray(), 'bascula' => $bascula]], 201);
     }
 
     public function imagen(Request $request, RecepcionFoto $foto): BinaryFileResponse

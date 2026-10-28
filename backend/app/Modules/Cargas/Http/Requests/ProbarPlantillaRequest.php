@@ -11,6 +11,7 @@ class ProbarPlantillaRequest extends PlantillaBasculaRequest
 
         return [
             'imagen' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:8192'],
+            'lector' => ['nullable', \Illuminate\Validation\Rule::in(\App\Modules\Cargas\Services\FotoRecepcionService::LECTORES)],
             ...collect($r)->only(['campos', 'campos.*.campo', 'campos.*.x', 'campos.*.y', 'campos.*.w', 'campos.*.h',
                                    'campos.*.etiqueta', 'campos.*.decimales', 'campos.*.desenfoque', 'campos.*.letras'])->all(),
         ];

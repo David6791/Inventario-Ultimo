@@ -20,6 +20,7 @@ class SubirFotoRequest extends CatalogoRequest
             'tipo'         => ['required', Rule::in(RecepcionFoto::TIPOS)],
             'imagen'       => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:8192'],
             'original'     => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:12288'],
+            'lector'       => ['nullable', Rule::in(\App\Modules\Cargas\Services\FotoRecepcionService::LECTORES), 'prohibited_if:tipo,BALANZA_MANUAL'],
             'plantilla_id' => ['nullable', 'integer', 'prohibited_if:tipo,BALANZA_MANUAL',
                                Rule::exists(PlantillaBascula::class, 'id')->where('activa', true)],
         ];

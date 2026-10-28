@@ -5,12 +5,12 @@ import { ButtonModule } from 'primeng/button';
 import { DropdownModule } from 'primeng/dropdown';
 import { mensajeDeError } from '../../core/errores';
 import { Esquinas, abrirFoto, aBlob, detectarEsquinas, enderezar, proporcionDe, reducir } from '../../core/imagen';
-import { CampoTicket, FotoRecepcion, LecturaTicket, PlantillaBascula, TipoFoto } from '../../core/models/cargas.model';
+import { CampoTicket, FotoRecepcion, LecturaTicket, LectorBoleta, PlantillaBascula, TipoFoto } from '../../core/models/cargas.model';
 import { RecepcionService } from '../../core/services/recepcion.service';
 import { EscanerService } from '../../core/services/escaner.service';
 import { EsquinasFotoComponent } from './esquinas-foto.component';
 
-export interface TicketLeido { foto: FotoRecepcion; plantilla: PlantillaBascula | null; lectura: LecturaTicket | null; }
+export interface TicketLeido { foto: FotoRecepcion; plantilla: PlantillaBascula | null; lectura: LecturaTicket | null; bascula: string | null; }
 
 const NOMBRES: Record<CampoTicket, string> = {
   ticket: 'Ticket', peso_bruto_kg: 'Bruto', tara_kg: 'Tara', peso_neto_kg: 'Neto', placa: 'Placa', fecha: 'Fecha',
@@ -21,7 +21,8 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
 /**
  * Foto de un ticket de báscula: se toma (o se elige), se ajustan las cuatro
  * esquinas, se endereza a la proporción de la plantilla de esa balanza y se
- * sube. El servidor la lee con Tesseract y devuelve los datos para llenar el
+ * sube. El servidor la lee con Tesseract (recuadros de la plantilla) o con
+ * Claude (la boleta entera, sin plantilla) y devuelve los datos para llenar el
  * formulario; la persona los revisa. La foto queda de respaldo en el pesaje.
  */
 @Component({
@@ -34,7 +35,7 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
         <span class="titulo"><i class="pi pi-camera"></i> {{ titulo() }}
           <span class="obligatoria" *ngIf="obligatoria()">obligatoria</span></span>
         <p-dropdown *ngIf="plantillasDelUso().length" [options]="plantillasDelUso()" [(ngModel)]="plantillaId" optionLabel="nombre"
-                    optionValue="id" placeholder="Balanza" appendTo="body" [disabled]="subiendo()" styleClass="balanza"
+                    optionValue="id" [placeholder]="lector() === 'claude' ? 'Balanza (opcional)' : 'Balanza'" appendTo="body" [disabled]="subiendo()" styleClass="balanza"
                     (onChange)="recordarPlantilla()" [ariaLabel]="'Balanza del ' + titulo()" />
       </div>
 
@@ -56,10 +57,11 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
         <app-esquinas-foto [foto]="f" [(esquinas)]="esquinas" />
         <div class="acciones">
           <p-button label="Otra foto" [text]="true" icon="pi pi-refresh" (onClick)="cancelar()" [disabled]="subiendo()" />
-          <p-button [label]="plantilla() ? 'Enderezar y leer' : 'Enderezar y subir'" icon="pi pi-check" [loading]="subiendo()"
-                    (onClick)="subir()" />
+          <p-button [label]="lector() === 'claude' ? (subiendo() ? 'Leyendo con Claude…' : 'Enderezar y leer con Claude')
+                             : plantilla() ? 'Enderezar y leer' : 'Enderezar y subir'"
+                    icon="pi pi-check" [loading]="subiendo()" (onClick)="subir()" />
         </div>
-        <small class="secundario" *ngIf="!plantilla()">Sin plantilla de balanza la foto queda de respaldo pero los datos se anotan a mano.</small>
+        <small class="secundario" *ngIf="!plantilla() && lector() === 'tesseract'">Sin plantilla de balanza la foto queda de respaldo pero los datos se anotan a mano.</small>
       </ng-container>
 
       <!-- 3. Leída -->
@@ -68,6 +70,13 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
           <img [src]="vista()" alt="Ticket enderezado" *ngIf="vista()" (click)="ampliado.set(!ampliado())" [class.ampliado]="ampliado()" />
           <div class="datos">
             <ng-container *ngIf="l.lectura as lec; else sinLectura">
+              <div class="lector" [class.claude]="lec.lector === 'claude'">
+                <i class="pi" [class.pi-sparkles]="lec.lector === 'claude'" [class.pi-th-large]="lec.lector !== 'claude'"></i>
+                {{ lec.lector === 'claude' ? 'Leído por Claude' : 'Leído por Tesseract' }}
+                <span *ngIf="lec.segundos">· {{ lec.segundos.toLocaleString('es-BO') }} s</span>
+                <span *ngIf="lec.uso" [title]="'Tokens: ' + lec.uso.entrada + ' de entrada y ' + lec.uso.salida + ' de salida'">
+                  · {{ (lec.uso.entrada + lec.uso.salida).toLocaleString('es-BO') }} tokens</span>
+              </div>
               <div class="dato" *ngFor="let d of datosLeidos()" [class.dudoso]="d.dudoso">
                 <span class="nombre">{{ d.nombre }}</span>
                 <span class="valor codigo">{{ d.valor ?? '—' }}</span>
@@ -111,6 +120,8 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
     .dato .nombre { color: var(--text-color-secondary, #6b7280); font-size: 0.78rem; }
     .dato .valor { font-weight: 650; }
     .dato .conf { font-size: 0.7rem; color: #047857; }
+    .lector { font-size: 0.72rem; color: var(--text-color-secondary, #6b7280); display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; }
+    .lector.claude { color: #9a3412; }
     .dato.dudoso .valor { color: #b45309; }
     .dato.dudoso .conf { color: #b45309; }
     .aviso { display: flex; gap: 0.35rem; font-size: 0.8rem; color: #92400e; }
@@ -125,6 +136,7 @@ export class FotoTicketComponent implements OnInit, OnDestroy {
   readonly tipo = input.required<TipoFoto>();
   readonly plantillas = input<PlantillaBascula[]>([]);
   readonly obligatoria = input(false);
+  readonly lector = input<LectorBoleta>('tesseract');
   readonly listo = output<TicketLeido>();
   readonly quitado = output<void>();
 
@@ -170,8 +182,9 @@ export class FotoTicketComponent implements OnInit, OnDestroy {
         valor: c.valor === null ? null : numero ? (c.valor as number).toLocaleString('es-BO') : c.valor,
         confianza: c.confianza,
         metodo: c.valor === null ? 'no se leyó' : c.metodo === 'calculado' ? 'calculado' : c.metodo === 'corregido' ? 'corregido'
-          : c.verificado ? 'cuadra' : c.confianza > 0 ? `${c.confianza} %` : 'revisar',
-        dudoso: !c.verificado && (c.valor === null || c.metodo !== 'recuadro' || c.confianza < 70),
+          : c.verificado ? 'cuadra' : c.metodo === 'claude' ? (c.confianza >= 90 ? 'claude' : 'revisar')
+          : c.confianza > 0 ? `${c.confianza} %` : 'revisar',
+        dudoso: !c.verificado && (c.valor === null || (c.metodo !== 'recuadro' && c.metodo !== 'claude') || c.confianza < 70),
       };
     });
   }
@@ -238,12 +251,12 @@ export class FotoTicketComponent implements OnInit, OnDestroy {
       const recto = enderezar(c, this.esquinas, plantilla?.proporcion ?? proporcionDe(this.esquinas));
       if (this.origen === 'escaner') this.guardarEsquinas(c);
       const [imagen, original] = await Promise.all([aBlob(recto), aBlob(reducir(c, 1600), 0.8)]);
-      this.servicio.subirFoto(this.tipo(), imagen, original, plantilla?.id ?? null).subscribe({
+      this.servicio.subirFoto(this.tipo(), imagen, original, plantilla?.id ?? null, this.lector()).subscribe({
         next: (foto) => {
           this.subiendo.set(false);
           this.foto.set(null);
           this.ponerVista(URL.createObjectURL(imagen));
-          const r: TicketLeido = { foto, plantilla, lectura: foto.lectura ?? null };
+          const r: TicketLeido = { foto, plantilla, lectura: foto.lectura ?? null, bascula: foto.bascula ?? plantilla?.bascula ?? null };
           this.leido.set(r);
           this.listo.emit(r);
         },

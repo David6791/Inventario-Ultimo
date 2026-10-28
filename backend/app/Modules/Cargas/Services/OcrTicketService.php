@@ -869,7 +869,7 @@ class OcrTicketService
     }
 
     /** Bruto − tara = neto. Si falta uno de los tres y hay los otros dos, se calcula. */
-    private function revisarPesos(array &$r, array &$avisos): ?bool
+    public function revisarPesos(array &$r, array &$avisos): ?bool
     {
         $b = $r['peso_bruto_kg']['valor'] ?? null;
         $t = $r['tara_kg']['valor'] ?? null;

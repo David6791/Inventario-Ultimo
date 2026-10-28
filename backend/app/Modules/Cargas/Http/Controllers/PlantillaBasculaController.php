@@ -65,8 +65,14 @@ class PlantillaBasculaController extends Controller
     public function probar(ProbarPlantillaRequest $request): JsonResponse
     {
         $datos = $request->datos();
+        $ruta = $request->file('imagen')->getRealPath();
+        $inicio = microtime(true);
+        $lectura = $request->input('lector') === 'claude'
+            ? $this->fotos->leerConClaude($ruta, null)
+            : [...$this->fotos->leer($ruta, $datos['campos']), 'segundos' => null];
+        $lectura['segundos'] ??= round(microtime(true) - $inicio, 1);
 
-        return response()->json(['data' => $this->fotos->leer($request->file('imagen')->getRealPath(), $datos['campos'])]);
+        return response()->json(['data' => $lectura]);
     }
 
     private function guardarMuestra(PlantillaBasculaRequest $request, PlantillaBascula $p): void

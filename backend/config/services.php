@@ -35,6 +35,14 @@ return [
         ],
     ],
 
+    // Lectura de boletas con la API de Claude (recepción de cargas). Sin clave, no se ofrece.
+    'anthropic' => [
+        'key'     => env('ANTHROPIC_API_KEY'),
+        'modelo'  => env('ANTHROPIC_MODELO', 'claude-sonnet-5-5'),
+        'url'     => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1/messages'),
+        'espera'  => (int) env('ANTHROPIC_ESPERA', 60),
+    ],
+
     // Lectura de tickets de báscula (recepción de cargas).
     'tesseract' => [
         'bin'    => env('TESSERACT_BIN', 'tesseract'),

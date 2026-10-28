@@ -55,6 +55,8 @@ class OpcionesController extends Controller
             // Dónde recibe carga este usuario (con una sola asignada, el formulario no pide sede).
             'sedes_recepcion' => app(\App\Modules\Cargas\Services\SedeRecepcionService::class)->sedesDe($usuario),
             'sede_recepcion_fija' => app(\App\Modules\Cargas\Services\SedeRecepcionService::class)->sedeFija($usuario),
+            // Lectura de boletas con Claude: solo si el servidor tiene la clave.
+            'lector_claude' => app(\App\Modules\Cargas\Services\ClaudeTicketService::class)->disponible(),
             'limite_promedio_peso_kg' => (float) (app(\App\Modules\Cargas\Services\ParametroService::class)
                 ->vigente('LIMITE_PROMEDIO_PESO_KG')?->valor ?? 100),
         ]]);

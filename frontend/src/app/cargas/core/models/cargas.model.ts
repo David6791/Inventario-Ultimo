@@ -39,6 +39,8 @@ export interface Opciones {
   sede_recepcion_fija?: number | null;
   /** Hasta cuántos kg de diferencia (nuestra menor que la del cliente) se promedia. */
   limite_promedio_peso_kg?: number;
+  /** El servidor tiene la clave de la API de Claude para leer boletas. */
+  lector_claude?: boolean;
 }
 
 export type TipoProductor = 'COOPERATIVISTA' | 'PARTICULAR' | 'EMPRESA' | 'INGENIO';
@@ -397,7 +399,10 @@ export interface CampoDisponible { campo: CampoTicket; etiqueta: string; tipo: '
 
 export interface ProductorParecido { id: number; nombre: string; ci: string | null; parecido: number; cooperativa: { id: number; nombre: string | null } | null; }
 
-export interface LecturaCampo { texto: string; valor: number | string | null; confianza: number; metodo: 'recuadro' | 'etiqueta' | 'calculado' | 'corregido'; verificado?: boolean; }
+export interface LecturaCampo { texto: string; valor: number | string | null; confianza: number; metodo: 'recuadro' | 'etiqueta' | 'calculado' | 'corregido' | 'claude'; verificado?: boolean; }
+
+/** Quién lee la boleta: Tesseract en el servidor (con plantilla) o Claude por la API. */
+export type LectorBoleta = 'tesseract' | 'claude';
 
 export interface LecturaTicket {
   campos: Partial<Record<CampoTicket, LecturaCampo>>;
@@ -405,6 +410,13 @@ export interface LecturaTicket {
   avisos: string[];
   /** Fecha y hora de la boleta (Y-m-d H:i:s), si se pudo leer. */
   fecha_ticket?: string | null;
+  lector?: LectorBoleta;
+  /** Con Claude: modelo, tiempo y tokens usados. */
+  modelo?: string;
+  segundos?: number | null;
+  uso?: { entrada: number; salida: number };
+  /** Con Claude: la balanza que dice la boleta. */
+  bascula?: string | null;
 }
 
 export interface FotoRecepcion {

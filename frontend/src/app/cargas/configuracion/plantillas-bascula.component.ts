@@ -14,6 +14,8 @@ import { ESTILOS_CARGAS } from '../core/estilos';
 import { Esquinas, abrirFoto, aBlob, detectarEsquinas, enderezar, proporcionDe } from '../core/imagen';
 import { CampoDisponible, CampoTicket, LecturaTicket, PlantillaBascula, RecuadroPlantilla } from '../core/models/cargas.model';
 import { RecepcionService } from '../core/services/recepcion.service';
+import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
+import { forkJoin } from 'rxjs';
 import { EscanerService } from '../core/services/escaner.service';
 import { EsquinasFotoComponent } from '../recepcion/fotos/esquinas-foto.component';
 
@@ -30,7 +32,8 @@ const COLORES: Record<CampoTicket, string> = {
  * ticket, se endereza por sus esquinas y se dibuja con el ratón o el dedo el
  * recuadro de cada dato: ticket, bruto, tara, neto… Los recuadros se guardan
  * como fracciones del ticket, así sirven para cualquier foto enderezada a la
- * misma proporción. «Probar lectura» lee la foto con Tesseract en el servidor.
+ * misma proporción. «Probar lectura» lee la foto con Tesseract en el servidor;
+ * «Comparar con Claude» la lee además con la API de Claude, lado a lado.
  */
 @Component({
   selector: 'app-plantillas-bascula',
@@ -159,7 +162,36 @@ const COLORES: Record<CampoTicket, string> = {
               </label>
               <p-button *ngIf="escaner.estado()?.escaneres?.length" label="Escanear otra" icon="pi pi-print" size="small" [outlined]="true"
                         [loading]="escaneando()" (onClick)="escanearFoto('prueba')" />
+              <p-button *ngIf="claude()" label="Comparar con Claude" icon="pi pi-sparkles" size="small" severity="help" [outlined]="true"
+                        [loading]="comparando()" [disabled]="!b.campos.length || probando()" (onClick)="comparar()" />
             </div>
+            <small class="secundario" *ngIf="claude() === false">Para comparar con Claude, configure ANTHROPIC_API_KEY en el servidor.</small>
+
+            <!-- Tesseract y Claude lado a lado -->
+            <ng-container *ngIf="comparacion() as cmp; else soloTesseract">
+              <table class="comparacion">
+                <thead><tr><th>Campo</th><th>Tesseract</th><th>Claude</th><th></th></tr></thead>
+                <tbody>
+                  <tr *ngFor="let f of cmp.filas" [class.distinto]="f.distinto">
+                    <td [style.color]="color(f.campo)">{{ nombreCampo(f.campo) }}</td>
+                    <td class="codigo">{{ f.tesseract ?? (f.conRecuadro ? 'no se leyó' : 'sin recuadro') }}</td>
+                    <td class="codigo">{{ f.claude ?? 'no se leyó' }}</td>
+                    <td><i class="pi" [class.pi-check]="!f.distinto" [class.pi-times]="f.distinto" [title]="f.distinto ? 'Distinto' : 'Igual'"></i></td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr><td>Bruto − tara = neto</td><td>{{ cmp.t.coherente === true ? 'cuadra' : cmp.t.coherente === false ? 'no cuadra' : '—' }}</td>
+                      <td>{{ cmp.c.coherente === true ? 'cuadra' : cmp.c.coherente === false ? 'no cuadra' : '—' }}</td><td></td></tr>
+                  <tr><td>Tiempo</td><td>{{ seg(cmp.t.segundos) }}</td><td>{{ seg(cmp.c.segundos) }}</td><td></td></tr>
+                  <tr *ngIf="cmp.c.uso"><td>Tokens</td><td>—</td>
+                      <td [title]="cmp.c.uso.entrada + ' de entrada, ' + cmp.c.uso.salida + ' de salida'">{{ (cmp.c.uso.entrada + cmp.c.uso.salida).toLocaleString('es-BO') }}</td><td></td></tr>
+                </tfoot>
+              </table>
+              <small class="secundario">{{ cmp.iguales }} de {{ cmp.filas.length }} datos iguales{{ cmp.c.modelo ? ' · ' + cmp.c.modelo : '' }}.</small>
+              <div class="mal" *ngFor="let a of cmp.c.avisos"><i class="pi pi-sparkles"></i> {{ a }}</div>
+              <div class="mal" *ngFor="let a of cmp.t.avisos"><i class="pi pi-th-large"></i> {{ a }}</div>
+            </ng-container>
+            <ng-template #soloTesseract>
             <ng-container *ngIf="lectura() as l">
               <div class="resultado" *ngFor="let r of b.campos">
                 <span [style.color]="color(r.campo)">{{ nombreCampo(r.campo) }}</span>
@@ -169,6 +201,7 @@ const COLORES: Record<CampoTicket, string> = {
               <div class="ok" *ngIf="l.coherente === true"><i class="pi pi-check-circle"></i> Bruto − tara = neto</div>
               <div class="mal" *ngFor="let a of l.avisos"><i class="pi pi-exclamation-triangle"></i> {{ a }}</div>
             </ng-container>
+            </ng-template>
           </div>
           <p-button label="Cambiar foto de muestra" icon="pi pi-camera" [text]="true" size="small" (onClick)="cambiarMuestra()" />
         </aside>
@@ -226,6 +259,14 @@ const COLORES: Record<CampoTicket, string> = {
     .resultado { display: grid; grid-template-columns: 4.5rem 1fr auto; gap: 0.4rem; font-size: 0.85rem; }
     .conf { font-size: 0.72rem; color: var(--text-color-secondary, #6b7280); }
     .ok { color: #047857; font-size: 0.82rem; }
+    .comparacion { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .comparacion th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-color-secondary, #6b7280);
+                      padding: 0.25rem 0.3rem; border-bottom: 1px solid var(--surface-border, #e5e7eb); }
+    .comparacion td { padding: 0.25rem 0.3rem; border-bottom: 1px solid var(--surface-border, #f1f5f9); word-break: break-word; }
+    .comparacion tr.distinto td { background: #fff7ed; }
+    .comparacion .pi-check { color: #047857; } .comparacion .pi-times { color: #c2410c; }
+    .comparacion tfoot td { color: var(--text-color-secondary, #6b7280); font-size: 0.76rem; }
+    .secundario { color: var(--text-color-secondary, #6b7280); font-size: 0.76rem; }
     .mal { color: #92400e; font-size: 0.82rem; }
     .pie { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.2rem; }
     .opcional { font-weight: 400; color: var(--text-color-secondary, #9ca3af); }
@@ -257,6 +298,31 @@ export class PlantillasBasculaComponent implements OnInit {
   readonly nuevaCaja = signal<{ x: number; y: number; w: number; h: number } | null>(null);
   readonly lectura = signal<LecturaTicket | null>(null);
   readonly probando = signal(false);
+  readonly comparando = signal(false);
+  readonly lecturaClaude = signal<LecturaTicket | null>(null);
+  /** null mientras no se sabe; false si el servidor no tiene la clave de Claude. */
+  readonly claude = signal<boolean | null>(null);
+  private ultimaPrueba: Blob | null = null;
+  private readonly catalogos = inject(CatalogosCargasService);
+
+  /** Tesseract y Claude sobre la misma foto, campo por campo. */
+  readonly comparacion = computed(() => {
+    const t = this.lectura(), c = this.lecturaClaude();
+    this.version();
+    if (!t || !c) return null;
+    const recuadros = new Set((this.borrador()?.campos ?? []).map((r) => r.campo));
+    const orden = this.camposDisponibles().map((x) => x.campo);
+    const campos = orden.filter((k) => recuadros.has(k) || c.campos[k]?.valor != null);
+    const texto = (v: number | string | null | undefined) => v == null || v === '' ? null : typeof v === 'number' ? v.toLocaleString('es-BO') : String(v);
+    const norma = (v: string | null) => v === null ? null : v.toUpperCase().replace(/[^0-9A-ZÁÉÍÓÚÑ]/g, '');
+    const filas = campos.map((k) => {
+      const a = texto(t.campos[k]?.valor), b = texto(c.campos[k]?.valor);
+      return { campo: k, tesseract: a, claude: b, conRecuadro: recuadros.has(k), distinto: norma(a) !== norma(b) };
+    });
+    return { filas, t, c, iguales: filas.filter((f) => !f.distinto).length };
+  });
+
+  seg(s: number | null | undefined): string { return s == null ? '—' : `${s.toLocaleString('es-BO')} s`; }
   readonly guardando = signal(false);
   private readonly version = signal(0);
 
@@ -275,7 +341,11 @@ export class PlantillasBasculaComponent implements OnInit {
     { valor: 3, etiqueta: 'Matricial fuerte (3)' },
   ];
 
-  ngOnInit(): void { this.cargar(); this.escaner.revisar(); }
+  ngOnInit(): void {
+    this.cargar();
+    this.escaner.revisar();
+    this.catalogos.opciones$.subscribe((o) => this.claude.set(!!o.lector_claude));
+  }
 
   async escanearFoto(para: 'muestra' | 'prueba'): Promise<void> {
     this.escaneando.set(true);
@@ -321,13 +391,13 @@ export class PlantillasBasculaComponent implements OnInit {
   nueva(): void {
     this.borrador.set({ id: null, nombre: '', bascula: '', uso: 'INTERIOR', activa: true, proporcion: 0.7, campos: [] });
     this.ponerMuestra(null);
-    this.lectura.set(null);
+    this.lectura.set(null); this.lecturaClaude.set(null); this.ultimaPrueba = null;
   }
 
   editar(p: PlantillaBascula): void {
     this.borrador.set({ id: p.id, nombre: p.nombre, bascula: p.bascula, uso: p.uso, activa: p.activa, proporcion: p.proporcion,
                         campos: p.campos.map((c) => ({ ...c })) });
-    this.lectura.set(null);
+    this.lectura.set(null); this.lecturaClaude.set(null); this.ultimaPrueba = null;
     this.ponerMuestra(null);
     if (p.tiene_muestra) this.servicio.muestraPlantilla(p.id).subscribe((b) => { this.ponerMuestra(b); this.muestraNueva = false; });
   }
@@ -342,7 +412,7 @@ export class PlantillasBasculaComponent implements OnInit {
 
   cambiarMuestra(): void {
     this.ponerMuestra(null);
-    this.lectura.set(null);
+    this.lectura.set(null); this.lecturaClaude.set(null); this.ultimaPrueba = null;
   }
 
   private ponerMuestra(b: Blob | null): void {
@@ -443,10 +513,25 @@ export class PlantillasBasculaComponent implements OnInit {
     const b = this.borrador(), m = this.muestra();
     const foto = imagen ?? m?.blob;
     if (!b || !foto) return;
+    this.ultimaPrueba = foto;
+    this.lecturaClaude.set(null);
     this.probando.set(true);
     this.servicio.probarPlantilla(foto, b.campos).subscribe({
       next: (l) => { this.probando.set(false); this.lectura.set(l); },
       error: (e) => { this.probando.set(false); this.toast.add({ severity: 'error', summary: 'No se pudo probar', detail: mensajeDeError(e) }); },
+    });
+  }
+
+  /** Lee la última foto probada (o la muestra) con los dos lectores a la vez. */
+  comparar(): void {
+    const b = this.borrador();
+    const foto = this.ultimaPrueba ?? this.muestra()?.blob;
+    if (!b || !foto) return;
+    this.ultimaPrueba = foto;
+    this.comparando.set(true);
+    forkJoin([this.servicio.probarPlantilla(foto, b.campos, 'tesseract'), this.servicio.probarPlantilla(foto, b.campos, 'claude')]).subscribe({
+      next: ([t, c]) => { this.comparando.set(false); this.lectura.set(t); this.lecturaClaude.set(c); },
+      error: (e) => { this.comparando.set(false); this.toast.add({ severity: 'error', summary: 'No se pudo comparar', detail: mensajeDeError(e) }); },
     });
   }
 

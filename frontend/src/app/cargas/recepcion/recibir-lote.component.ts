@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
@@ -22,6 +22,7 @@ import { RecepcionService } from '../core/services/recepcion.service';
 import { SeriesService } from '../core/services/series.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
 import { SacosCamposComponent, datosSacos, grupoSacos } from './sacos-campos.component';
+import { ConfirmarPesajeComponent, PesajeAConfirmar } from './confirmar-pesaje.component';
 
 const CLAVE_TIPO = 'cargas.tipo-recepcion';
 
@@ -36,7 +37,7 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, CheckboxModule,
             DropdownModule, InputTextModule, InputTextareaModule, SelectButtonModule, ToastModule, DialogModule, PesajeCamposComponent,
-            SacosCamposComponent],
+            SacosCamposComponent, ConfirmarPesajeComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -160,7 +161,7 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
       <app-pesaje-campos *ngIf="conPesaje || tipoRecepcion === 'MIXTA'" [grupo]="pesaje" [plantillas]="plantillas()"
                          [fotoObligatoria]="!!opciones()?.foto_ticket_obligatoria" [sinSacos]="tipoRecepcion === 'MIXTA'"
                          [limite]="opciones()?.limite_promedio_peso_kg ?? 100" [descuentoSacos]="tipoRecepcion === 'MIXTA' ? (reparto()?.sacos ?? 0) : 0"
-                         (leido)="boletasLeidas($event)" />
+                         [claudeDisponible]="!!opciones()?.lector_claude" (leido)="boletasLeidas($event)" />
       <p class="secundario" *ngIf="!conPesaje && tipoRecepcion === 'BASCULA'">Podrá agregar los pesajes después, desde la ficha del lote.</p>
     </section>
 
@@ -201,6 +202,9 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
         <p-button label="Guardar igual" icon="pi pi-check" severity="warning" (onClick)="revisarVisible = false; guardar(true)" />
       </ng-template>
     </p-dialog>
+
+    <app-confirmar-pesaje [(visible)]="confirmarVisible" [datos]="aConfirmar()" [vale]="valeAConfirmar()" [extras]="extrasConfirmar()"
+                          (confirmado)="guardar(false, true)" />
 
     <div class="pie">
       <p-button label="Cancelar" [text]="true" routerLink="/cargas/lotes" />
@@ -273,6 +277,11 @@ export class RecibirLoteComponent implements OnInit {
   readonly productorDeBoleta = signal(false);
   readonly diferencias = signal<string[]>([]);
   revisarVisible = false;
+  confirmarVisible = false;
+  @ViewChild(PesajeCamposComponent) private camposPesaje?: PesajeCamposComponent;
+  readonly aConfirmar = signal<PesajeAConfirmar | null>(null);
+  readonly valeAConfirmar = signal<{ kg: number; criterio: 'EMPRESA' | 'CLIENTE' | 'PROMEDIO' } | null>(null);
+  readonly extrasConfirmar = signal<{ etiqueta: string; valor: string | null | undefined }[]>([]);
   readonly tipos = [
     { valor: 'BASCULA', etiqueta: 'Báscula', icono: 'pi pi-truck' },
     { valor: 'SACOS', etiqueta: 'Solo sacos', icono: 'pi pi-box' },
@@ -406,9 +415,23 @@ export class RecibirLoteComponent implements OnInit {
     this.parecidos.set([]);
   }
 
-  guardar(revisado = false): void {
+  guardar(revisado = false, confirmado = false): void {
     const v = this.form.getRawValue();
-    if (!revisado && this.tipoRecepcion !== 'SACOS') {
+    const conPesaje = this.tipoRecepcion === 'MIXTA' || (this.tipoRecepcion === 'BASCULA' && this.conPesaje);
+    // Registro manual: antes de guardar se confirma todo contra la boleta.
+    if (!confirmado && conPesaje && this.camposPesaje?.modo() === 'MANUAL') {
+      this.aConfirmar.set(this.pesaje.getRawValue() as PesajeAConfirmar);
+      this.valeAConfirmar.set(this.camposPesaje.vale());
+      this.extrasConfirmar.set([
+        { etiqueta: 'Tipo de recepción', valor: this.tipos.find((t) => t.valor === this.tipoRecepcion)?.etiqueta },
+        { etiqueta: 'Sede', valor: this.sedes().find((s) => s.id === v.almacen_id)?.nombre },
+        ...(this.serie()?.origen === 'COMPRA' ? [{ etiqueta: 'Productor', valor: this.productor()?.nombre }] : []),
+        ...(this.tipoRecepcion === 'MIXTA' && this.reparto() ? [{ etiqueta: 'Sacos (otro lote)', valor: `${this.fmt(this.reparto()!.sacos)} kg` }] : []),
+      ]);
+      this.confirmarVisible = true;
+      return;
+    }
+    if (!revisado && !confirmado && this.tipoRecepcion !== 'SACOS') {
       const p = this.pesaje.getRawValue();
       const d = diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
         { placa: p.placa, chofer_nombre: p.chofer_nombre }, this.productor()?.nombre ?? null);

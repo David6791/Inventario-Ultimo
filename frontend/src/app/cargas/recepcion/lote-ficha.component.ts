@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnChanges, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnChanges, OnInit, ViewChild, inject, input, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
@@ -22,6 +22,7 @@ import { CatalogosCargasService } from '../core/services/catalogos-cargas.servic
 import { diferenciasBoleta } from '../core/diferencias';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
+import { ConfirmarPesajeComponent, PesajeAConfirmar } from './confirmar-pesaje.component';
 import { LoteLaboratorioComponent } from '../laboratorio/lote-laboratorio.component';
 import { LoteValorComponent } from '../precios/lote-valor.component';
 
@@ -30,7 +31,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
   selector: 'app-lote-ficha',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, InputNumberModule, InputTextareaModule,
-            SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent, LoteLaboratorioComponent, LoteValorComponent],
+            SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent, ConfirmarPesajeComponent, LoteLaboratorioComponent, LoteValorComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -86,7 +87,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
         <div class="dato grande" *ngIf="l.pesajes_con_peso_cliente"><span class="rotulo">Peso del cliente</span>
           <span class="monto">{{ kg(l.peso_cliente_kg) }} kg</span>
           <small [class.alerta]="alerta(l)" class="secundario">Diferencia {{ +l.diferencia_cliente_kg > 0 ? '+' : '' }}{{ kg(l.diferencia_cliente_kg) }} kg
-            ({{ pct(l) }} %) · vale el de la empresa</small></div>
+            ({{ pct(l) }} %) · vale lo que dice «Peso que vale»</small></div>
         <div class="dato grande"><span class="rotulo">Bono de transporte</span>
           <span class="monto">Bs {{ kg(+l.bonos_pagados + +l.bonos_por_pagar) }}</span>
           <small class="secundario" *ngIf="l.bonos_pendientes">Bs {{ kg(l.bonos_por_pagar) }} por pagar en caja</small>
@@ -195,7 +196,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
           'Repesaje para verificar: no suma al peso ni genera bono.' }}</small>
       </div>
       <app-pesaje-campos *ngIf="pesajeVisible" [grupo]="pesaje" [plantillas]="plantillas()" [fotoObligatoria]="fotoObligatoria()" [limite]="limite()"
-                         (leido)="lecturas = $event" />
+                         [claudeDisponible]="claude()" (leido)="lecturas = $event" />
       <div class="nota-diferencias" *ngIf="diferencias().length">
         <b>Lo leído de la boleta no coincide con lo anotado:</b>
         <ul><li *ngFor="let d of diferencias()">{{ d }}</li></ul>
@@ -207,6 +208,9 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
                   (onClick)="guardarPesaje()" />
       </ng-template>
     </p-dialog>
+
+    <app-confirmar-pesaje [(visible)]="confirmarVisible" [datos]="aConfirmar()" [vale]="valeAConfirmar()" [extras]="extrasConfirmar()"
+                          (confirmado)="guardarPesaje(true)" />
 
     <!-- Fotos de un pesaje -->
     <p-dialog [(visible)]="fotosVisible" [header]="'Fotos del pesaje ' + (fotosDe()?.ticket ?? '')" [modal]="true"
@@ -312,6 +316,12 @@ export class LoteFichaComponent implements OnInit, OnChanges {
   readonly plantillas = signal<PlantillaBascula[]>([]);
   readonly fotoObligatoria = signal(false);
   readonly limite = signal(100);
+  readonly claude = signal(false);
+  confirmarVisible = false;
+  @ViewChild(PesajeCamposComponent) private camposPesaje?: PesajeCamposComponent;
+  readonly aConfirmar = signal<PesajeAConfirmar | null>(null);
+  readonly valeAConfirmar = signal<{ kg: number; criterio: 'EMPRESA' | 'CLIENTE' | 'PROMEDIO' } | null>(null);
+  readonly extrasConfirmar = signal<{ etiqueta: string; valor: string | null | undefined }[]>([]);
   readonly fotosDe = signal<Pesaje | null>(null);
   lecturas: { interior: LecturaTicket | null; exterior: LecturaTicket | null } = { interior: null, exterior: null };
   readonly diferencias = signal<string[]>([]);
@@ -341,6 +351,7 @@ export class LoteFichaComponent implements OnInit, OnChanges {
     this.catalogos.opciones$.subscribe((o) => {
       this.fotoObligatoria.set(!!o.foto_ticket_obligatoria);
       this.limite.set(o.limite_promedio_peso_kg ?? 100);
+      this.claude.set(!!o.lector_claude);
     });
   }
 
@@ -440,11 +451,21 @@ export class LoteFichaComponent implements OnInit, OnChanges {
     chofer.updateValueAndValidity();
   }
 
-  guardarPesaje(): void {
+  guardarPesaje(confirmado = false): void {
     const l = this.lote();
     if (!l) return;
     const p = this.pesaje.getRawValue();
-    const d = diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
+    if (!confirmado && this.camposPesaje?.modo() === 'MANUAL') {
+      this.aConfirmar.set(p as PesajeAConfirmar);
+      this.valeAConfirmar.set(this.tipoPesaje === 'INGRESO' ? this.camposPesaje.vale() : null);
+      this.extrasConfirmar.set([
+        { etiqueta: 'Lote', valor: l.codigo },
+        { etiqueta: 'Tipo de pesaje', valor: this.tipos.find((t) => t.valor === this.tipoPesaje)?.etiqueta },
+      ]);
+      this.confirmarVisible = true;
+      return;
+    }
+    const d = confirmado ? [] : diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
       { placa: p.placa, chofer_nombre: p.chofer_nombre }, l.productor?.nombre ?? null);
     if (d.length && d.join('|') !== this.diferencias().join('|')) {
       this.diferencias.set(d);           // segunda vez con las mismas diferencias: se guarda igual

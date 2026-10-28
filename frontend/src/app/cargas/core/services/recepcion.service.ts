@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
-  BonoCalculado, BonoPendiente, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, Lote, Pagina, Pesaje,
+  BonoCalculado, BonoPendiente, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, LectorBoleta, Lote, Pagina, Pesaje,
   PlantillaBascula, ProductorParecido, RecuadroPlantilla, SedeRecepcion, RespuestaApi, TablaTramos, TipoFoto, Tramo,
 } from '../models/cargas.model';
 
@@ -102,16 +102,19 @@ export class RecepcionService {
     return this.http.get(`${this.base}/plantillas-bascula/${id}/muestra`, { responseType: 'blob' });
   }
 
-  probarPlantilla(imagen: Blob, campos: RecuadroPlantilla[]): Observable<LecturaTicket> {
+  probarPlantilla(imagen: Blob, campos: RecuadroPlantilla[], lector: LectorBoleta = 'tesseract'): Observable<LecturaTicket> {
     const f = new FormData();
     f.append('imagen', imagen, 'prueba.jpg');
     f.append('campos', JSON.stringify(campos));
+    f.append('lector', lector);
     return this.http.post<RespuestaApi<LecturaTicket>>(`${this.base}/plantillas-bascula/probar`, f).pipe(map((r) => r.data));
   }
 
-  subirFoto(tipo: TipoFoto, imagen: Blob, original: Blob | null, plantillaId: number | null): Observable<FotoRecepcion> {
+  subirFoto(tipo: TipoFoto, imagen: Blob, original: Blob | null, plantillaId: number | null,
+            lector: LectorBoleta = 'tesseract'): Observable<FotoRecepcion> {
     const f = new FormData();
     f.append('tipo', tipo);
+    if (tipo !== 'BALANZA_MANUAL') f.append('lector', lector);
     f.append('imagen', imagen, 'foto.jpg');
     if (original) f.append('original', original, 'original.jpg');
     if (plantillaId) f.append('plantilla_id', String(plantillaId));

@@ -15,6 +15,10 @@ import { ETIQUETA_CRITERIO, pesoQueVale } from '../core/peso-que-vale';
 import { FormsModule } from '@angular/forms';
 
 const CLAVE_BASCULA = 'cargas.ultima-bascula';
+const CLAVE_MODO = 'cargas.modo-registro';
+
+/** Cómo se registra el pesaje: a mano, leyendo la boleta con Tesseract o con Claude. */
+export type ModoRegistro = 'MANUAL' | 'TESSERACT' | 'CLAUDE';
 
 /** Grupo de campos del pesaje (para la recepción y para agregar pesajes a un lote). */
 export function grupoPesaje(fb: FormBuilder): FormGroup {
@@ -54,18 +58,16 @@ export function recordarBascula(valor: string | null | undefined): void {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, InputNumberModule, InputTextModule, SelectButtonModule, FotoTicketComponent, FotoSimpleComponent],
   template: `
     <div class="modo" *ngIf="conFotos()">
-      <p-selectButton [options]="modos" [allowEmpty]="false" [ngModel]="modo()" (ngModelChange)="cambiarModo($event)"
-                      optionLabel="etiqueta" optionValue="valor" styleClass="modos">
+      <p-selectButton [options]="modos()" [allowEmpty]="false" [ngModel]="modo()" (ngModelChange)="cambiarModo($event)"
+                      optionLabel="etiqueta" optionValue="valor" optionDisabled="deshabilitado" styleClass="modos">
         <ng-template let-m pTemplate="item"><i [class]="m.icono"></i><span>{{ m.etiqueta }}</span></ng-template>
       </p-selectButton>
-      <small class="secundario">{{ modo() === 'LECTOR'
-        ? 'Escanee o fotografíe la boleta: los datos se llenan solos y se pueden corregir antes de guardar.'
-        : 'Escriba los datos mirando la boleta. Adjunte la foto o el escaneo como respaldo.' }}</small>
+      <small class="secundario">{{ explicacionModo() }}</small>
     </div>
-    <div class="fotos" *ngIf="conFotos() && modo() === 'LECTOR'">
-      <app-foto-ticket tipo="TICKET_INTERIOR" [plantillas]="plantillas()" [obligatoria]="fotoObligatoria()"
+    <div class="fotos" *ngIf="conFotos() && modo() !== 'MANUAL'">
+      <app-foto-ticket tipo="TICKET_INTERIOR" [plantillas]="plantillas()" [obligatoria]="fotoObligatoria()" [lector]="lector()"
                        (listo)="ticketInterior($event)" (quitado)="quitarFoto('foto_interior_id')" />
-      <app-foto-ticket tipo="TICKET_EXTERIOR" [plantillas]="plantillas()"
+      <app-foto-ticket tipo="TICKET_EXTERIOR" [plantillas]="plantillas()" [lector]="lector()"
                        (listo)="ticketExterior($event)" (quitado)="quitarFoto('foto_exterior_id')" />
     </div>
     <div class="fotos manual" *ngIf="conFotos() && modo() === 'MANUAL'">
@@ -84,12 +86,12 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-2">
         <label for="bascula">Báscula</label>
         <input id="bascula" pInputText formControlName="bascula" maxlength="40" placeholder="Potosí 1" />
-        <small class="de-foto" *ngIf="deFoto().has('bascula')"><i class="pi pi-camera"></i> de la plantilla</small>
+        <small class="de-foto" *ngIf="deFoto().has('bascula')"><i class="pi pi-camera"></i> {{ modo() === 'CLAUDE' ? 'leída por Claude' : 'de la plantilla' }}</small>
       </div>
       <div class="campo span-2">
         <label for="ticket">N.º de ticket</label>
         <input id="ticket" pInputText formControlName="ticket" maxlength="30" class="codigo" />
-        <small class="de-foto" *ngIf="deFoto().has('ticket')"><i class="pi pi-camera"></i> leído de la foto</small>
+        <small class="de-foto" *ngIf="deFoto().has('ticket')"><i class="pi pi-camera"></i> {{ deDonde() }}</small>
       </div>
       <div class="campo span-2" *ngIf="!sinSacos()">
         <label for="sacos">Sacos <span class="opcional">(opcional)</span></label>
@@ -99,12 +101,12 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-2">
         <label for="bruto">Peso bruto (kg)</label>
         <p-inputNumber inputId="bruto" formControlName="peso_bruto_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
-        <small class="de-foto" *ngIf="deFoto().has('peso_bruto_kg')"><i class="pi pi-camera"></i> leído de la foto</small>
+        <small class="de-foto" *ngIf="deFoto().has('peso_bruto_kg')"><i class="pi pi-camera"></i> {{ deDonde() }}</small>
       </div>
       <div class="campo span-2">
         <label for="tara">Tara (kg)</label>
         <p-inputNumber inputId="tara" formControlName="tara_kg" mode="decimal" locale="es-BO" [maxFractionDigits]="2" [min]="0" />
-        <small class="de-foto" *ngIf="deFoto().has('tara_kg')"><i class="pi pi-camera"></i> leído de la foto</small>
+        <small class="de-foto" *ngIf="deFoto().has('tara_kg')"><i class="pi pi-camera"></i> {{ deDonde() }}</small>
       </div>
       <div class="campo span-2">
         <label>Peso neto (kg)</label>
@@ -140,7 +142,7 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-3">
         <label for="chofer">Chofer</label>
         <input id="chofer" pInputText formControlName="chofer_nombre" maxlength="150" />
-        <small class="de-foto" *ngIf="deFoto().has('chofer_nombre')"><i class="pi pi-camera"></i> leído de la foto</small>
+        <small class="de-foto" *ngIf="deFoto().has('chofer_nombre')"><i class="pi pi-camera"></i> {{ deDonde() }}</small>
       </div>
       <div class="campo span-1">
         <label for="chofer_ci">CI</label>
@@ -150,12 +152,12 @@ export function recordarBascula(valor: string | null | undefined): void {
       <div class="campo span-2">
         <label for="orden">N.º de orden <span class="opcional">(opcional)</span></label>
         <input id="orden" pInputText formControlName="numero_orden" maxlength="30" class="codigo" />
-        <small class="de-foto" *ngIf="deFoto().has('numero_orden')"><i class="pi pi-camera"></i> leído de la foto</small>
+        <small class="de-foto" *ngIf="deFoto().has('numero_orden')"><i class="pi pi-camera"></i> {{ deDonde() }}</small>
       </div>
       <div class="campo span-2">
         <label for="fecha-ticket">Fecha de la boleta <span class="opcional">(opcional)</span></label>
         <input id="fecha-ticket" pInputText type="datetime-local" formControlName="fecha_ticket" step="1" />
-        <small class="de-foto" *ngIf="deFoto().has('fecha_ticket')"><i class="pi pi-camera"></i> leída de la foto</small>
+        <small class="de-foto" *ngIf="deFoto().has('fecha_ticket')"><i class="pi pi-camera"></i> {{ deDonde('a') }}</small>
       </div>
       <div class="campo span-2" *ngIf="productorLeido() as pl">
         <label>Productor en la boleta</label>
@@ -230,21 +232,42 @@ export class PesajeCamposComponent implements OnInit {
   readonly limite = input(100);
   /** Mixta: kg de sacos que se restan del neto del camión y del cliente. */
   readonly descuentoSacos = input(0);
-  readonly modos = [
-    { valor: 'LECTOR', etiqueta: 'Con escáner o foto', icono: 'pi pi-print' },
-    { valor: 'MANUAL', etiqueta: 'Registro manual', icono: 'pi pi-pencil' },
-  ];
-  readonly modo = signal<'LECTOR' | 'MANUAL'>(PesajeCamposComponent.modoGuardado());
+  /** El servidor tiene la clave de la API de Claude. */
+  readonly claudeDisponible = input(false);
+  readonly modos = computed(() => [
+    { valor: 'MANUAL', etiqueta: 'Manual', icono: 'pi pi-pencil', deshabilitado: false },
+    { valor: 'TESSERACT', etiqueta: 'Lector Tesseract', icono: 'pi pi-th-large', deshabilitado: false },
+    { valor: 'CLAUDE', etiqueta: this.claudeDisponible() ? 'Lector Claude' : 'Lector Claude (sin configurar)', icono: 'pi pi-sparkles',
+      deshabilitado: !this.claudeDisponible() },
+  ]);
+  private readonly modoElegido = signal<ModoRegistro>(PesajeCamposComponent.modoGuardado());
+  /** Claude elegido pero sin clave en el servidor: se usa Tesseract. */
+  readonly modo = computed<ModoRegistro>(() => this.modoElegido() === 'CLAUDE' && !this.claudeDisponible() ? 'TESSERACT' : this.modoElegido());
+  readonly lector = computed(() => this.modo() === 'CLAUDE' ? 'claude' as const : 'tesseract' as const);
+  readonly modoCambiado = output<ModoRegistro>();
   readonly etiquetaCriterio = ETIQUETA_CRITERIO;
+  readonly explicacionModo = computed(() => ({
+    MANUAL: 'Escriba los datos mirando la boleta y adjunte la foto o el escaneo como respaldo. Antes de guardar se le pedirá confirmarlos.',
+    TESSERACT: 'Tesseract lee los recuadros de la plantilla de cada balanza, en este servidor y sin internet. Revise los datos antes de guardar.',
+    CLAUDE: 'Claude lee la boleta completa, sin recuadros. Necesita internet y cada lectura usa créditos de la API. Revise los datos antes de guardar.',
+  })[this.modo()]);
 
-  private static modoGuardado(): 'LECTOR' | 'MANUAL' {
-    try { return localStorage.getItem('cargas.modo-registro') === 'MANUAL' ? 'MANUAL' : 'LECTOR'; } catch { return 'LECTOR'; }
+  deDonde(genero: 'o' | 'a' = 'o'): string {
+    return this.modo() === 'CLAUDE' ? `leíd${genero} por Claude` : `leíd${genero} de la foto`;
   }
 
-  cambiarModo(m: 'LECTOR' | 'MANUAL'): void {
+  private static modoGuardado(): ModoRegistro {
+    try {
+      const m = localStorage.getItem(CLAVE_MODO);
+      return m === 'MANUAL' || m === 'CLAUDE' ? m : 'TESSERACT';       // «LECTOR» de antes = Tesseract
+    } catch { return 'TESSERACT'; }
+  }
+
+  cambiarModo(m: ModoRegistro): void {
     if (m === this.modo()) return;
-    this.modo.set(m);
-    try { localStorage.setItem('cargas.modo-registro', m); } catch { /* sin almacenamiento */ }
+    this.modoElegido.set(m);
+    this.modoCambiado.emit(this.modo());
+    try { localStorage.setItem(CLAVE_MODO, m); } catch { /* sin almacenamiento */ }
     // Las fotos del otro modo no se arrastran: se vuelven a adjuntar.
     this.grupo().patchValue({ foto_interior_id: null, foto_exterior_id: null });
     this.deFoto.set(new Set());
@@ -315,7 +338,7 @@ export class PesajeCamposComponent implements OnInit {
     const c = t.lectura?.campos ?? {};
     const cambios: Record<string, unknown> = { foto_interior_id: t.foto.id };
     const marcados = new Set<string>();
-    if (t.plantilla?.bascula) { cambios['bascula'] = t.plantilla.bascula; marcados.add('bascula'); }
+    if (t.bascula) { cambios['bascula'] = t.bascula; marcados.add('bascula'); }
     if (c.ticket?.valor != null) { cambios['ticket'] = String(c.ticket.valor); marcados.add('ticket'); }
     if (typeof c.peso_bruto_kg?.valor === 'number') { cambios['peso_bruto_kg'] = c.peso_bruto_kg.valor; marcados.add('peso_bruto_kg'); }
     if (typeof c.tara_kg?.valor === 'number') { cambios['tara_kg'] = c.tara_kg.valor; marcados.add('tara_kg'); }

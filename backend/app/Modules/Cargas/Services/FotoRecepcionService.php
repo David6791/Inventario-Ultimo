@@ -18,11 +18,14 @@ class FotoRecepcionService
 {
     public const DISCO = 'local';
 
-    public function __construct(private readonly OcrTicketService $ocr)
+    public const LECTORES = ['tesseract', 'claude'];
+
+    public function __construct(private readonly OcrTicketService $ocr, private readonly ClaudeTicketService $claude)
     {
     }
 
-    public function subir(UploadedFile $imagen, ?UploadedFile $original, string $tipo, ?PlantillaBascula $plantilla, User $usuario): RecepcionFoto
+    public function subir(UploadedFile $imagen, ?UploadedFile $original, string $tipo, ?PlantillaBascula $plantilla, User $usuario,
+                          string $lector = 'tesseract'): RecepcionFoto
     {
         if (random_int(1, 20) === 1) {
             $this->limpiarSueltas();       // sin cron: de vez en cuando, al subir
@@ -33,8 +36,11 @@ class FotoRecepcionService
         $rutaOriginal = $original?->storeAs($carpeta, $nombre . '-original.' . $this->extension($original), self::DISCO);
 
         $lectura = null;
-        if ($plantilla && $plantilla->campos) {
-            $lectura = $this->leer(Storage::disk(self::DISCO)->path($ruta), $plantilla->campos);
+        $ruta_abs = Storage::disk(self::DISCO)->path($ruta);
+        if ($lector === 'claude') {
+            $lectura = $this->leerConClaude($ruta_abs, $plantilla?->campos);
+        } elseif ($plantilla && $plantilla->campos) {
+            $lectura = $this->leer($ruta_abs, $plantilla->campos);
         }
 
         return RecepcionFoto::create([
@@ -47,11 +53,33 @@ class FotoRecepcionService
         ]);
     }
 
+    /**
+     * Lectura con Claude. Si la API no responde (sin internet, sin saldo, sin
+     * clave) y hay plantilla, se lee con Tesseract y se avisa.
+     */
+    public function leerConClaude(string $ruta, ?array $campos): array
+    {
+        try {
+            return $this->claude->leer($ruta);
+        } catch (\Throwable $e) {
+            report($e);
+            $aviso = 'No se pudo leer con Claude (' . mb_substr($e->getMessage(), 0, 160) . ').';
+            if ($campos) {
+                $l = $this->leer($ruta, $campos);
+                array_unshift($l['avisos'], $aviso . ' Se leyó con Tesseract.');
+
+                return $l;
+            }
+
+            return ['campos' => [], 'coherente' => null, 'lector' => 'claude', 'avisos' => [$aviso . ' Anote los datos mirando la boleta.']];
+        }
+    }
+
     /** Lectura con OCR; si Tesseract no está o falla, la foto igual se guarda y se digita a mano. */
     public function leer(string $ruta, array $campos): array
     {
         try {
-            return $this->ocr->leer($ruta, $campos);
+            return [...$this->ocr->leer($ruta, $campos), 'lector' => 'tesseract'];
         } catch (\Throwable $e) {
             report($e);
 
