@@ -398,14 +398,17 @@ class RecepcionFotosApiTest extends TestCase
     {
         config(['services.anthropic.key' => 'sk-prueba']);
         Http::fake(['api.anthropic.com/*' => Http::response(['type' => 'message', 'model' => 'claude-x',
-            'content' => [['type' => 'text', 'text' => "Aquí están los datos:\n```json\n{\"ticket\": \"4512\", \"peso_bruto_kg\": 20000, \"tara_kg\": 8000, \"peso_neto_kg\": 12000, \"dudosos\": []}\n```"]],
+            'content' => [['type' => 'text', 'text' => "Aquí están los datos:\n```json\n{\"ticket\": \"4512\", \"peso_bruto_kg\": \"20.000 KG\", \"tara_kg\": 8.5, \"peso_neto_kg\": 11.5, \"dudosos\": []}\n```"]],
             'usage' => ['input_tokens' => 10, 'output_tokens' => 5]])]);
 
         Sanctum::actingAs($this->recepcion);
         $this->post('/api/cargas/fotos', ['tipo' => 'TICKET_INTERIOR', 'lector' => 'claude',
             'imagen' => UploadedFile::fake()->image('t.jpg', 800, 1100)], ['Accept' => 'application/json'])->assertCreated()
             ->assertJsonPath('data.lectura.lector', 'claude')
-            ->assertJsonPath('data.lectura.campos.peso_neto_kg.valor', 12000)
+            ->assertJsonPath('data.lectura.campos.peso_bruto_kg.valor', 20000)
+            ->assertJsonPath('data.lectura.campos.tara_kg.valor', 8500)
+            ->assertJsonPath('data.lectura.campos.peso_neto_kg.valor', 11500)
+            ->assertJsonPath('data.lectura.respuesta.ticket', '4512')
             ->assertJsonPath('data.lectura.coherente', true);
     }
 

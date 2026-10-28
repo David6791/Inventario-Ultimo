@@ -27,9 +27,9 @@ class ClaudeTicketService
             'balanza'       => ['type' => ['string', 'null'], 'description' => 'Empresa de la balanza'],
             'ticket'        => ['type' => ['string', 'null'], 'description' => 'N.º de ticket o pesaje, solo dígitos'],
             'numero_orden'  => ['type' => ['string', 'null'], 'description' => 'N.º de orden, solo dígitos'],
-            'peso_bruto_kg' => ['type' => ['integer', 'null']],
-            'tara_kg'       => ['type' => ['integer', 'null']],
-            'peso_neto_kg'  => ['type' => ['integer', 'null']],
+            'peso_bruto_kg' => ['type' => ['number', 'null'], 'description' => 'Camión cargado, el mayor (Bruto, Peso 1, Entrada, Ingreso)'],
+            'tara_kg'       => ['type' => ['number', 'null'], 'description' => 'Camión vacío (Tara, Peso 2, Salida)'],
+            'peso_neto_kg'  => ['type' => ['number', 'null'], 'description' => 'Neto impreso (bruto − tara)'],
             'placa'         => ['type' => ['string', 'null'], 'description' => 'Sin guion, p. ej. 2261DKE'],
             'productor'     => ['type' => ['string', 'null'], 'description' => 'Productor, socio o cliente'],
             'chofer'        => ['type' => ['string', 'null'], 'description' => 'Chofer o transportista'],
@@ -44,7 +44,8 @@ class ClaudeTicketService
     // Corto a propósito: cada palabra se paga en cada lectura.
     private const INSTRUCCIONES = <<<'TXT'
         Boleta de báscula de camiones (Bolivia). Extrae los datos IMPRESOS con registrar_boleta.
-        - Pesos en kg enteros: «9.660 KG» = 9660. Copia el neto impreso, no lo calcules.
+        - Los tres pesos casi siempre están: búscalos aunque la etiqueta sea Peso 1/Peso 2, Entrada/Salida o estén en casillas.
+        - Pesos en kg enteros: «9.660 KG» = 9660 (el punto separa miles). Copia el neto impreso, no lo calcules.
         - Ignora lo escrito a mano (vistos, firmas, códigos) y cualquier otro papel de la imagen.
         - Dato ausente o ilegible: null, nunca lo adivines. Si dudas, ponlo y nómbralo en «dudosos».
         - Solo la llamada a la herramienta, sin texto. Si no puedes usarla, solo el JSON.
@@ -101,6 +102,7 @@ class ClaudeTicketService
 
         $lectura = $this->convertir($entrada);
         $lectura['lector'] = 'claude';
+        $lectura['respuesta'] = $entrada;          // tal cual llegó, para revisar si algo no se leyó
         $lectura['modelo'] = $r->json('model', $modelo);
         $lectura['segundos'] = round(microtime(true) - $inicio, 1);
         $lectura['uso'] = [
@@ -131,6 +133,28 @@ class ClaudeTicketService
         return null;
     }
 
+    /**
+     * Peso en kg. Un texto («18.660 KG») se lee por dígitos: el punto es de
+     * miles. Un número con fracción de tres cifras (18.66 por 18.660) es
+     * el mismo error y se corrige; los kilos con decimales de verdad no salen
+     * en una boleta de camión.
+     */
+    private function peso(mixed $v): ?float
+    {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        if (is_string($v)) {
+            return $this->ocr->numero($v);
+        }
+        $n = (float) $v;
+        if ($n > 0 && $n < 1000 && floor($n) != $n) {
+            $n = round($n * 1000);
+        }
+
+        return $n > 0 ? $n : null;
+    }
+
     /** De la respuesta de Claude a la forma de la lectura de Tesseract. */
     public function convertir(array $e): array
     {
@@ -145,7 +169,7 @@ class ClaudeTicketService
                 $v = trim($v) === '' ? null : trim($v);
             }
             $valor = match ($c) {
-                'peso_bruto_kg', 'tara_kg', 'peso_neto_kg' => is_numeric($v) ? (float) $v : ($v !== null ? $this->ocr->numero((string) $v) : null),
+                'peso_bruto_kg', 'tara_kg', 'peso_neto_kg' => $this->peso($v),
                 'ticket', 'numero_orden' => $v !== null ? (preg_replace('/\D/', '', (string) $v) ?: null) : null,
                 'placa'     => $v !== null ? ($this->ocr->placa((string) $v) ?? mb_strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $v))) : null,
                 'productor', 'chofer' => $v !== null ? mb_strtoupper(preg_replace('/\s+/u', ' ', (string) $v)) : null,

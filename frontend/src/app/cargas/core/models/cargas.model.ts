@@ -415,6 +415,8 @@ export interface LecturaTicket {
   modelo?: string;
   segundos?: number | null;
   uso?: { entrada: number; salida: number; imagen?: string };
+  /** Con Claude: la respuesta tal cual llegó. */
+  respuesta?: Record<string, unknown>;
   /** Con Claude: la balanza que dice la boleta. */
   bascula?: string | null;
 }

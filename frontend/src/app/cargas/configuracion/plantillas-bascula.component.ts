@@ -192,6 +192,8 @@ const COLORES: Record<CampoTicket, string> = {
               <small class="secundario">{{ cmp.iguales }} de {{ cmp.filas.length }} datos iguales{{ cmp.c.modelo ? ' · ' + cmp.c.modelo : '' }}.</small>
               <div class="mal" *ngFor="let a of cmp.c.avisos"><i class="pi pi-sparkles"></i> {{ a }}</div>
               <div class="mal" *ngFor="let a of cmp.t.avisos"><i class="pi pi-th-large"></i> {{ a }}</div>
+              <details *ngIf="cmp.c.respuesta" class="crudo"><summary>Respuesta de Claude tal cual</summary>
+                <pre>{{ cmp.c.respuesta | json }}</pre></details>
             </ng-container>
             <ng-template #soloTesseract>
             <ng-container *ngIf="lectura() as l">
@@ -267,6 +269,9 @@ const COLORES: Record<CampoTicket, string> = {
     .comparacion td { padding: 0.25rem 0.3rem; border-bottom: 1px solid var(--surface-border, #f1f5f9); word-break: break-word; }
     .comparacion tr.distinto td { background: #fff7ed; }
     .comparacion .pi-check { color: #047857; } .comparacion .pi-times { color: #c2410c; }
+    .crudo summary { cursor: pointer; font-size: 0.78rem; color: var(--text-color-secondary, #6b7280); }
+    .crudo pre { font-size: 0.72rem; white-space: pre-wrap; word-break: break-word; background: var(--surface-ground, #f8fafc);
+                 padding: 0.5rem; border-radius: 6px; max-height: 18rem; overflow: auto; }
     .comparacion tfoot td { color: var(--text-color-secondary, #6b7280); font-size: 0.76rem; }
     .secundario { color: var(--text-color-secondary, #6b7280); font-size: 0.76rem; }
     .mal { color: #92400e; font-size: 0.82rem; }
