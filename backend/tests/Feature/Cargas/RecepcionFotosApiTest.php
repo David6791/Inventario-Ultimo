@@ -376,7 +376,7 @@ class RecepcionFotosApiTest extends TestCase
         $this->getJson('/api/cargas/opciones')->assertOk()->assertJsonPath('data.lector_claude', true);
 
         $r = $this->post('/api/cargas/fotos', ['tipo' => 'TICKET_INTERIOR', 'lector' => 'claude',
-            'imagen' => UploadedFile::fake()->image('t.jpg', 800, 1100)], ['Accept' => 'application/json'])->assertCreated();
+            'imagen' => UploadedFile::fake()->image('t.jpg', 1600, 2200)], ['Accept' => 'application/json'])->assertCreated();
         $r->assertJsonPath('data.bascula', 'VICTORIA')
           ->assertJsonPath('data.lectura.lector', 'claude')
           ->assertJsonPath('data.lectura.campos.ticket.valor', '0010970')
@@ -385,7 +385,8 @@ class RecepcionFotosApiTest extends TestCase
           ->assertJsonPath('data.lectura.campos.productor.valor', 'JUAN PEREZ')
           ->assertJsonPath('data.lectura.campos.tara_kg.confianza', 50)
           ->assertJsonPath('data.lectura.coherente', true)
-          ->assertJsonPath('data.lectura.uso.entrada', 1650);
+          ->assertJsonPath('data.lectura.uso.entrada', 1650)
+          ->assertJsonPath('data.lectura.uso.imagen', '800×1100');
         $this->assertArrayNotHasKey('verificado', $r->json('data.lectura.campos.tara_kg'));
 
         Http::assertSent(fn ($req) => $req->hasHeader('x-api-key', 'sk-prueba')

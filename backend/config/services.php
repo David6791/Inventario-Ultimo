@@ -41,6 +41,8 @@ return [
         'modelo'  => env('ANTHROPIC_MODELO', 'claude-sonnet-5-5'),
         'url'     => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1/messages'),
         'espera'  => (int) env('ANTHROPIC_ESPERA', 60),
+        // Lado mayor de la imagen que se manda (px): define casi todo el costo.
+        'lado_max' => (int) env('ANTHROPIC_LADO_MAX', 1100),
     ],
 
     // Lectura de tickets de báscula (recepción de cargas).

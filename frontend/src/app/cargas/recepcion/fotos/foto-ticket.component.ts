@@ -74,7 +74,7 @@ const CLAVE_PLANTILLA = 'cargas.plantilla.';
                 <i class="pi" [class.pi-sparkles]="lec.lector === 'claude'" [class.pi-th-large]="lec.lector !== 'claude'"></i>
                 {{ lec.lector === 'claude' ? 'Leído por Claude' : 'Leído por Tesseract' }}
                 <span *ngIf="lec.segundos">· {{ lec.segundos.toLocaleString('es-BO') }} s</span>
-                <span *ngIf="lec.uso" [title]="'Tokens: ' + lec.uso.entrada + ' de entrada y ' + lec.uso.salida + ' de salida'">
+                <span *ngIf="lec.uso" [title]="'Tokens: ' + lec.uso.entrada + ' de entrada y ' + lec.uso.salida + ' de salida' + (lec.uso.imagen ? ' · imagen de ' + lec.uso.imagen + ' px' : '')">
                   · {{ (lec.uso.entrada + lec.uso.salida).toLocaleString('es-BO') }} tokens</span>
               </div>
               <div class="dato" *ngFor="let d of datosLeidos()" [class.dudoso]="d.dudoso">

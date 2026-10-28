@@ -69,6 +69,7 @@ services:
       # Lector de boletas con Claude (opcional): sin clave, el sistema ofrece solo manual y Tesseract.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODELO: ${ANTHROPIC_MODELO:-claude-sonnet-5-5}
+      ANTHROPIC_LADO_MAX: ${ANTHROPIC_LADO_MAX:-1100}
     volumes:
       - ../backend:/var/www/backend
       - vendor:/var/www/backend/vendor

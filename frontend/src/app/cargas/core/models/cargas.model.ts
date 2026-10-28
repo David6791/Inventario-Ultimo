@@ -414,7 +414,7 @@ export interface LecturaTicket {
   /** Con Claude: modelo, tiempo y tokens usados. */
   modelo?: string;
   segundos?: number | null;
-  uso?: { entrada: number; salida: number };
+  uso?: { entrada: number; salida: number; imagen?: string };
   /** Con Claude: la balanza que dice la boleta. */
   bascula?: string | null;
 }

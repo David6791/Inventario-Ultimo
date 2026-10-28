@@ -184,7 +184,9 @@ const COLORES: Record<CampoTicket, string> = {
                       <td>{{ cmp.c.coherente === true ? 'cuadra' : cmp.c.coherente === false ? 'no cuadra' : '—' }}</td><td></td></tr>
                   <tr><td>Tiempo</td><td>{{ seg(cmp.t.segundos) }}</td><td>{{ seg(cmp.c.segundos) }}</td><td></td></tr>
                   <tr *ngIf="cmp.c.uso"><td>Tokens</td><td>—</td>
-                      <td [title]="cmp.c.uso.entrada + ' de entrada, ' + cmp.c.uso.salida + ' de salida'">{{ (cmp.c.uso.entrada + cmp.c.uso.salida).toLocaleString('es-BO') }}</td><td></td></tr>
+                      <td>{{ (cmp.c.uso.entrada + cmp.c.uso.salida).toLocaleString('es-BO') }}
+                        <small>({{ cmp.c.uso.entrada.toLocaleString('es-BO') }} entrada · {{ cmp.c.uso.salida.toLocaleString('es-BO') }} salida)</small></td><td></td></tr>
+                  <tr *ngIf="cmp.c.uso?.imagen"><td>Imagen enviada</td><td>—</td><td>{{ cmp.c.uso!.imagen }} px</td><td></td></tr>
                 </tfoot>
               </table>
               <small class="secundario">{{ cmp.iguales }} de {{ cmp.filas.length }} datos iguales{{ cmp.c.modelo ? ' · ' + cmp.c.modelo : '' }}.</small>

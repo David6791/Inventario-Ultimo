@@ -24,38 +24,30 @@ class ClaudeTicketService
     private const ESQUEMA = [
         'type'       => 'object',
         'properties' => [
-            'balanza'       => ['type' => ['string', 'null'], 'description' => 'Nombre de la balanza o empresa que emite el ticket (p. ej. «VICTORIA», «SAN CRISTOBAL»).'],
-            'ticket'        => ['type' => ['string', 'null'], 'description' => 'Número principal del ticket o de pesaje (N.º, N. Pesaje). Solo dígitos, con los ceros a la izquierda.'],
-            'numero_orden'  => ['type' => ['string', 'null'], 'description' => 'Segundo número si existe (N. Orden). Solo dígitos.'],
-            'peso_bruto_kg' => ['type' => ['number', 'null'], 'description' => 'Peso bruto en kg, entero (9.660 KG → 9660).'],
-            'tara_kg'       => ['type' => ['number', 'null'], 'description' => 'Tara en kg, entero.'],
-            'peso_neto_kg'  => ['type' => ['number', 'null'], 'description' => 'Peso neto en kg, entero.'],
-            'placa'         => ['type' => ['string', 'null'], 'description' => 'Placa del vehículo: 3 o 4 números y 3 letras, sin guiones (2261DKE).'],
-            'productor'     => ['type' => ['string', 'null'], 'description' => 'Productor, socio o cliente dueño del mineral, en mayúsculas con tildes.'],
-            'chofer'        => ['type' => ['string', 'null'], 'description' => 'Chofer o transportista, en mayúsculas con tildes.'],
-            'fecha'         => ['type' => ['string', 'null'], 'description' => 'Fecha del pesaje en formato AAAA-MM-DD (de ingreso si hay dos).'],
-            'hora'          => ['type' => ['string', 'null'], 'description' => 'Hora del pesaje en formato HH:MM:SS (de ingreso si hay dos).'],
-            'dudosos'       => ['type' => 'array', 'items' => ['type' => 'string'],
-                                'description' => 'Nombres de los campos que se ven borrosos, tapados o cortados y conviene revisar.'],
-            'notas'         => ['type' => ['string', 'null'], 'description' => 'Algo que la persona deba saber (dos boletas en la imagen, un número tachado y corregido a mano…).'],
+            'balanza'       => ['type' => ['string', 'null'], 'description' => 'Empresa de la balanza'],
+            'ticket'        => ['type' => ['string', 'null'], 'description' => 'N.º de ticket o pesaje, solo dígitos'],
+            'numero_orden'  => ['type' => ['string', 'null'], 'description' => 'N.º de orden, solo dígitos'],
+            'peso_bruto_kg' => ['type' => ['integer', 'null']],
+            'tara_kg'       => ['type' => ['integer', 'null']],
+            'peso_neto_kg'  => ['type' => ['integer', 'null']],
+            'placa'         => ['type' => ['string', 'null'], 'description' => 'Sin guion, p. ej. 2261DKE'],
+            'productor'     => ['type' => ['string', 'null'], 'description' => 'Productor, socio o cliente'],
+            'chofer'        => ['type' => ['string', 'null'], 'description' => 'Chofer o transportista'],
+            'fecha'         => ['type' => ['string', 'null'], 'description' => 'AAAA-MM-DD (de ingreso)'],
+            'hora'          => ['type' => ['string', 'null'], 'description' => 'HH:MM:SS (de ingreso)'],
+            'dudosos'       => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Campos borrosos o tapados'],
+            'notas'         => ['type' => ['string', 'null'], 'description' => 'Solo si hay algo raro; si no, null'],
         ],
         'required' => ['ticket', 'peso_bruto_kg', 'tara_kg', 'peso_neto_kg', 'dudosos'],
     ];
 
+    // Corto a propósito: cada palabra se paga en cada lectura.
     private const INSTRUCCIONES = <<<'TXT'
-        La imagen es una boleta de una báscula de camiones de Bolivia (recepción de mineral en una comercializadora).
-        Extrae los datos IMPRESOS de la boleta con la herramienta registrar_boleta.
-
-        Reglas:
-        - Pesos en kilogramos como números enteros: «9.660 KG» o «9,660» son 9660. No inventes decimales.
-        - Ignora lo escrito a mano (vistos, firmas, códigos como «CR-2165», círculos) salvo que corrija un número impreso; en ese caso usa el impreso y cuéntalo en «notas».
-        - Si en la imagen hay otro documento además de la boleta de la báscula (un recibo, un anticipo), usa solo la boleta de la báscula.
-        - Si un dato no está en la boleta o no se puede leer, devuélvelo como null. Nunca lo adivines.
-        - Si dudas de un dato (borroso, tapado por un visto, cortado), ponlo igual y nómbralo en «dudosos».
-        - Placa boliviana: 3 o 4 dígitos seguidos de 3 letras, sin guion.
-        - No calcules el neto: copia el que está impreso.
-
-        Responde únicamente llamando a la herramienta registrar_boleta. Si no puedes usarla, responde solo con un objeto JSON con esos mismos campos, sin texto alrededor.
+        Boleta de báscula de camiones (Bolivia). Extrae los datos IMPRESOS con registrar_boleta.
+        - Pesos en kg enteros: «9.660 KG» = 9660. Copia el neto impreso, no lo calcules.
+        - Ignora lo escrito a mano (vistos, firmas, códigos) y cualquier otro papel de la imagen.
+        - Dato ausente o ilegible: null, nunca lo adivines. Si dudas, ponlo y nómbralo en «dudosos».
+        - Solo la llamada a la herramienta, sin texto. Si no puedes usarla, solo el JSON.
         TXT;
 
     public function __construct(private readonly OcrTicketService $ocr)
@@ -74,7 +66,7 @@ class ClaudeTicketService
             throw new RuntimeException('Falta la clave de la API de Claude (ANTHROPIC_API_KEY en backend/.env).');
         }
         $modelo ??= config('services.anthropic.modelo');
-        [$tipo, $datos] = $this->imagen($ruta);
+        [$tipo, $datos, $px] = $this->imagen($ruta);
 
         $inicio = microtime(true);
         $r = Http::withHeaders([
@@ -82,7 +74,7 @@ class ClaudeTicketService
             'anthropic-version' => '2023-06-01',
         ])->timeout(config('services.anthropic.espera', 60))->acceptJson()->post(config('services.anthropic.url'), [
             'model'       => $modelo,
-            'max_tokens'  => 1024,
+            'max_tokens'  => 600,
             'tools'       => [[
                 'name'         => 'registrar_boleta',
                 'description'  => 'Registra los datos leídos de la boleta de báscula.',
@@ -114,6 +106,7 @@ class ClaudeTicketService
         $lectura['uso'] = [
             'entrada' => (int) $r->json('usage.input_tokens', 0),
             'salida'  => (int) $r->json('usage.output_tokens', 0),
+            'imagen'  => $px,
         ];
 
         return $lectura;
@@ -187,10 +180,12 @@ class ClaudeTicketService
     }
 
     /**
-     * La imagen en JPEG y a lo sumo 1.568 px de lado mayor: más grande no mejora
-     * la lectura de una boleta y cuesta más tokens.
+     * La imagen en JPEG con el lado mayor de ANTHROPIC_LADO_MAX px (1.100). La
+     * imagen es casi todo el costo: tokens ≈ ancho × alto / 750, así que a
+     * 1.100 px una boleta cuesta unos 1.200 tokens en vez de unos 2.400 a 1.568.
+     * Si se leen mal letras chicas, se sube; con «Comparar con Claude» se ve.
      *
-     * @return array{0: string, 1: string} tipo y datos en base64
+     * @return array{0: string, 1: string, 2: string} tipo, datos en base64 y tamaño enviado
      */
     private function imagen(string $ruta): array
     {
@@ -200,17 +195,19 @@ class ClaudeTicketService
         }
         $w = imagesx($img);
         $h = imagesy($img);
-        $escala = min(1, 1568 / max($w, $h));
+        $lado = max(600, (int) config('services.anthropic.lado_max', 1100));
+        $escala = min(1, $lado / max($w, $h));
         if ($escala < 1) {
             $chica = imagescale($img, (int) round($w * $escala), (int) round($h * $escala), IMG_BICUBIC);
             imagedestroy($img);
             $img = $chica;
         }
+        $px = imagesx($img) . '×' . imagesy($img);
         ob_start();
-        imagejpeg($img, null, 90);
+        imagejpeg($img, null, 85);
         $bytes = ob_get_clean();
         imagedestroy($img);
 
-        return ['image/jpeg', base64_encode($bytes)];
+        return ['image/jpeg', base64_encode($bytes), $px];
     }
 }
