@@ -389,8 +389,23 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertArrayNotHasKey('verificado', $r->json('data.lectura.campos.tara_kg'));
 
         Http::assertSent(fn ($req) => $req->hasHeader('x-api-key', 'sk-prueba')
-            && $req['tool_choice']['name'] === 'registrar_boleta'
+            && $req['tools'][0]['name'] === 'registrar_boleta' && $req['tool_choice']['type'] === 'auto'
             && $req['messages'][0]['content'][0]['source']['media_type'] === 'image/jpeg');
+    }
+
+    public function test_claude_que_contesta_con_texto_json_tambien_se_lee(): void
+    {
+        config(['services.anthropic.key' => 'sk-prueba']);
+        Http::fake(['api.anthropic.com/*' => Http::response(['type' => 'message', 'model' => 'claude-x',
+            'content' => [['type' => 'text', 'text' => "Aquí están los datos:\n```json\n{\"ticket\": \"4512\", \"peso_bruto_kg\": 20000, \"tara_kg\": 8000, \"peso_neto_kg\": 12000, \"dudosos\": []}\n```"]],
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5]])]);
+
+        Sanctum::actingAs($this->recepcion);
+        $this->post('/api/cargas/fotos', ['tipo' => 'TICKET_INTERIOR', 'lector' => 'claude',
+            'imagen' => UploadedFile::fake()->image('t.jpg', 800, 1100)], ['Accept' => 'application/json'])->assertCreated()
+            ->assertJsonPath('data.lectura.lector', 'claude')
+            ->assertJsonPath('data.lectura.campos.peso_neto_kg.valor', 12000)
+            ->assertJsonPath('data.lectura.coherente', true);
     }
 
     public function test_si_claude_falla_la_foto_se_guarda_y_se_avisa(): void

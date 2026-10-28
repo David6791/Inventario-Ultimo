@@ -11,8 +11,10 @@ use RuntimeException;
  * dato, aunque el ticket venga corrido, con vistos de bolígrafo, bordes de caja
  * o junto con otro papel en el mismo escaneo.
  *
- * La respuesta llega por una herramienta con esquema fijo (tool_choice), así
- * los datos vienen ya ordenados. Se devuelve con la misma forma que la lectura
+ * La respuesta llega por una herramienta con esquema fijo, así los datos
+ * vienen ya ordenados. No se fuerza con tool_choice (algunos modelos no lo
+ * aceptan): se pide en las instrucciones y, si el modelo contesta con texto,
+ * se toma el JSON del texto. Se devuelve con la misma forma que la lectura
  * de Tesseract, para que el resto del sistema no distinga de dónde salió; la
  * cuenta bruto − tara = neto y la revisión de la persona se mantienen.
  */
@@ -52,6 +54,8 @@ class ClaudeTicketService
         - Si dudas de un dato (borroso, tapado por un visto, cortado), ponlo igual y nómbralo en «dudosos».
         - Placa boliviana: 3 o 4 dígitos seguidos de 3 letras, sin guion.
         - No calcules el neto: copia el que está impreso.
+
+        Responde únicamente llamando a la herramienta registrar_boleta. Si no puedes usarla, responde solo con un objeto JSON con esos mismos campos, sin texto alrededor.
         TXT;
 
     public function __construct(private readonly OcrTicketService $ocr)
@@ -84,7 +88,7 @@ class ClaudeTicketService
                 'description'  => 'Registra los datos leídos de la boleta de báscula.',
                 'input_schema' => self::ESQUEMA,
             ]],
-            'tool_choice' => ['type' => 'tool', 'name' => 'registrar_boleta'],
+            'tool_choice' => ['type' => 'auto'],
             'messages'    => [[
                 'role'    => 'user',
                 'content' => [
@@ -98,7 +102,7 @@ class ClaudeTicketService
             $msg = $r->json('error.message') ?? $r->body();
             throw new RuntimeException("La API de Claude respondió {$r->status()}: " . mb_substr((string) $msg, 0, 200));
         }
-        $entrada = collect($r->json('content', []))->firstWhere('type', 'tool_use')['input'] ?? null;
+        $entrada = $this->entrada((array) $r->json('content', []));
         if (! is_array($entrada)) {
             throw new RuntimeException('La API de Claude no devolvió los datos de la boleta.');
         }
@@ -113,6 +117,25 @@ class ClaudeTicketService
         ];
 
         return $lectura;
+    }
+
+    /** Los datos de la boleta: de la herramienta o, si contestó con texto, del JSON en el texto. */
+    private function entrada(array $contenido): ?array
+    {
+        foreach ($contenido as $b) {
+            if (($b['type'] ?? '') === 'tool_use' && ($b['name'] ?? '') === 'registrar_boleta' && is_array($b['input'] ?? null)) {
+                return $b['input'];
+            }
+        }
+        $texto = collect($contenido)->where('type', 'text')->pluck('text')->implode("\n");
+        if (preg_match('/\{.*\}/s', $texto, $m)) {
+            $json = json_decode($m[0], true);
+            if (is_array($json) && array_intersect(array_keys($json), ['ticket', 'peso_bruto_kg', 'tara_kg', 'peso_neto_kg'])) {
+                return $json;
+            }
+        }
+
+        return null;
     }
 
     /** De la respuesta de Claude a la forma de la lectura de Tesseract. */
