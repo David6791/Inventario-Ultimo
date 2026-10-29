@@ -98,6 +98,8 @@ const ESTRUCTURA: ItemMenu[] = [
       { etiqueta: 'Cotizaciones',        icono: 'pi pi-chart-line', ruta: '/cargas/cotizaciones', permiso: 'cargas.ver' },
       { etiqueta: 'Retenciones',         icono: 'pi pi-percentage', ruta: '/cargas/retenciones',  permiso: 'cargas.ver' },
       { etiqueta: 'Bono de transporte',  icono: 'pi pi-money-bill', ruta: '/cargas/bono',         permiso: 'cargas.ver' },
+      { etiqueta: 'Bono de laboratorio', icono: 'pi pi-filter-fill', ruta: '/cargas/bono-laboratorio', permiso: 'cargas.ver' },
+      { etiqueta: 'Reglas de peso',      icono: 'pi pi-sliders-h',  ruta: '/cargas/reglas-peso',  permiso: 'cargas.ver' },
       { etiqueta: 'Productores',         icono: 'pi pi-users',      ruta: '/cargas/productores',  permiso: 'cargas.ver' },
       { etiqueta: 'Cooperativas',        icono: 'pi pi-sitemap',    ruta: '/cargas/cooperativas', permiso: 'cargas.ver' },
       { etiqueta: 'Minas y bocaminas',   icono: 'pi pi-map',        ruta: '/cargas/minas',        permiso: 'cargas.ver' },

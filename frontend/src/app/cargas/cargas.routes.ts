@@ -58,6 +58,18 @@ export const CARGAS_ROUTES: Routes = [
     loadComponent: () => import('./recepcion/bono-tramos.component').then((m) => m.BonoTramosComponent),
   },
   {
+    path: 'bono-laboratorio',
+    title: 'Bono de laboratorio',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./recepcion/bono-laboratorio.component').then((m) => m.BonoLaboratorioComponent),
+  },
+  {
+    path: 'reglas-peso',
+    title: 'Reglas de peso',
+    canMatch: [conPermiso('cargas.ver')],
+    loadComponent: () => import('./configuracion/reglas-peso.component').then((m) => m.ReglasPesoComponent),
+  },
+  {
     path: 'productores/importar',
     title: 'Importar productores',
     canMatch: [conPermiso('cargas.catalogos')],

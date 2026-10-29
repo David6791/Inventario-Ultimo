@@ -347,8 +347,9 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertEquals(12025, (float) Pesaje::find($id)->peso_final_kg);
         $this->assertSame('PROMEDIO', Pesaje::find($id)->criterio_peso);
 
-        // El límite es un parámetro: con 50 kg, 80 de diferencia ya no promedia.
-        DB::table('cargas.parametro')->where('clave', 'LIMITE_PROMEDIO_PESO_KG')->update(['valor' => '50']);
+        // El límite está en las reglas de peso: con 50 kg, 80 de diferencia ya no promedia.
+        DB::table('cargas.regla_peso')->where('orden', 2)->update(['hasta' => 50]);
+        DB::table('cargas.regla_peso')->where('orden', 3)->update(['desde' => 50]);
         $p = $this->postJson('/api/cargas/lotes', $this->base(['pesaje' => $this->camion([
             'ticket' => 'PV-9', 'peso_bruto_kg' => 20000, 'tara_kg' => 8000, 'peso_cliente_kg' => 12080])]))->assertCreated()->json('data');
         $this->assertSame('EMPRESA', $p['pesajes'][0]['criterio_peso']);

@@ -99,6 +99,11 @@ class Lote extends CargasModel
     }
 
     /** Recepción mixta: el otro lote del mismo viaje. */
+    public function bonoLaboratorio(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BonoLaboratorio::class, 'lote_id');
+    }
+
     public function lotePar(): BelongsTo
     {
         return $this->belongsTo(self::class, 'lote_par_id');

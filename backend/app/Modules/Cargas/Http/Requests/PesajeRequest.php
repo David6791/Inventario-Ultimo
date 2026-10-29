@@ -35,6 +35,16 @@ class PesajeRequest extends CatalogoRequest
         }
         $datos['tipo'] = $datos['tipo'] ?? 'INGRESO';
         $datos['peso_cliente_tipo'] = $datos['peso_cliente_tipo'] ?? 'NETO';
+        // Boleta del cliente con bruto y tara: su neto es la resta. Solo el bruto: se le resta nuestra tara.
+        $b = $datos['peso_cliente_bruto_kg'] ?? null;
+        $t = $datos['peso_cliente_tara_kg'] ?? null;
+        if (is_numeric($b) && is_numeric($t)) {
+            $datos['peso_cliente_kg'] = round((float) $b - (float) $t, 2);
+            $datos['peso_cliente_tipo'] = 'NETO';
+        } elseif (is_numeric($b) && ! is_numeric($datos['peso_cliente_kg'] ?? null)) {
+            $datos['peso_cliente_kg'] = (float) $b;
+            $datos['peso_cliente_tipo'] = 'BRUTO';
+        }
         $p === '' ? $this->merge($datos) : $this->merge([rtrim($p, '.') => $datos]);
     }
 
@@ -50,6 +60,8 @@ class PesajeRequest extends CatalogoRequest
             "{$p}tara_kg"       => [$req, 'numeric', 'min:0', "lt:{$p}peso_bruto_kg", 'decimal:0,2'],
             "{$p}peso_cliente_kg" => ['nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
             "{$p}peso_cliente_tipo" => ['nullable', Rule::in(['NETO', 'BRUTO'])],
+            "{$p}peso_cliente_bruto_kg" => ['nullable', 'numeric', 'gt:0', 'max:9999999', 'decimal:0,2'],
+            "{$p}peso_cliente_tara_kg"  => ['nullable', 'numeric', 'min:0', "lt:{$p}peso_cliente_bruto_kg", 'decimal:0,2'],
             "{$p}num_sacos"     => ['nullable', 'integer', 'min:0', 'max:100000'],
             "{$p}placa"         => ['nullable', 'string', 'max:15'],
             "{$p}chofer_nombre" => ["required_if:{$p}tipo,INGRESO", 'nullable', 'string', 'max:150'],
@@ -86,6 +98,7 @@ class PesajeRequest extends CatalogoRequest
             "{$p}ticket.required_with"      => 'Indique el número de ticket de la báscula.',
             "{$p}bascula.required_with"     => 'Indique la báscula.',
             "{$p}tara_kg.required_with"     => 'Indique la tara.',
+            "{$p}peso_cliente_tara_kg.lt"   => 'La tara del cliente debe ser menor que su peso bruto.',
             "{$p}peso_cliente_kg.gt"        => 'El peso del cliente debe ser mayor que cero; déjelo vacío si no lo declaró.',
             "{$p}fecha_ticket.before_or_equal" => 'La fecha de la boleta no puede ser posterior a mañana: revísela.',
             "{$p}fecha_ticket.after"        => 'La fecha de la boleta no es válida: revísela.',

@@ -17,6 +17,7 @@ class Pesaje extends CargasModel
     protected $fillable = [
         'lote_id', 'tipo', 'bascula', 'ticket', 'fecha', 'peso_bruto_kg', 'tara_kg', 'peso_cliente_kg', 'peso_cliente_tipo', 'num_sacos',
         'placa', 'chofer_nombre', 'chofer_ci', 'registrado_por', 'modalidad', 'descuento_sacos_kg', 'pesaje_viaje_id', 'numero_orden', 'fecha_ticket',
+        'peso_cliente_bruto_kg', 'peso_cliente_tara_kg',
     ];
 
     protected $casts = [
@@ -24,6 +25,9 @@ class Pesaje extends CargasModel
         'peso_bruto_kg' => 'decimal:2',
         'tara_kg'       => 'decimal:2',
         'peso_cliente_kg' => 'decimal:2',
+        'peso_cliente_bruto_kg' => 'decimal:2',
+        'peso_cliente_tara_kg' => 'decimal:2',
+        'regla_peso_id' => 'integer',
         'peso_neto_kg'  => 'decimal:2',
         'descuento_sacos_kg' => 'decimal:2',
         'peso_final_kg' => 'decimal:2',
@@ -67,5 +71,10 @@ class Pesaje extends CargasModel
     public function viaje(): BelongsTo
     {
         return $this->belongsTo(self::class, 'pesaje_viaje_id');
+    }
+
+    public function reglaPeso(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(ReglaPeso::class, 'regla_peso_id');
     }
 }

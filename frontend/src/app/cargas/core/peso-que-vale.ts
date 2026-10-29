@@ -18,4 +18,5 @@ export const ETIQUETA_CRITERIO: Record<CriterioPeso, string> = {
   EMPRESA: 'el de nuestra báscula',
   CLIENTE: 'el del cliente',
   PROMEDIO: 'el promedio',
+  FORMULA: 'el de la fórmula',
 };

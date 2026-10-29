@@ -63,7 +63,8 @@ class LoteController extends Controller
             'data'    => $this->ficha($r['lote']),
             'mensaje' => ($r['lote_sacos'] ? "Lotes {$r['lote']->codigo} (granel) y {$r['lote_sacos']->codigo} (sacos) recibidos."
                                            : "Lote {$r['lote']->codigo} recibido.")
-                . ($r['bono'] ? " Bono de transporte: " . self::monto($r['bono']) . ", por pagar en caja." : ''),
+                . ($r['bono'] ? " Bono de transporte: " . self::monto($r['bono']) . ", por pagar en caja." : '')
+                . (($lab = $r['lote']->bonoLaboratorio()->first()) ? " Bono de laboratorio: " . self::monto($lab) . ", por pagar en caja." : ''),
         ], 201);
     }
 
@@ -120,10 +121,11 @@ class LoteController extends Controller
             'pesajes.correccionesCliente.corregidoPor:id,name',
             'pesajes.fotos:id,tipo,plantilla_id,pesaje_id,lectura,created_at', 'pesajes.sacos.fotos:id,tipo,pesaje_saco_id,created_at',
             'pesajes.viaje:id,lote_id,ticket,bascula', 'pesajes.viaje.lote:id,codigo', 'lotePar:id,codigo,material,estado',
-            'eventos.usuario:id,name',
+            'eventos.usuario:id,name', 'bonoLaboratorio.movimiento:id,numero,caja_id,fecha', 'pesajes.reglaPeso:id,orden,formula,descripcion',
         ]);
+        $anticipos = DB::table('cargas.v_lote_anticipos')->where('lote_id', $lote->id)->first();
 
-        return [...$lote->toArray(), ...($this->resumen([$lote->id])[$lote->id] ?? []),
+        return [...$lote->toArray(), ...($this->resumen([$lote->id])[$lote->id] ?? []), 'anticipos' => $anticipos,
                 'url_verificacion' => UrlVerificacion::de($lote)];
     }
 
@@ -172,7 +174,7 @@ class LoteController extends Controller
         ]])->all();
     }
 
-    private static function monto(\App\Modules\Cargas\Models\BonoTransporte $bono): string
+    private static function monto(\App\Modules\Cargas\Models\BonoTransporte|\App\Modules\Cargas\Models\BonoLaboratorio $bono): string
     {
         return ($bono->moneda === 'USD' ? '$us ' : 'Bs ') . number_format((float) $bono->monto, 2, ',', '.');
     }

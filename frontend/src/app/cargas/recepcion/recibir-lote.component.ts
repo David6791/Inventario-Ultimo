@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { catchError, of, switchMap } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -16,11 +17,11 @@ import { diferenciasBoleta } from '../core/diferencias';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
 import { formatoDinero } from '../../caja/core/dinero';
-import { Bocamina, DatosPesaje, DatosRecepcion, LecturaTicket, Mina, Opciones, PlantillaBascula, Productor, ProductorParecido, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
+import { Bocamina, DatosRecepcion, PesoQueVale, LecturaTicket, Mina, Opciones, PlantillaBascula, Productor, ProductorParecido, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
 import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { SeriesService } from '../core/services/series.service';
-import { PesajeCamposComponent, grupoPesaje, recordarBascula } from './pesaje-campos.component';
+import { PesajeCamposComponent, datosPesaje, grupoPesaje, recordarBascula } from './pesaje-campos.component';
 import { SacosCamposComponent, datosSacos, grupoSacos } from './sacos-campos.component';
 import { ConfirmarPesajeComponent, PesajeAConfirmar } from './confirmar-pesaje.component';
 
@@ -69,25 +70,12 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
           <div class="proximo">{{ serie()?.proximo_codigo ?? '—' }}</div>
           <small *ngIf="serie()">{{ serie()!.linea?.nombre }}</small>
         </div>
+      </div>
+    </form>
 
-        <div class="campo span-3" *ngIf="!sedeFija(); else sedeAsignada">
-          <label for="sede">Sede</label>
-          <p-dropdown inputId="sede" formControlName="almacen_id" [options]="sedes()" optionLabel="nombre"
-                      optionValue="id" placeholder="Elija la sede" appendTo="body" [style]="{ width: '100%' }" />
-          <small class="aviso-texto" *ngIf="opciones() && !sedes().length">Su usuario no recibe carga en ninguna sede: pida que lo asignen en «Sedes de recepción».</small>
-        </div>
-        <ng-template #sedeAsignada>
-          <div class="campo span-3">
-            <label>Sede</label>
-            <div class="sede-fija"><i class="pi pi-map-marker"></i> {{ sedeFija()!.nombre }}</div>
-            <small>Es la sede donde usted recibe carga.</small>
-          </div>
-        </ng-template>
-        <div class="campo span-3">
-          <label for="guia">Guía de transporte <span class="opcional">(opcional)</span></label>
-          <input id="guia" pInputText formControlName="guia_transporte" maxlength="40" class="codigo" />
-        </div>
-
+    <!-- Productor y mina (compra) o mina propia y bocamina: van dentro del pesaje, como en la boleta -->
+    <ng-template #origen>
+      <div [formGroup]="form" class="campos origen" *ngIf="serie()">
         <ng-container *ngIf="serie()?.origen === 'COMPRA'">
           <div class="campo span-3">
             <label for="productor">Productor</label>
@@ -117,12 +105,11 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
             <small>Define el municipio para la regalía.</small>
           </div>
         </ng-container>
-
         <ng-container *ngIf="serie()?.origen === 'PROPIA'">
           <div class="campo span-3">
             <label for="mina-propia">Mina propia</label>
             <p-dropdown inputId="mina-propia" formControlName="mina_id" [options]="minasPropias()" optionLabel="nombre" optionValue="id"
-                        placeholder="Elija la mina" appendTo="body" (onChange)="cargarBocaminas()" />
+                        placeholder="Elija la mina" appendTo="body" (onChange)="cargarBocaminas()" [style]="{ width: '100%' }" />
           </div>
           <div class="campo span-3">
             <label for="bocamina">Bocamina</label>
@@ -130,18 +117,9 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
                         [optionLabel]="'codigo'" placeholder="Elija la bocamina" appendTo="body" [style]="{ width: '100%' }" />
           </div>
         </ng-container>
-
-        <div class="campo span-2">
-          <label for="material">Material <span class="opcional">(opcional)</span></label>
-          <p-dropdown inputId="material" formControlName="material" [options]="opciones()?.materiales ?? []" optionLabel="etiqueta"
-                      optionValue="valor" placeholder="Elementos que trae" [showClear]="true" appendTo="body" [style]="{ width: '100%' }" />
-        </div>
-        <div class="campo span-4">
-          <label for="obs">Observaciones <span class="opcional">(opcional)</span></label>
-          <textarea id="obs" pInputTextarea formControlName="observaciones" rows="2" maxlength="1000"></textarea>
-        </div>
       </div>
-    </form>
+      <p class="secundario" *ngIf="!serie()">Elija la serie para anotar el productor y la mina.</p>
+    </ng-template>
 
     <section class="tarjeta tipo">
       <h3>Tipo de recepción</h3>
@@ -158,15 +136,21 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
         <span class="check" *ngIf="tipoRecepcion === 'BASCULA'"><p-checkbox [(ngModel)]="conPesaje" [binary]="true" inputId="con-pesaje" />
           <label for="con-pesaje">El camión ya pasó por la báscula</label></span>
       </div>
-      <app-pesaje-campos *ngIf="conPesaje || tipoRecepcion === 'MIXTA'" [grupo]="pesaje" [plantillas]="plantillas()"
+      <app-pesaje-campos *ngIf="conPesaje || tipoRecepcion === 'MIXTA'; else soloOrigen" [grupo]="pesaje" [plantillas]="plantillas()"
                          [fotoObligatoria]="!!opciones()?.foto_ticket_obligatoria" [sinSacos]="tipoRecepcion === 'MIXTA'"
-                         [limite]="opciones()?.limite_promedio_peso_kg ?? 100" [descuentoSacos]="tipoRecepcion === 'MIXTA' ? (reparto()?.sacos ?? 0) : 0"
-                         [claudeDisponible]="!!opciones()?.lector_claude" (leido)="boletasLeidas($event)" />
-      <p class="secundario" *ngIf="!conPesaje && tipoRecepcion === 'BASCULA'">Podrá agregar los pesajes después, desde la ficha del lote.</p>
+                         [descuentoSacos]="tipoRecepcion === 'MIXTA' ? (reparto()?.sacos ?? 0) : 0"
+                         [claudeDisponible]="!!opciones()?.lector_claude" (leido)="boletasLeidas($event)">
+        <ng-container *ngTemplateOutlet="origen" />
+      </app-pesaje-campos>
+      <ng-template #soloOrigen>
+        <ng-container *ngTemplateOutlet="origen" />
+        <p class="secundario">Podrá agregar los pesajes después, desde la ficha del lote.</p>
+      </ng-template>
     </section>
 
     <section class="tarjeta" *ngIf="tipoRecepcion !== 'BASCULA'">
       <h3>{{ tipoRecepcion === 'MIXTA' ? 'Sacos (van en otro lote)' : 'Sacos en balanza manual' }}</h3>
+      <ng-container *ngIf="tipoRecepcion === 'SACOS'"><ng-container *ngTemplateOutlet="origen" /></ng-container>
       <app-sacos-campos [grupo]="sacos" [conTransporte]="tipoRecepcion === 'SACOS'" />
 
       <ng-container *ngIf="tipoRecepcion === 'MIXTA'">
@@ -188,23 +172,48 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
           </div>
         </div>
         <p class="secundario">Se crean dos lotes de la misma serie y productor: el de granel con el neto del ticket menos los sacos,
-          y el de sacos con sus pesadas. El bono de transporte es uno solo, por el camión completo.</p>
+          y el de sacos con sus pesadas. El bono de transporte es uno solo, por el camión completo; el de laboratorio, uno por lote.</p>
       </ng-container>
     </section>
 
-    <p-dialog [(visible)]="revisarVisible" header="Revise las diferencias con la boleta" [modal]="true" [style]="{ width: '34rem', maxWidth: '95vw' }"
-              [draggable]="false">
-      <p class="secundario">Lo leído de la boleta no coincide con lo anotado:</p>
-      <ul class="diferencias"><li *ngFor="let d of diferencias()"><i class="pi pi-exclamation-triangle"></i> {{ d }}</li></ul>
-      <p class="secundario">Corrija lo que haga falta, o guarde igual si lo anotado es lo correcto.</p>
-      <ng-template pTemplate="footer">
-        <p-button label="Volver a revisar" [text]="true" (onClick)="revisarVisible = false" />
-        <p-button label="Guardar igual" icon="pi pi-check" severity="warning" (onClick)="revisarVisible = false; guardar(true)" />
-      </ng-template>
-    </p-dialog>
+    <!-- Más datos del lote -->
+    <form [formGroup]="form" class="tarjeta">
+      <h3>Más datos</h3>
+      <div class="campos">
+        <div class="campo span-3" *ngIf="!sedeFija(); else sedeAsignada">
+          <label for="sede">Sede</label>
+          <p-dropdown inputId="sede" formControlName="almacen_id" [options]="sedes()" optionLabel="nombre"
+                      optionValue="id" placeholder="Elija la sede" appendTo="body" [style]="{ width: '100%' }" />
+          <small class="aviso-texto" *ngIf="opciones() && !sedes().length">Su usuario no recibe carga en ninguna sede: pida que lo asignen en «Sedes de recepción».</small>
+        </div>
+        <ng-template #sedeAsignada>
+          <div class="campo span-3">
+            <label>Sede</label>
+            <div class="sede-fija"><i class="pi pi-map-marker"></i> {{ sedeFija()!.nombre }}</div>
+            <small>Es la sede donde usted recibe carga.</small>
+          </div>
+        </ng-template>
+        <div class="campo span-3">
+          <label for="guia">Guía de transporte <span class="opcional">(opcional)</span></label>
+          <input id="guia" pInputText formControlName="guia_transporte" maxlength="40" class="codigo" />
+        </div>
+        <div class="campo span-2">
+          <label for="material">Material</label>
+          <p-dropdown inputId="material" formControlName="material" [options]="opciones()?.materiales ?? []" optionLabel="etiqueta"
+                      optionValue="valor" placeholder="Elementos que trae" [showClear]="true" appendTo="body" [style]="{ width: '100%' }" />
+          <small *ngIf="bonoLab() as b" class="bono-lab"><i class="pi pi-filter-fill"></i>
+            Bono de laboratorio: <b>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</b> ({{ b.num_elementos }} elemento{{ b.num_elementos === 1 ? '' : 's' }})</small>
+          <small *ngIf="!form.value.material && serie()?.origen === 'COMPRA'" class="secundario">Sin material no se genera el bono de laboratorio.</small>
+        </div>
+        <div class="campo span-4">
+          <label for="obs">Observaciones <span class="opcional">(opcional)</span></label>
+          <textarea id="obs" pInputTextarea formControlName="observaciones" rows="2" maxlength="1000"></textarea>
+        </div>
+      </div>
+    </form>
 
     <app-confirmar-pesaje [(visible)]="confirmarVisible" [datos]="aConfirmar()" [vale]="valeAConfirmar()" [extras]="extrasConfirmar()"
-                          (confirmado)="guardar(false, true)" />
+                          [diferencias]="diferencias()" (confirmado)="guardar(true)" />
 
     <div class="pie">
       <p-button label="Cancelar" [text]="true" routerLink="/cargas/lotes" />
@@ -243,8 +252,8 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
     .de-boleta { color: #047857; margin-left: 0.4rem; }
     .sede-fija { display: flex; gap: 0.4rem; align-items: center; font-weight: 600; padding: 0.55rem 0; }
     .aviso-texto { color: #b45309; }
-    .diferencias { list-style: none; padding: 0; margin: 0.5rem 0 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
-    .diferencias li { display: flex; gap: 0.45rem; color: #92400e; font-size: 0.9rem; }
+    .origen { margin: 0.2rem 0 0.3rem; }
+    .bono-lab { color: #6d28d9; display: flex; gap: 0.3rem; align-items: center; }
   `],
 })
 export class RecibirLoteComponent implements OnInit {
@@ -276,11 +285,11 @@ export class RecibirLoteComponent implements OnInit {
   readonly buscado = signal(false);
   readonly productorDeBoleta = signal(false);
   readonly diferencias = signal<string[]>([]);
-  revisarVisible = false;
   confirmarVisible = false;
   @ViewChild(PesajeCamposComponent) private camposPesaje?: PesajeCamposComponent;
   readonly aConfirmar = signal<PesajeAConfirmar | null>(null);
-  readonly valeAConfirmar = signal<{ kg: number; criterio: 'EMPRESA' | 'CLIENTE' | 'PROMEDIO' } | null>(null);
+  readonly valeAConfirmar = signal<PesoQueVale | null>(null);
+  readonly bonoLab = signal<{ num_elementos: number; monto: string; moneda: string } | null>(null);
   readonly extrasConfirmar = signal<{ etiqueta: string; valor: string | null | undefined }[]>([]);
   readonly tipos = [
     { valor: 'BASCULA', etiqueta: 'Báscula', icono: 'pi pi-truck' },
@@ -350,6 +359,9 @@ export class RecibirLoteComponent implements OnInit {
       const sede = o.sede_recepcion_fija ?? pred ?? (lista.length === 1 ? lista[0].id : null);
       if (sede && !this.form.value.almacen_id) this.form.patchValue({ almacen_id: sede });
     });
+    this.form.get('material')!.valueChanges.pipe(
+      switchMap((m) => (m ? this.servicio.bonoLaboratorioPara(m).pipe(catchError(() => of(null))) : of(null))),
+    ).subscribe((b) => this.bonoLab.set(b));
     this.form.get('serie_id')!.valueChanges.subscribe((id) => {
       this.serieId.set(id);
       this.form.patchValue({ mina_id: null, bocamina_id: null }, { emitEvent: false });
@@ -415,31 +427,39 @@ export class RecibirLoteComponent implements OnInit {
     this.parecidos.set([]);
   }
 
-  guardar(revisado = false, confirmado = false): void {
+  /**
+   * Antes de guardar, siempre (a mano, con Tesseract o con Claude), se
+   * muestra todo lo anotado con la foto de la boleta y las diferencias contra
+   * lo leído; se guarda solo cuando la persona confirma.
+   */
+  guardar(confirmado = false): void {
     const v = this.form.getRawValue();
     const conPesaje = this.tipoRecepcion === 'MIXTA' || (this.tipoRecepcion === 'BASCULA' && this.conPesaje);
-    // Registro manual: antes de guardar se confirma todo contra la boleta.
-    if (!confirmado && conPesaje && this.camposPesaje?.modo() === 'MANUAL') {
-      this.aConfirmar.set(this.pesaje.getRawValue() as PesajeAConfirmar);
-      this.valeAConfirmar.set(this.camposPesaje.vale());
+    if (!confirmado) {
+      const p = this.pesaje.getRawValue();
+      this.diferencias.set(conPesaje ? diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
+        { placa: p.placa, chofer_nombre: p.chofer_nombre }, this.productor()?.nombre ?? null) : []);
+      this.aConfirmar.set(conPesaje ? (p as PesajeAConfirmar) : null);
+      this.valeAConfirmar.set(conPesaje ? this.camposPesaje?.vale() ?? null : null);
+      const sacos = this.tipoRecepcion !== 'BASCULA' ? datosSacos(this.sacos, this.tipoRecepcion === 'SACOS') : null;
+      const kgSacos = sacos ? sacos.pesadas.reduce((t, x) => t + (x.peso_kg ?? 0), 0) : 0;
+      const nSacos = sacos ? sacos.pesadas.reduce((t, x) => t + (x.sacos ?? 0), 0) : 0;
+      const mina = this.minas().find((m) => m.id === v.mina_id)?.nombre;
       this.extrasConfirmar.set([
+        { etiqueta: 'Lote', valor: this.serie()?.proximo_codigo },
         { etiqueta: 'Tipo de recepción', valor: this.tipos.find((t) => t.valor === this.tipoRecepcion)?.etiqueta },
         { etiqueta: 'Sede', valor: this.sedes().find((s) => s.id === v.almacen_id)?.nombre },
         ...(this.serie()?.origen === 'COMPRA' ? [{ etiqueta: 'Productor', valor: this.productor()?.nombre }] : []),
-        ...(this.tipoRecepcion === 'MIXTA' && this.reparto() ? [{ etiqueta: 'Sacos (otro lote)', valor: `${this.fmt(this.reparto()!.sacos)} kg` }] : []),
+        ...(mina ? [{ etiqueta: 'Mina', valor: mina }] : []),
+        { etiqueta: 'Material', valor: this.opciones()?.materiales.find((m) => m.valor === v.material)?.etiqueta ?? v.material },
+        ...(sacos ? [{ etiqueta: this.tipoRecepcion === 'MIXTA' ? 'Sacos (otro lote)' : 'Sacos', valor:
+            `${nSacos} sacos · ${this.fmt(kgSacos)} kg en ${sacos.pesadas.length} pesada${sacos.pesadas.length === 1 ? '' : 's'}` }] : []),
+        ...(this.tipoRecepcion === 'MIXTA' && this.reparto() ? [{ etiqueta: 'Granel (este lote)', valor: `${this.fmt(this.reparto()!.granel)} kg` }] : []),
+        ...(this.tipoRecepcion === 'SACOS' && sacos ? [{ etiqueta: 'Quién entrega', valor: sacos.chofer_nombre }] : []),
+        ...(this.bonoLab() ? [{ etiqueta: 'Bono de laboratorio', valor: `Bs ${this.fmt(this.bonoLab()!.monto)}` }] : []),
       ]);
       this.confirmarVisible = true;
       return;
-    }
-    if (!revisado && !confirmado && this.tipoRecepcion !== 'SACOS') {
-      const p = this.pesaje.getRawValue();
-      const d = diferenciasBoleta(this.lecturas.interior, this.lecturas.exterior,
-        { placa: p.placa, chofer_nombre: p.chofer_nombre }, this.productor()?.nombre ?? null);
-      if (d.length) {
-        this.diferencias.set(d);
-        this.revisarVisible = true;
-        return;
-      }
     }
     const datos: DatosRecepcion = {
       serie_id: v.serie_id!, almacen_id: v.almacen_id!,
@@ -447,7 +467,7 @@ export class RecibirLoteComponent implements OnInit {
       mina_id: v.mina_id, bocamina_id: v.bocamina_id, guia_transporte: v.guia_transporte, material: v.material, observaciones: v.observaciones,
       tipo_recepcion: this.tipoRecepcion,
       pesaje: this.tipoRecepcion === 'MIXTA' || (this.tipoRecepcion === 'BASCULA' && this.conPesaje)
-        ? (this.pesaje.getRawValue() as DatosPesaje) : null,
+        ? datosPesaje(this.pesaje) : null,
       sacos: this.tipoRecepcion === 'BASCULA' ? null : datosSacos(this.sacos, this.tipoRecepcion === 'SACOS'),
       lote_sacos: this.tipoRecepcion === 'MIXTA' ? { material: this.materialSacos, observaciones: this.observacionesSacos } : null,
     };

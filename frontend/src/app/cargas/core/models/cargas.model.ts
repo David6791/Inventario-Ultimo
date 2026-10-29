@@ -259,6 +259,9 @@ export interface Pesaje {
   peso_neto_kg: string;
   peso_cliente_kg: string | null;
   peso_cliente_tipo: 'NETO' | 'BRUTO';
+  peso_cliente_bruto_kg?: string | null;
+  peso_cliente_tara_kg?: string | null;
+  regla_peso?: { id: number; orden: number; formula: string; descripcion: string | null } | null;
   correcciones_cliente?: { id: number; anterior_kg: string | null; anterior_tipo: string; nuevo_kg: string | null; nuevo_tipo: string;
                            motivo: string; corregido_en: string; corregido_por?: Usuario }[];
   num_sacos: number | null;
@@ -319,6 +322,8 @@ export interface Lote extends ResumenLote {
   lote_par?: { id: number; codigo: string; material: string | null; estado: EstadoLote } | null;
   /** URL pública del QR del rótulo (solo en la ficha). */
   url_verificacion?: string;
+  bono_laboratorio?: BonoLaboratorio | null;
+  anticipos?: AnticiposLote | null;
   eventos?: { id: number; estado_anterior: string | null; estado_nuevo: string; ocurrido_en: string; detalle: string | null; usuario?: Usuario }[];
 }
 
@@ -330,6 +335,8 @@ export interface DatosPesaje {
   tara_kg: number | null;
   peso_cliente_kg?: number | null;
   peso_cliente_tipo?: 'NETO' | 'BRUTO';
+  peso_cliente_bruto_kg?: number | null;
+  peso_cliente_tara_kg?: number | null;
   num_sacos: number | null;
   placa: string | null;
   chofer_nombre: string | null;
@@ -367,7 +374,32 @@ export interface DatosRecepcion {
 
 // ------------------------------------------------------- Recepción con fotos
 export type TipoRecepcion = 'BASCULA' | 'SACOS' | 'MIXTA';
-export type CriterioPeso = 'EMPRESA' | 'CLIENTE' | 'PROMEDIO';
+export type CriterioPeso = 'EMPRESA' | 'CLIENTE' | 'PROMEDIO' | 'FORMULA';
+
+/** Regla del peso que vale: si desde < D ≤ hasta (D = C − E, en kg o % de E), vale la fórmula. */
+export interface ReglaPeso {
+  id?: number; orden?: number; unidad: 'KG' | 'PCT'; desde: string | number | null; hasta: string | number | null;
+  formula: string; descripcion: string | null;
+}
+export interface JuegoReglas { vigente_desde: string; vigente_hasta: string | null; estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR'; reglas: ReglaPeso[]; }
+export interface PesoQueVale { kg: number; criterio: CriterioPeso; regla: { id: number; orden: number; formula: string; descripcion: string | null } | null; }
+
+/** Bono de laboratorio: monto por cantidad de elementos del material. */
+export interface TramoLaboratorio { id?: number; num_elementos: number; monto: string | number; moneda?: string; }
+export interface TablaLaboratorio { vigente_desde: string; vigente_hasta: string | null; estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR'; tramos: TramoLaboratorio[]; }
+export interface BonoLaboratorio {
+  id: number; lote_id: number; num_elementos: number; monto: string; moneda: 'BOB' | 'USD'; estado: EstadoBono;
+  beneficiario_nombre: string | null; beneficiario_ci: string | null; motivo_anulacion?: string | null;
+  movimiento?: { id: number; numero: string; caja_id: number; fecha: string } | null;
+}
+export interface BonoLabPendiente extends BonoLaboratorio {
+  lote: { id: number; codigo: string; material: string | null; fecha_recepcion: string; productor?: { id: number; nombre: string; ci: string | null } | null };
+}
+/** Lo adelantado en el lote (cargas.v_lote_anticipos): lo que la liquidación descuenta. */
+export interface AnticiposLote {
+  anticipos_bob: string; anticipos_usd: string; bono_transporte_bob: string; bono_transporte_usd: string;
+  bono_laboratorio_bob: string; bono_laboratorio_usd: string; total_bob: string; total_usd: string; bonos_pendientes: number;
+}
 
 export interface SedeRecepcion { id: number; codigo: string; nombre: string; recepcionistas: { id: number; name: string }[]; }
 export type ModalidadPesaje = 'BASCULA' | 'SACOS';

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
-  BonoCalculado, BonoPendiente, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, LectorBoleta, Lote, Pagina, Pesaje,
+  BonoCalculado, BonoLabPendiente, BonoPendiente, JuegoReglas, PesoQueVale, ReglaPeso, TablaLaboratorio, TramoLaboratorio, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, LectorBoleta, Lote, Pagina, Pesaje,
   PlantillaBascula, ProductorParecido, RecuadroPlantilla, SedeRecepcion, RespuestaApi, TablaTramos, TipoFoto, Tramo,
 } from '../models/cargas.model';
 
@@ -67,6 +67,51 @@ export class RecepcionService {
   calcularBono(pesoNetoKg: number): Observable<BonoCalculado | null> {
     return this.http.get<RespuestaApi<BonoCalculado | null>>(`${this.base}/bono-tramos/calcular`, { params: { peso_neto_kg: pesoNetoKg } })
       .pipe(map((r) => r.data));
+  }
+
+  // --------------------------------------------------------------- Reglas de peso
+  reglasPeso(): Observable<JuegoReglas[]> {
+    return this.http.get<RespuestaApi<JuegoReglas[]>>(`${this.base}/reglas-peso`).pipe(map((r) => r.data));
+  }
+
+  publicarReglasPeso(vigenteDesde: string, reglas: ReglaPeso[]): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${this.base}/reglas-peso`, { vigente_desde: vigenteDesde, reglas });
+  }
+
+  probarFormula(formula: string, empresa: number, cliente: number): Observable<number> {
+    return this.http.post<RespuestaApi<{ kg: number }>>(`${this.base}/reglas-peso/probar`, { formula, empresa, cliente }).pipe(map((r) => r.data.kg));
+  }
+
+  /** Peso que vale con las reglas vigentes: lo calcula la base, igual que al guardar. */
+  pesoQueVale(empresa: number, cliente: number | null): Observable<PesoQueVale> {
+    const params: Record<string, number> = { empresa };
+    if (cliente) params['cliente'] = cliente;
+    return this.http.get<RespuestaApi<PesoQueVale>>(`${this.base}/reglas-peso/calcular`, { params }).pipe(map((r) => r.data));
+  }
+
+  // --------------------------------------------------------------- Bono de laboratorio
+  tablasLaboratorio(): Observable<TablaLaboratorio[]> {
+    return this.http.get<RespuestaApi<TablaLaboratorio[]>>(`${this.base}/bono-laboratorio-tramos`).pipe(map((r) => r.data));
+  }
+
+  publicarTablaLaboratorio(vigenteDesde: string, tramos: TramoLaboratorio[]): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${this.base}/bono-laboratorio-tramos`, { vigente_desde: vigenteDesde, tramos });
+  }
+
+  bonoLaboratorioPara(material: string): Observable<{ num_elementos: number; monto: string; moneda: string } | null> {
+    return this.http.get<RespuestaApi<{ num_elementos: number; monto: string; moneda: string } | null>>(
+      `${this.base}/bono-laboratorio-tramos/calcular`, { params: { material } }).pipe(map((r) => r.data));
+  }
+
+  bonosLaboratorioPendientes(cajaId: number): Observable<BonoLabPendiente[]> {
+    return this.http.get<RespuestaApi<BonoLabPendiente[]>>(`${this.base}/bonos-laboratorio/pendientes`, { params: { caja_id: cajaId } })
+      .pipe(map((r) => r.data));
+  }
+
+  pagarBonoLaboratorio(bonoId: number, cajaId: number, nombre: string, ci: string | null):
+      Observable<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }> {
+    return this.http.post<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }>(
+      `${this.base}/bonos-laboratorio/${bonoId}/pagar`, { caja_id: cajaId, beneficiario_nombre: nombre, beneficiario_ci: ci });
   }
 
   bonosPendientes(cajaId: number): Observable<BonoPendiente[]> {
