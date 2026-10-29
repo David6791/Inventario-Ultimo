@@ -215,9 +215,16 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
     <app-confirmar-pesaje [(visible)]="confirmarVisible" [datos]="aConfirmar()" [vale]="valeAConfirmar()" [extras]="extrasConfirmar()"
                           [diferencias]="diferencias()" (confirmado)="guardar(true)" />
 
+    <div class="faltan" *ngIf="faltanVisibles().length" role="alert">
+      <b><i class="pi pi-exclamation-circle"></i> Para recibir el lote falta:</b>
+      <ul>
+        <li *ngFor="let f of faltanVisibles()"><button type="button" class="enlace" (click)="irA(f.id)">{{ f.texto }}</button></li>
+      </ul>
+    </div>
+
     <div class="pie">
       <p-button label="Cancelar" [text]="true" routerLink="/cargas/lotes" />
-      <p-button label="Recibir lote" icon="pi pi-check" [loading]="guardando()" [disabled]="!listo() || guardando()" (onClick)="guardar()" />
+      <p-button label="Recibir lote" icon="pi pi-check" [loading]="guardando()" [disabled]="guardando()" (onClick)="guardar()" />
     </div>
   `,
   styles: [ESTILOS_CARGAS, `
@@ -253,6 +260,11 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
     .sede-fija { display: flex; gap: 0.4rem; align-items: center; font-weight: 600; padding: 0.55rem 0; }
     .aviso-texto { color: #b45309; }
     .origen { margin: 0.2rem 0 0.3rem; }
+    .faltan { max-width: 60rem; margin-bottom: 0.8rem; padding: 0.7rem 1rem; border-radius: 8px; background: #fef2f2;
+              border: 1px solid #fecaca; color: #991b1b; font-size: 0.9rem; }
+    .faltan ul { margin: 0.35rem 0 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
+    .faltan .enlace { border: 0; background: none; color: #991b1b; text-decoration: underline; cursor: pointer; padding: 0; font: inherit; text-align: left; }
+    :host ::ng-deep .resaltado, :host ::ng-deep .resaltado input { outline: 2px solid #ef4444; outline-offset: 2px; border-radius: 6px; }
     .bono-lab { color: #6d28d9; display: flex; gap: 0.3rem; align-items: center; }
   `],
 })
@@ -349,6 +361,10 @@ export class RecibirLoteComponent implements OnInit {
   ngOnInit(): void {
     this.servicio.plantillas(true).subscribe((r) => this.plantillas.set(r.data));
     this.pesaje.valueChanges.subscribe(() => this.valoresMixta.update((n) => n + 1));
+    // Con los avisos a la vista, se van quitando a medida que se completa.
+    for (const g of [this.form, this.pesaje, this.sacos]) {
+      g.valueChanges.subscribe(() => { if (this.faltanVisibles().length) this.faltanVisibles.set(this.faltantes()); });
+    }
     this.sacos.valueChanges.subscribe(() => this.valoresMixta.update((n) => n + 1));
     this.seriesSrv.listar().subscribe((r) => this.series.set(r.data.filter((s) => s.activa)));
     this.catalogos.listarMinas({ solo_activas: true }).subscribe((m) => this.minas.set(m));
@@ -375,6 +391,7 @@ export class RecibirLoteComponent implements OnInit {
 
   elegirProductor(p: Productor | null): void {
     this.productor.set(p);
+    if (this.faltanVisibles().length) setTimeout(() => this.faltanVisibles.set(this.faltantes()));
     this.productorDeBoleta.set(false);
   }
 
@@ -384,16 +401,68 @@ export class RecibirLoteComponent implements OnInit {
     if (mina) this.catalogos.listarBocaminas(mina).subscribe((b) => this.bocaminas.set(b.filter((x) => x.activa)));
   }
 
-  listo(): boolean {
+  /** Lo que falta para recibir el lote, con el campo al que lleva cada aviso. */
+  faltantes(): { texto: string; id: string }[] {
+    const f: { texto: string; id: string }[] = [];
     const s = this.serie();
-    if (!s || this.form.invalid) return false;
-    if (s.origen === 'COMPRA' && !this.productor()) return false;
-    if (s.origen === 'PROPIA' && (!this.form.value.mina_id || !this.form.value.bocamina_id)) return false;
+    const v = this.form.getRawValue();
+    if (!s) f.push({ texto: 'Elija la serie del lote.', id: 'serie' });
+    if (!v.almacen_id) f.push({ texto: 'Elija la sede donde recibe.', id: 'sede' });
+    if (s?.origen === 'COMPRA' && !this.productor()) {
+      f.push({ texto: this.productorTexto ? 'Elija el productor de la lista (escribir el nombre no basta: búsquelo y tóquelo).'
+                                          : 'Indique el productor.', id: 'productor' });
+    }
+    if (s?.origen === 'PROPIA') {
+      if (!v.mina_id) f.push({ texto: 'Elija la mina propia.', id: 'mina-propia' });
+      if (!v.bocamina_id) f.push({ texto: 'Elija la bocamina.', id: 'bocamina' });
+    }
     const t = this.tipoRecepcion;
-    if ((t === 'MIXTA' || (t === 'BASCULA' && this.conPesaje)) && this.pesaje.invalid) return false;
-    if (t !== 'BASCULA' && this.sacos.invalid) return false;
-    if (t === 'MIXTA' && (this.reparto()?.granel ?? 0) <= 0) return false;
-    return true;
+    if (t === 'MIXTA' || (t === 'BASCULA' && this.conPesaje)) {
+      const p = this.pesaje.getRawValue();
+      const control = (c: string) => this.pesaje.get(c)!;
+      if (control('foto_interior_id').invalid) f.push({ texto: 'Suba la foto (o el escaneo) de la boleta interior: es obligatoria.', id: 'pesaje' });
+      if (!p.peso_bruto_kg) f.push({ texto: 'Anote el peso bruto de nuestra báscula.', id: 'bruto' });
+      if (p.tara_kg == null) f.push({ texto: 'Anote la tara de nuestra báscula.', id: 'tara' });
+      if (p.peso_bruto_kg && p.tara_kg != null && p.tara_kg >= p.peso_bruto_kg) f.push({ texto: 'La tara debe ser menor que el peso bruto.', id: 'tara' });
+      if (p.peso_cliente_bruto_kg != null && p.peso_cliente_tara_kg != null && p.peso_cliente_tara_kg >= p.peso_cliente_bruto_kg) {
+        f.push({ texto: 'En la boleta del cliente, la tara debe ser menor que el bruto.', id: 'c-tara' });
+      }
+      if (control('chofer_nombre').invalid) f.push({ texto: 'Anote el chofer (cobra el bono de transporte).', id: 'chofer' });
+      if (!String(p.bascula ?? '').trim()) f.push({ texto: 'Anote la báscula (en «Más datos de la boleta»).', id: 'bascula' });
+      if (!String(p.ticket ?? '').trim()) f.push({ texto: 'Anote el n.º de ticket (en «Más datos de la boleta»).', id: 'ticket' });
+      if (control('numero_orden').invalid) f.push({ texto: 'El n.º de orden es demasiado largo.', id: 'orden' });
+    }
+    if (t !== 'BASCULA') {
+      const g = this.sacos.getRawValue() as { bascula: string; pesadas: { sacos: number | null; peso_kg: number | null; foto_id: number | null }[] };
+      if (!String(g.bascula ?? '').trim()) f.push({ texto: 'Anote la balanza de los sacos.', id: 'balanza-manual' });
+      g.pesadas.forEach((x, i) => {
+        const n = g.pesadas.length > 1 ? ` de la pesada ${i + 1}` : '';
+        if (!x.sacos || x.sacos < 1) f.push({ texto: `Anote la cantidad de sacos${n}.`, id: 'sacos' });
+        if (!x.peso_kg || x.peso_kg <= 0) f.push({ texto: `Anote el peso${n} de los sacos.`, id: 'sacos' });
+        if (!x.foto_id) f.push({ texto: `Tome la foto${n} en la balanza manual.`, id: 'sacos' });
+      });
+    }
+    if (t === 'MIXTA' && this.reparto() && this.reparto()!.granel <= 0) {
+      f.push({ texto: 'Los sacos pesan igual o más que el neto del camión: revise los pesos.', id: 'sacos' });
+    }
+    return f;
+  }
+
+  /** Avisos de lo que falta: se muestran desde que se intenta guardar. */
+  readonly faltanVisibles = signal<{ texto: string; id: string }[]>([]);
+
+  listo(): boolean { return this.faltantes().length === 0; }
+
+  /** Lleva al campo que falta y lo resalta un momento. */
+  irA(id: string): void {
+    const anclas: Record<string, string> = { pesaje: 'app-pesaje-campos', sacos: 'app-sacos-campos' };
+    const el = (anclas[id] ? document.querySelector(anclas[id]) : document.getElementById(id)) as HTMLElement | null;
+    if (!el) return;
+    const caja = (el.closest('.campo') as HTMLElement | null) ?? el;
+    caja.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof el.focus === 'function') setTimeout(() => el.focus({ preventScroll: true }), 300);
+    caja.classList.add('resaltado');
+    setTimeout(() => caja.classList.remove('resaltado'), 2500);
   }
 
   /**
@@ -433,6 +502,16 @@ export class RecibirLoteComponent implements OnInit {
    * lo leído; se guarda solo cuando la persona confirma.
    */
   guardar(confirmado = false): void {
+    // Si falta algo, se dice qué y dónde, en vez de dejar el botón apagado.
+    const faltan = this.faltantes();
+    this.faltanVisibles.set(faltan);
+    if (faltan.length) {
+      this.form.markAllAsTouched(); this.pesaje.markAllAsTouched(); this.sacos.markAllAsTouched();
+      this.toast.add({ severity: 'warn', summary: faltan.length === 1 ? 'Falta un dato' : `Faltan ${faltan.length} datos`,
+                       detail: faltan[0].texto, life: 6000 });
+      this.irA(faltan[0].id);
+      return;
+    }
     const v = this.form.getRawValue();
     const conPesaje = this.tipoRecepcion === 'MIXTA' || (this.tipoRecepcion === 'BASCULA' && this.conPesaje);
     if (!confirmado) {
