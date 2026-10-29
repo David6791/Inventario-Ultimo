@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -12,7 +12,11 @@ import { CajaService } from '../core/caja.service';
 import { DineroPipe } from '../core/dinero';
 import { ESTILOS_CAJA } from '../core/estilos';
 
-/** Las cajas de las sedes del usuario, con su estado y su efectivo del momento. */
+/**
+ * Las cajas del usuario, con su estado y su efectivo del momento. Primero las
+ * que opera (es su cajero); las que solo puede consultar (supervisión o
+ * administración) aparecen aparte y solo si las pide, o si no opera ninguna.
+ */
 @Component({
   selector: 'app-mis-cajas',
   standalone: true,
@@ -35,8 +39,8 @@ import { ESTILOS_CAJA } from '../core/estilos';
       <p-skeleton height="9.5rem" *ngFor="let _ of [1, 2]" />
     </div>
 
-    <div class="grilla" *ngIf="!cargando()">
-      <a class="tarjeta" *ngFor="let c of activas()" [routerLink]="['/caja/operar', c.id]" [class.abierta]="c.sesion_abierta">
+    <ng-template #tarjeta let-c>
+      <a class="tarjeta" [routerLink]="['/caja/operar', c.id]" [class.abierta]="c.sesion_abierta" [class.ajena]="!c.soy_cajero">
         <div class="cabeza">
           <span class="codigo">{{ c.codigo }}</span>
           <span class="pastilla" [class.pastilla-ok]="c.sesion_abierta">
@@ -61,13 +65,35 @@ import { ESTILOS_CAJA } from '../core/estilos';
         </div>
         <i class="pi pi-angle-right flecha"></i>
       </a>
+    </ng-template>
 
-      <div class="vacio" *ngIf="!activas().length">
-        <i class="pi pi-wallet"></i>
-        <div class="titulo-vacio">No hay cajas en sus sedes</div>
-        <span>Pida a quien administra las cajas que cree la de su sede o que le asigne la sede a su usuario.</span>
+    <ng-container *ngIf="!cargando()">
+      <!-- Las cajas que el usuario opera -->
+      <div class="grilla" *ngIf="mias().length">
+        <ng-container *ngFor="let c of mias()"><ng-container *ngTemplateOutlet="tarjeta; context: { $implicit: c }" /></ng-container>
       </div>
-    </div>
+
+      <!-- Las demás (supervisión o administración): solo si las pide, o si no opera ninguna -->
+      <ng-container *ngIf="otras().length">
+        <div class="ver-otras" *ngIf="mias().length">
+          <p-button [label]="verOtras() ? 'Ocultar las otras cajas' : 'Ver las otras cajas (' + otras().length + ', solo consulta)'"
+                    [icon]="verOtras() ? 'pi pi-eye-slash' : 'pi pi-eye'" [text]="true" size="small" (onClick)="alternarOtras()" />
+        </div>
+        <ng-container *ngIf="verOtras() || !mias().length">
+          <h3 class="titulo-otras">{{ mias().length ? 'Otras cajas' : 'Cajas que puede consultar' }}
+            <span class="secundario">· no es cajero de estas: solo puede ver su estado y movimientos</span></h3>
+          <div class="grilla">
+            <ng-container *ngFor="let c of otras()"><ng-container *ngTemplateOutlet="tarjeta; context: { $implicit: c }" /></ng-container>
+          </div>
+        </ng-container>
+      </ng-container>
+
+      <div class="vacio" *ngIf="!mias().length && !otras().length">
+        <i class="pi pi-wallet"></i>
+        <div class="titulo-vacio">No tiene cajas asignadas</div>
+        <span>Pida a quien administra las cajas que lo asigne como cajero de la caja de su sede.</span>
+      </div>
+    </ng-container>
   `,
   styles: [...ESTILOS_CAJA, `
     .grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 1rem; }
@@ -88,6 +114,10 @@ import { ESTILOS_CAJA } from '../core/estilos';
     .mia { color: #15803d; font-weight: 600; }
     .flecha { position: absolute; right: 1rem; bottom: 1rem; color: var(--text-color-secondary, #9ca3af); }
     .vacio { grid-column: 1 / -1; }
+    .tarjeta.ajena { background: var(--surface-ground, #f8fafc); }
+    .ver-otras { margin-top: 1rem; }
+    .titulo-otras { font-size: 0.95rem; margin: 1.2rem 0 0.7rem; }
+    .titulo-otras .secundario { font-weight: 400; font-size: 0.82rem; }
   `],
 })
 export class MisCajasComponent implements OnInit {
@@ -96,6 +126,18 @@ export class MisCajasComponent implements OnInit {
 
   readonly activas = signal<Caja[]>([]);
   readonly cargando = signal(true);
+  readonly mias = computed(() => this.activas().filter((c) => c.soy_cajero));
+  readonly otras = computed(() => this.activas().filter((c) => !c.soy_cajero));
+  readonly verOtras = signal(MisCajasComponent.otrasGuardado());
+
+  private static otrasGuardado(): boolean {
+    try { return localStorage.getItem('caja.ver-otras') === 'si'; } catch { return false; }
+  }
+
+  alternarOtras(): void {
+    this.verOtras.update((v) => !v);
+    try { localStorage.setItem('caja.ver-otras', this.verOtras() ? 'si' : 'no'); } catch { /* sin almacenamiento */ }
+  }
 
   ngOnInit(): void {
     this.servicio.listar().subscribe({
