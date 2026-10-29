@@ -101,24 +101,37 @@ class Caja extends CajaModel
     }
 
     /**
-     * Cajas que el usuario puede consultar: las que tiene asignadas y las de
-     * sus sedes. Quien administra cajas o ve todos los almacenes, las ve todas.
+     * Cajas que el usuario puede consultar:
+     *  - quien administra cajas o ve todos los almacenes: todas;
+     *  - quien supervisa (valida cierres o ve reportes): las de sus sedes y las suyas;
+     *  - el cajero y el aprobador: solo las que tiene asignadas, aunque haya
+     *    otras cajas en su sede.
      */
+    public static function veCajasDeSusSedes(User $usuario): bool
+    {
+        return $usuario->can('caja.validar') || $usuario->can('caja.reportes');
+    }
+
     public function scopeDelAmbitoDe(Builder $query, User $usuario): Builder
     {
         if ($usuario->can('caja.administrar') || $usuario->can('almacenes.ver-todos')) {
             return $query;
         }
 
-        return $query->where(fn ($q) => $q
-            ->whereIn('almacen_id', $usuario->almacenesIds())
-            ->orWhereHas('cajeros', fn ($c) => $c->whereKey($usuario->id)));
+        return $query->where(function ($q) use ($usuario) {
+            $q->whereHas('cajeros', fn ($c) => $c->whereKey($usuario->id))
+              ->orWhereHas('aprobadores', fn ($c) => $c->whereKey($usuario->id));
+            if (self::veCajasDeSusSedes($usuario)) {
+                $q->orWhereIn('almacen_id', $usuario->almacenesIds());
+            }
+        });
     }
 
     public function esDelAmbitoDe(User $usuario): bool
     {
-        return $usuario->can('caja.administrar')
-            || $usuario->accedeAlmacen($this->almacen_id)
-            || $this->esCajero($usuario);
+        return $usuario->can('caja.administrar') || $usuario->can('almacenes.ver-todos')
+            || $this->esCajero($usuario)
+            || $this->aprobadores()->whereKey($usuario->id)->exists()
+            || (self::veCajasDeSusSedes($usuario) && $usuario->accedeAlmacen($this->almacen_id));
     }
 }

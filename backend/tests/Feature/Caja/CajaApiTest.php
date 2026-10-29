@@ -198,7 +198,14 @@ class CajaApiTest extends TestCase
         $titular = $this->usuario(self::CAJERO, [1], [$caja]);
         $otro = $this->usuario(self::CAJERO, [1], []);     // misma sede y permisos, sin asignar
 
+        // Otro cajero de la misma sede no ve la caja ajena: ni en la lista ni abriéndola.
         $this->como($otro);
+        $this->assertSame([], $this->getJson('/api/caja/cajas')->assertOk()->json('data'));
+        $this->getJson("/api/caja/cajas/{$caja->id}")->assertForbidden();
+        $this->postJson("/api/caja/cajas/{$caja->id}/sesiones", ['saldo_inicial' => ['BOB' => 10]])->assertForbidden();
+
+        // Quien supervisa sí ve las cajas de su sede, para consultarlas, pero no las opera.
+        $this->como($this->usuario(['caja.ver', 'caja.validar', 'caja.abrir'], [1], []));
         $this->getJson("/api/caja/cajas/{$caja->id}")->assertOk()->assertJsonPath('data.soy_cajero', false);
         $this->postJson("/api/caja/cajas/{$caja->id}/sesiones", ['saldo_inicial' => ['BOB' => 10]])
             ->assertForbidden()->assertJsonPath('message', fn ($m) => str_contains($m, 'No está asignado como cajero de la caja PTS'));
