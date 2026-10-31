@@ -49,7 +49,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
         </div>
         <div class="nombre">{{ c.nombre }}</div>
         <div class="secundario">
-          {{ c.almacen?.nombre }} ·
+          {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }} ·
           <span [class.mia]="c.soy_cajero">{{ c.soy_cajero ? 'Usted es cajero' : 'Solo consulta' }}</span>
         </div>
 

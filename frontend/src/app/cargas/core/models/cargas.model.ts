@@ -35,7 +35,7 @@ export interface Opciones {
   /** Parámetro FOTO_TICKET_OBLIGATORIA. */
   foto_ticket_obligatoria?: boolean;
   /** Sedes donde este usuario recibe carga; con una sola asignada viene la fija. */
-  sedes_recepcion?: { id: number; codigo: string; nombre: string }[];
+  sedes_recepcion?: { id: number; codigo: string; nombre: string; centro_costo?: CentroCostoCorto | null }[];
   sede_recepcion_fija?: number | null;
   /** Hasta cuántos kg de diferencia (nuestra menor que la del cliente) se promedia. */
   limite_promedio_peso_kg?: number;
@@ -300,7 +300,7 @@ export interface Lote extends ResumenLote {
   linea?: { id: number; codigo: string; nombre: string; forma?: string };
   origen: 'COMPRA' | 'PROPIA';
   almacen_id: number;
-  almacen?: { id: number; nombre: string };
+  almacen?: { id: number; nombre: string; centro_costo?: CentroCostoCorto | null };
   fecha_recepcion: string;
   productor_id: number | null;
   productor?: { id: number; nombre: string; ci: string | null; nit: string | null; nim?: string | null; tipo?: string } | null;
@@ -401,7 +401,9 @@ export interface AnticiposLote {
   bono_laboratorio_bob: string; bono_laboratorio_usd: string; total_bob: string; total_usd: string; bonos_pendientes: number;
 }
 
-export interface SedeRecepcion { id: number; codigo: string; nombre: string; recepcionistas: { id: number; name: string }[]; }
+/** Centro de costo de un almacén: da el nombre del acopio. */
+export interface CentroCostoCorto { id: number; codigo: string; nombre: string; es_acopio?: boolean; es_central?: boolean; }
+export interface SedeRecepcion { id: number; codigo: string; nombre: string; centro_costo?: CentroCostoCorto | null; recepcionistas: { id: number; name: string }[]; }
 export type ModalidadPesaje = 'BASCULA' | 'SACOS';
 export type TipoFoto = 'TICKET_INTERIOR' | 'TICKET_EXTERIOR' | 'BALANZA_MANUAL';
 export type CampoTicket = 'ticket' | 'peso_bruto_kg' | 'tara_kg' | 'peso_neto_kg' | 'placa' | 'numero_orden' | 'productor' | 'chofer' | 'fecha' | 'hora';

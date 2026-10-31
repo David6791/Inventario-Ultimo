@@ -25,20 +25,22 @@ import { RecepcionService } from '../core/services/recepcion.service';
     <p-toast />
     <header class="encabezado">
       <div>
-        <h2>Sedes de recepción</h2>
-        <p class="subtitulo">Quién recibe carga en cada sede. Con recepcionistas asignados, solo ellos reciben ahí; si una
-          persona tiene una sola sede, el formulario de recepción ya no le pide la sede.</p>
+        <h2>Acopios y recepcionistas</h2>
+        <p class="subtitulo">Quién recibe carga en cada acopio (los centros de costo marcados como acopio). Con recepcionistas
+          asignados, solo ellos reciben ahí; si una persona tiene un solo acopio, el formulario de recepción ya no se lo pide.</p>
       </div>
     </header>
 
     <div class="sedes">
       <article class="sede" *ngFor="let s of sedes()">
         <div class="cabeza">
-          <h3><i class="pi pi-map-marker"></i> {{ s.nombre }} <span class="codigo secundario">{{ s.codigo }}</span></h3>
+          <h3><i class="pi pi-map-marker"></i> {{ s.centro_costo?.nombre ?? s.nombre }}
+            <span class="codigo secundario">{{ s.centro_costo?.codigo ?? s.codigo }}</span></h3>
           <span class="pastilla" [class.pastilla-acento]="s.recepcionistas.length">
             {{ s.recepcionistas.length ? s.recepcionistas.length + ' recepcionista' + (s.recepcionistas.length === 1 ? '' : 's') : 'Abierta' }}</span>
         </div>
-        <p class="secundario" *ngIf="!s.recepcionistas.length">Sin recepcionistas: recibe cualquiera que tenga acceso a la sede.</p>
+        <p class="secundario">Almacén {{ s.nombre }}</p>
+        <p class="secundario" *ngIf="!s.recepcionistas.length">Sin recepcionistas: recibe cualquiera que tenga acceso al acopio.</p>
         <ng-container *appTienePermiso="'cargas.catalogos'">
           <p-multiSelect [options]="candidatos()" [(ngModel)]="elegidos[s.id]" optionLabel="name" optionValue="id" display="chip"
                          placeholder="Elija quién recibe aquí" [filter]="true" filterBy="name,email" appendTo="body"

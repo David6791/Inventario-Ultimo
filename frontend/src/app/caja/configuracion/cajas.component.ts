@@ -65,7 +65,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
           <td>
             <div>{{ c.nombre }}</div>
             <div class="secundario">
-              {{ c.almacen?.nombre }}
+              {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }}
               <span class="pastilla" *ngIf="c.maneja_usd">Bs y US$</span>
             </div>
             <div class="secundario cajeros">

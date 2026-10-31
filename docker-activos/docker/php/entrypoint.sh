@@ -34,6 +34,15 @@ if [ "${MIGRAR_AL_INICIAR}" = "true" ]; then
 fi
 
 if [ "${SEMBRAR_AL_INICIAR}" = "true" ]; then
+    # Base nueva (sin usuarios): todo lo inicial de una vez (permisos, roles,
+    # almacén central, administrador y catálogos). Con usuarios ya creados no
+    # se repite: el seeder de usuarios reiniciaría la clave del administrador.
+    USUARIOS=$(php artisan tinker --execute="echo \App\Models\User::count();" 2>/dev/null | tr -dc '0-9' || echo "0")
+    if [ "${USUARIOS:-0}" = "0" ]; then
+        echo "==> php artisan db:seed (base nueva)"
+        php artisan db:seed --force
+    fi
+
     # Estructura: permisos, roles y catálogos de caja y cargas. Todos son
     # idempotentes y van en este orden (los roles necesitan los permisos).
     for SEEDER in PermisoSeeder ActivosRolesSeeder CajaCargasRolesSeeder CargasCatalogoSeeder; do

@@ -57,9 +57,9 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
         <div>
           <h2>{{ c.nombre }} <span class="codigo titulo-codigo">{{ c.codigo }}</span></h2>
           <p class="subtitulo" *ngIf="c.sesion_abierta as s">
-            Sesión {{ s.numero }} abierta por {{ s.abierta_por }} el {{ s.abierta_en | date: 'dd/MM/yyyy HH:mm' }} · {{ c.almacen?.nombre }}
+            Sesión {{ s.numero }} abierta por {{ s.abierta_por }} el {{ s.abierta_en | date: 'dd/MM/yyyy HH:mm' }} · {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }}
           </p>
-          <p class="subtitulo" *ngIf="!c.sesion_abierta">Caja cerrada · {{ c.almacen?.nombre }}</p>
+          <p class="subtitulo" *ngIf="!c.sesion_abierta">Caja cerrada · {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }}</p>
         </div>
         <div class="acciones" *ngIf="c.sesion_abierta as s">
           <p-button label="Reporte del día" icon="pi pi-file-pdf" [text]="true" (onClick)="reporte(s.id)" />

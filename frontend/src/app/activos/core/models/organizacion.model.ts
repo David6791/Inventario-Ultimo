@@ -21,6 +21,12 @@ export interface CentroCosto {
   /** Sin almacén el centro es invisible: nadie ve sus activos. */
   sin_ambito: boolean;
   activo: boolean;
+  /** Recibe carga de mineral (recepción y bonos). */
+  es_acopio?: boolean;
+  /** Sede central: envía el dinero a las cajas de los acopios. */
+  es_central?: boolean;
+  /** Cajas del almacén del centro. */
+  cajas?: string[];
 }
 
 export interface Empleado {

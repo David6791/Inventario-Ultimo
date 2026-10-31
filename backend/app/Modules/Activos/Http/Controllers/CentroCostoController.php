@@ -43,6 +43,10 @@ class CentroCostoController extends Controller
                 // Sin almacén el centro es invisible: nadie ve sus bienes.
                 'sin_ambito'      => $c->almacen_id === null,
                 'activo'          => $c->activo,
+                'es_acopio'       => (bool) $c->es_acopio,
+                'es_central'      => (bool) $c->es_central,
+                'cajas'           => $c->almacen_id ? DB::table('caja.caja')->where('almacen_id', $c->almacen_id)->where('activa', true)
+                                        ->orderBy('codigo')->pluck('codigo')->all() : [],
             ]);
 
         return response()->json(['data' => $centros]);
@@ -103,7 +107,11 @@ class CentroCostoController extends Controller
             'responsable_id' => ['nullable', 'integer',
                                  Rule::exists(\App\Modules\Activos\Models\Empleado::class, 'id')],
             'activo'         => ['boolean'],
+            // Acopio: recibe carga y paga sus bonos. Central: envía el dinero a las cajas.
+            'es_acopio'      => ['boolean'],
+            'es_central'     => ['boolean'],
         ], [
+            'es_acopio.boolean' => 'Indique si el centro es acopio.',
             'almacen_id.required' =>
                 'El almacén define quién puede ver los activos de este centro.',
         ]);

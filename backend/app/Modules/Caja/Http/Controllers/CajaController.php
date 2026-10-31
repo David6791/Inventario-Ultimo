@@ -36,7 +36,7 @@ class CajaController extends Controller
     {
         $cajas = Caja::query()
             ->delAmbitoDe($request->user())
-            ->with(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name', 'aprobadores:id,name'])
+            ->with(['almacen:id,codigo,nombre', 'almacen.centroCosto:id,almacen_id,codigo,nombre,es_acopio,es_central', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name', 'aprobadores:id,name'])
             ->withCount(['solicitudes as solicitudes_por_pagar' => fn ($q) => $q->where('estado', 'APROBADA')])
             ->orderByDesc('activa')
             ->orderBy('codigo')
@@ -72,7 +72,7 @@ class CajaController extends Controller
     {
         $this->asegurarAmbito($caja);
 
-        $caja->load(['almacen:id,codigo,nombre', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name', 'aprobadores:id,name']);
+        $caja->load(['almacen:id,codigo,nombre', 'almacen.centroCosto:id,almacen_id,codigo,nombre,es_acopio,es_central', 'sesionAbierta.abiertaPor:id,name', 'cajeros:id,name', 'aprobadores:id,name']);
         $caja->loadCount(['solicitudes as solicitudes_por_pagar' => fn ($q) => $q->where('estado', 'APROBADA')]);
         $sesion = $caja->sesionAbierta;
 

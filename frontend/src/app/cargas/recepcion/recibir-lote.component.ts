@@ -181,16 +181,16 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
       <h3>Más datos</h3>
       <div class="campos">
         <div class="campo span-3" *ngIf="!sedeFija(); else sedeAsignada">
-          <label for="sede">Sede</label>
+          <label for="sede">Acopio</label>
           <p-dropdown inputId="sede" formControlName="almacen_id" [options]="sedes()" optionLabel="nombre"
-                      optionValue="id" placeholder="Elija la sede" appendTo="body" [style]="{ width: '100%' }" />
-          <small class="aviso-texto" *ngIf="opciones() && !sedes().length">Su usuario no recibe carga en ninguna sede: pida que lo asignen en «Sedes de recepción».</small>
+                      optionValue="id" placeholder="Elija el acopio" appendTo="body" [style]="{ width: '100%' }" />
+          <small class="aviso-texto" *ngIf="opciones() && !sedes().length">Su usuario no recibe carga en ningún acopio: pida que lo asignen en «Acopios y recepcionistas».</small>
         </div>
         <ng-template #sedeAsignada>
           <div class="campo span-3">
-            <label>Sede</label>
+            <label>Acopio</label>
             <div class="sede-fija"><i class="pi pi-map-marker"></i> {{ sedeFija()!.nombre }}</div>
-            <small>Es la sede donde usted recibe carga.</small>
+            <small>Es el acopio donde usted recibe carga.</small>
           </div>
         </ng-template>
         <div class="campo span-3">
@@ -348,7 +348,9 @@ export class RecibirLoteComponent implements OnInit {
   }
 
   /** Sedes donde este usuario recibe; con una sola asignada, va fija y no se elige. */
-  readonly sedes = computed(() => this.opciones()?.sedes_recepcion ?? this.opciones()?.almacenes ?? []);
+  /** Acopios donde recibe: con el nombre del centro de costo (el almacén, si todavía no tiene centro). */
+  readonly sedes = computed(() => (this.opciones()?.sedes_recepcion ?? this.opciones()?.almacenes ?? [])
+    .map((s) => ({ ...s, nombre: (s as { centro_costo?: { nombre: string } | null }).centro_costo?.nombre ?? s.nombre })));
   readonly sedeFija = computed(() => {
     const id = this.opciones()?.sede_recepcion_fija;
     return id ? this.sedes().find((s) => s.id === id) ?? null : null;
@@ -407,7 +409,7 @@ export class RecibirLoteComponent implements OnInit {
     const s = this.serie();
     const v = this.form.getRawValue();
     if (!s) f.push({ texto: 'Elija la serie del lote.', id: 'serie' });
-    if (!v.almacen_id) f.push({ texto: 'Elija la sede donde recibe.', id: 'sede' });
+    if (!v.almacen_id) f.push({ texto: 'Elija el acopio donde recibe.', id: 'sede' });
     if (s?.origen === 'COMPRA' && !this.productor()) {
       f.push({ texto: this.productorTexto ? 'Elija el productor de la lista (escribir el nombre no basta: búsquelo y tóquelo).'
                                           : 'Indique el productor.', id: 'productor' });
@@ -527,7 +529,7 @@ export class RecibirLoteComponent implements OnInit {
       this.extrasConfirmar.set([
         { etiqueta: 'Lote', valor: this.serie()?.proximo_codigo },
         { etiqueta: 'Tipo de recepción', valor: this.tipos.find((t) => t.valor === this.tipoRecepcion)?.etiqueta },
-        { etiqueta: 'Sede', valor: this.sedes().find((s) => s.id === v.almacen_id)?.nombre },
+        { etiqueta: 'Acopio', valor: this.sedes().find((s) => s.id === v.almacen_id)?.nombre },
         ...(this.serie()?.origen === 'COMPRA' ? [{ etiqueta: 'Productor', valor: this.productor()?.nombre }] : []),
         ...(mina ? [{ etiqueta: 'Mina', valor: mina }] : []),
         { etiqueta: 'Material', valor: this.opciones()?.materiales.find((m) => m.valor === v.material)?.etiqueta ?? v.material },

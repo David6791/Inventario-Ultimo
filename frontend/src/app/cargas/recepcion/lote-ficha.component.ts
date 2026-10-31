@@ -45,7 +45,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
             <span class="pastilla estado" [ngClass]="'estado-' + l.estado.toLowerCase()">{{ etiquetaEstado(l.estado) }}</span>
             <span class="pastilla estado pastilla-acento" *ngIf="l.tipo_recepcion && l.tipo_recepcion !== 'BASCULA'">{{ etiquetaTipo(l) }}</span></h2>
           <p class="subtitulo">{{ l.linea?.nombre }} · recibido el {{ l.fecha_recepcion | date: 'dd/MM/yyyy HH:mm' }}
-            por {{ nombre(l.registrado_por) }} · {{ l.almacen?.nombre }}</p>
+            por {{ nombre(l.registrado_por) }} · {{ l.almacen?.centro_costo?.nombre ?? l.almacen?.nombre }}</p>
         </div>
         <div class="acciones">
           <p-button label="Boleta" icon="pi pi-print" [outlined]="true" (onClick)="boleta()" />

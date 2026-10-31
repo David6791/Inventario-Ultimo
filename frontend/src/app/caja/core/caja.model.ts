@@ -5,7 +5,11 @@ export type Reinicio = 'NUNCA' | 'ANUAL' | 'MENSUAL' | 'DIARIO';
 
 export interface Opcion<T = string> { valor: T; etiqueta: string; }
 
-export interface AlmacenCorto { id: number; codigo: string; nombre: string; }
+export interface AlmacenCorto {
+  id: number; codigo: string; nombre: string;
+  /** Centro de costo del almacén: su nombre es el de la caja/acopio; la central envía el dinero. */
+  centro_costo?: { id: number; codigo: string; nombre: string; es_acopio?: boolean; es_central?: boolean } | null;
+}
 
 export interface OpcionesCaja {
   almacenes: AlmacenCorto[];

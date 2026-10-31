@@ -37,7 +37,7 @@ class LoteController extends Controller
                 ->where('codigo', 'ilike', "%{$buscar}%")
                 ->orWhereHas('productor', fn ($p) => $p->buscar($buscar))))
             ->with(['productor:id,nombre,ci,nit', 'cooperativa:id,nombre', 'linea:id,codigo,nombre',
-                    'mina:id,nombre', 'bocamina:id,codigo,nombre', 'almacen:id,nombre'])
+                    'mina:id,nombre', 'bocamina:id,codigo,nombre', 'almacen:id,nombre', 'almacen.centroCosto:id,almacen_id,codigo,nombre'])
             ->orderByDesc('fecha_recepcion')->orderByDesc('id')
             ->paginate(min(100, $request->integer('por_pagina', 25)));
 
@@ -116,7 +116,7 @@ class LoteController extends Controller
         $lote->load([
             'productor:id,nombre,ci,nit,nim,tipo', 'cooperativa:id,nombre', 'linea:id,codigo,nombre,forma',
             'serie:id,prefijo,nombre', 'mina:id,nombre,propia', 'bocamina:id,codigo,nombre', 'municipio:id,nombre',
-            'almacen:id,nombre', 'registradoPor:id,name', 'anuladoPor:id,name',
+            'almacen:id,nombre', 'almacen.centroCosto:id,almacen_id,codigo,nombre', 'registradoPor:id,name', 'anuladoPor:id,name',
             'pesajes.registradoPor:id,name', 'pesajes.bono.movimiento:id,numero,caja_id,fecha',
             'pesajes.correccionesCliente.corregidoPor:id,name',
             'pesajes.fotos:id,tipo,plantilla_id,pesaje_id,lectura,created_at', 'pesajes.sacos.fotos:id,tipo,pesaje_saco_id,created_at',

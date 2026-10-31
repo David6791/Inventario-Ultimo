@@ -22,11 +22,13 @@ class CentroCosto extends ActivoModel
     public $timestamps = true;
 
     protected $fillable = [
-        'area_id', 'codigo', 'nombre', 'almacen_id', 'responsable_id', 'activo',
+        'area_id', 'codigo', 'nombre', 'almacen_id', 'responsable_id', 'activo', 'es_acopio', 'es_central',
     ];
 
     protected $casts = [
         'activo'         => 'boolean',
+        'es_acopio'      => 'boolean',
+        'es_central'     => 'boolean',
         'area_id'        => 'integer',
         'almacen_id'     => 'integer',
         'responsable_id' => 'integer',

@@ -8,7 +8,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Sedes donde cada persona recibe carga, como las cajas con sus cajeros:
+ * Acopios donde cada persona recibe carga (el almacén de un centro de costo
+ * marcado como acopio; mientras no se marque ninguno, todos los almacenes),
+ * como las cajas con sus cajeros:
  *  - Una sede con recepcionistas asignados solo la usan ellos.
  *  - Quien tiene sedes asignadas recibe solo en esas (con una sola, el
  *    formulario ni la pide).
@@ -22,7 +24,8 @@ class SedeRecepcionService
     /** @return Collection<int, Almacen> */
     public function sedesDe(User $u): Collection
     {
-        $activas = Almacen::query()->where('activo', true)->orderBy('nombre');
+        $activas = Almacen::query()->where('activo', true)->deAcopios()
+            ->with('centroCosto:id,almacen_id,codigo,nombre')->orderBy('nombre');
         if ($u->can('cargas.ver-todos-almacenes')) {
             return $activas->get(['id', 'codigo', 'nombre']);
         }
@@ -65,7 +68,8 @@ class SedeRecepcionService
         $asignados = DB::table('cargas.sede_recepcionista as s')->join('users as u', 'u.id', '=', 's.user_id')
             ->orderBy('u.name')->get(['s.almacen_id', 'u.id', 'u.name'])->groupBy('almacen_id');
 
-        return Almacen::query()->where('activo', true)->orderBy('nombre')->get(['id', 'codigo', 'nombre'])
+        return Almacen::query()->where('activo', true)->deAcopios()
+            ->with('centroCosto:id,almacen_id,codigo,nombre')->orderBy('nombre')->get(['id', 'codigo', 'nombre'])
             ->map(fn ($a) => [...$a->toArray(), 'recepcionistas' => ($asignados[$a->id] ?? collect())
                 ->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values()])
             ->all();

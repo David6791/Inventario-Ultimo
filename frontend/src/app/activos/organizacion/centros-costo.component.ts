@@ -8,6 +8,7 @@ import { DropdownModule } from 'primeng/dropdown';
 import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
+import { CheckboxModule } from 'primeng/checkbox';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { OrganizacionService } from '../core/services/organizacion.service';
@@ -20,7 +21,7 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
   standalone: true,
   imports: [
     CommonModule, ReactiveFormsModule, RouterLink, TableModule, ButtonModule,
-    DialogModule, DropdownModule, InputTextModule, TagModule, ToastModule,
+    DialogModule, DropdownModule, InputTextModule, TagModule, ToastModule, CheckboxModule,
   ],
   providers: [MessageService],
   template: `
@@ -30,8 +31,9 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
       <div>
         <h2>Centros de costo</h2>
         <p class="subtitulo">
-          La unidad organizativa de la empresa. Cada centro tiene su almacén, su personal
-          y sus ubicaciones; los activos se imputan a un centro y se asignan a su gente.
+          La unidad principal de la empresa. Cada centro tiene su almacén, su caja, su personal
+          y sus ubicaciones. Los marcados como <b>acopio</b> reciben carga y pagan sus bonos;
+          la <b>sede central</b> envía el dinero a las cajas de los acopios.
         </p>
       </div>
       <div class="acciones">
@@ -56,6 +58,8 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
           <th style="width: 13rem">Código</th>
           <th>Centro de costo</th>
           <th style="width: 14rem">Almacén</th>
+          <th style="width: 9rem">Cajas</th>
+          <th style="width: 9rem">Función</th>
           <th style="width: 7rem" class="centro">Personal</th>
           <th style="width: 7rem" class="centro">Activos</th>
           <th style="width: 5rem"></th>
@@ -77,6 +81,12 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
             </ng-template>
           </td>
 
+          <td><span class="codigo" *ngFor="let k of c.cajas; let u = last">{{ k }}{{ u ? '' : ', ' }}</span>
+            <span class="secundario" *ngIf="!c.cajas?.length">—</span></td>
+          <td>
+            <p-tag *ngIf="c.es_central" value="Sede central" severity="info" />
+            <p-tag *ngIf="c.es_acopio" value="Acopio" severity="success" />
+          </td>
           <td class="centro numero">{{ c.empleados_count ?? 0 }}</td>
           <td class="centro numero">{{ c.activos_count ?? 0 }}</td>
 
@@ -88,7 +98,7 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
       </ng-template>
 
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="7">
+        <tr><td colspan="9">
           <div class="vacio">
             <i class="pi pi-building"></i>
             <p class="titulo-vacio">Sin centros de costo</p>
@@ -130,7 +140,17 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
           <small>
             Define quién ve los activos de este centro: los usuarios que tengan
             este almacén asignado. Sin almacén, el centro es invisible.
+            Cada almacén es de un solo centro.
           </small>
+        </div>
+
+        <div class="campo span-6 funciones">
+          <label class="check"><p-checkbox formControlName="es_acopio" [binary]="true" inputId="es-acopio" />
+            <span><b>Acopio</b> — recibe carga de mineral y paga los bonos de transporte y laboratorio en su caja.</span></label>
+          <label class="check"><p-checkbox formControlName="es_central" [binary]="true" inputId="es-central" />
+            <span><b>Sede central</b> — envía el dinero a las cajas de los acopios. Hay una sola.</span></label>
+          <small class="alerta" *ngIf="(form.value.es_acopio || form.value.es_central) && !form.value.almacen_id">
+            <i class="pi pi-exclamation-triangle"></i> Para ser acopio o sede central necesita su almacén.</small>
         </div>
       </form>
 
@@ -143,6 +163,9 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
   `,
   styles: [ESTILOS_CONFIG, `
     .fila-alerta { background: #fffbf5; }
+    .funciones { gap: 0.55rem; }
+    .check { display: flex; gap: 0.55rem; align-items: flex-start; font-size: 0.88rem; font-weight: 400 !important; cursor: pointer; }
+    td p-tag + p-tag { margin-left: 0.25rem; }
 
     .alerta {
       display: inline-flex; align-items: center; gap: 0.3rem;
@@ -170,6 +193,8 @@ export class CentrosCostoComponent implements OnInit {
     codigo: ['', [Validators.required, Validators.maxLength(40)]],
     nombre: ['', [Validators.required, Validators.maxLength(150)]],
     almacen_id: [null as number | null],
+    es_acopio: [false],
+    es_central: [false],
   });
 
   ngOnInit(): void {
@@ -199,7 +224,7 @@ export class CentrosCostoComponent implements OnInit {
 
   abrirNuevo(): void {
     this.editando.set(null);
-    this.form.reset();
+    this.form.reset({ es_acopio: false, es_central: false });
     this.dialogVisible = true;
   }
 
