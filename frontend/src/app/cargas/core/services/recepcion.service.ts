@@ -9,7 +9,24 @@ import {
 
 export interface ListaPlantillas { data: PlantillaBascula[]; campos: CampoDisponible[]; ocr: boolean; }
 
-export interface FiltroLotes { buscar?: string; estado?: string | null; serie_id?: number | null; desde?: string; hasta?: string; page?: number; }
+export interface FiltroResumen { desde: string; hasta: string; almacen_id?: number | null; serie_id?: number | null; material?: string | null; origen?: string | null; }
+export interface FilaResumen { clave: string; nombre: string; lotes: number; kg: number; }
+export interface ResumenCargas {
+  totales: { lotes: number; kg: number; lotes_propios: number };
+  por_acopio: FilaResumen[]; por_tipo: FilaResumen[]; por_material: FilaResumen[]; por_origen: FilaResumen[];
+  produccion_propia: { mina: string | null; bocamina: string | null; lotes: number; kg: number }[];
+  por_dia: { fecha: string; lotes: number; kg: number }[];
+}
+function limpio(f: object): Record<string, string | number> {
+  const p: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(f)) if (v !== null && v !== undefined && v !== '') p[k] = v as string | number;
+  return p;
+}
+
+export interface FiltroLotes {
+  buscar?: string; estado?: string | null; serie_id?: number | null; desde?: string; hasta?: string; page?: number;
+  almacen_id?: number | null; material?: string | null; origen?: string | null;
+}
 
 @Injectable({ providedIn: 'root' })
 export class RecepcionService {
@@ -20,6 +37,15 @@ export class RecepcionService {
     const params: Record<string, string | number> = {};
     for (const [k, v] of Object.entries(f)) if (v !== null && v !== undefined && v !== '') params[k] = v as string | number;
     return this.http.get<Pagina<Lote>>(`${this.base}/lotes`, { params });
+  }
+
+  // --------------------------------------------------------- Clasificación
+  resumen(f: FiltroResumen): Observable<ResumenCargas> {
+    return this.http.get<RespuestaApi<ResumenCargas>>(`${this.base}/reportes/resumen`, { params: limpio(f) }).pipe(map((r) => r.data));
+  }
+
+  resumenArchivo(f: FiltroResumen, formato: 'pdf' | 'excel'): Observable<Blob> {
+    return this.http.get(`${this.base}/reportes/resumen/${formato}`, { params: limpio(f), responseType: 'blob' });
   }
 
   ver(id: number): Observable<Lote> {

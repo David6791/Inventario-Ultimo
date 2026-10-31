@@ -115,7 +115,7 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
               Cajeros: {{ nombresCajeros() || 'ninguno todavía' }}.</span>
       </div>
 
-      <app-envios-fondos [caja]="c" (cambio)="cargar()" />
+      <app-envios-fondos [caja]="c" [operable]="!deOtroDia()" (cambio)="cargar()" />
 
       <!-- ===================== Caja cerrada: apertura ===================== -->
       <section class="apertura" *ngIf="!c.sesion_abierta && c.soy_cajero">

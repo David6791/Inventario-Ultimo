@@ -31,6 +31,8 @@ export interface Opciones {
   estados_lote: Opcion[];
   materiales: Opcion[];
   almacenes: { id: number; codigo: string; nombre: string }[];
+  /** Acopios que puede consultar, con el nombre del centro de costo. */
+  acopios?: { id: number; codigo: string; nombre: string }[];
   almacen_predeterminado: number | null;
   /** Parámetro FOTO_TICKET_OBLIGATORIA. */
   foto_ticket_obligatoria?: boolean;

@@ -33,7 +33,7 @@ import { DineroPipe } from '../core/dinero';
           <span class="secundario"> de la caja {{ e.origen.codigo }} · {{ e.motivo }}{{ e.entregado_a ? ' · lo trae ' + e.entregado_a : '' }}</span>
           <div class="secundario">{{ e.numero }} · enviado por {{ e.enviado_por?.name }} el {{ e.enviado_en | date: 'dd/MM HH:mm' }}</div>
         </div>
-        <p-button *ngIf="caja().soy_cajero && caja().sesion_abierta" label="Recibir" icon="pi pi-check" size="small"
+        <p-button *ngIf="caja().soy_cajero && caja().sesion_abierta && operable()" label="Recibir" icon="pi pi-check" size="small"
                   [loading]="trabajando() === e.id" [disabled]="trabajando() !== null" (onClick)="recibir(e)" />
         <span class="secundario" *ngIf="caja().soy_cajero && !caja().sesion_abierta">Abra la caja para recibirlo.</span>
       </div>
@@ -47,14 +47,14 @@ import { DineroPipe } from '../core/dinero';
           <span class="secundario">· envía el dinero a las cajas de los acopios</span></span>
         <div class="botones">
           <p-button label="Historial de envíos" icon="pi pi-history" [text]="true" size="small" (onClick)="historialVisible = true" />
-          <p-button *ngIf="caja().soy_cajero && caja().sesion_abierta" label="Enviar dinero" icon="pi pi-send" size="small"
+          <p-button *ngIf="caja().soy_cajero && caja().sesion_abierta && operable()" label="Enviar dinero" icon="pi pi-send" size="small"
                     (onClick)="abrirEnvio()" />
         </div>
       </div>
       <div class="transito" *ngIf="enTransito().length">
         <span class="secundario">En tránsito:</span>
         <span class="chip" *ngFor="let e of enTransito()">{{ e.destino.codigo }} · {{ e.monto | dinero: e.moneda }}
-          <button type="button" class="enlace" *ngIf="caja().soy_cajero && caja().sesion_abierta" (click)="pedirAnular(e)">anular</button></span>
+          <button type="button" class="enlace" *ngIf="caja().soy_cajero && caja().sesion_abierta && operable()" (click)="pedirAnular(e)">anular</button></span>
       </div>
     </section>
     <div class="solo-historial" *ngIf="!caja().es_central && envios().length && !porRecibir().length">
@@ -169,6 +169,8 @@ import { DineroPipe } from '../core/dinero';
 })
 export class EnviosFondosComponent implements OnChanges {
   readonly caja = input.required<CajaOperacion>();
+  /** La sesión es de hoy: con una sesión de otro día no se registran movimientos (se cierra primero). */
+  readonly operable = input(true);
   /** Algo cambió el saldo: la caja se vuelve a cargar. */
   readonly cambio = output<void>();
 

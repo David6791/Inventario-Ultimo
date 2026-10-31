@@ -31,6 +31,12 @@ class LoteController extends Controller
             ->delAmbitoDe($request->user())
             ->when($request->filled('estado'), fn ($q) => $q->where('estado', $request->query('estado')))
             ->when($request->filled('serie_id'), fn ($q) => $q->where('serie_id', $request->integer('serie_id')))
+            // Clasificación: acopio, material (o «SIN»), compra o propia, mina.
+            ->when($request->filled('almacen_id'), fn ($q) => $q->where('almacen_id', $request->integer('almacen_id')))
+            ->when($request->filled('material'), fn ($q) => $request->query('material') === 'SIN'
+                ? $q->whereNull('material') : $q->where('material', $request->query('material')))
+            ->when($request->filled('origen'), fn ($q) => $q->where('origen', $request->query('origen')))
+            ->when($request->filled('mina_id'), fn ($q) => $q->where('mina_id', $request->integer('mina_id')))
             ->when($request->filled('desde'), fn ($q) => $q->whereDate('fecha_recepcion', '>=', $request->query('desde')))
             ->when($request->filled('hasta'), fn ($q) => $q->whereDate('fecha_recepcion', '<=', $request->query('hasta')))
             ->when($buscar !== '', fn ($q) => $q->where(fn ($w) => $w

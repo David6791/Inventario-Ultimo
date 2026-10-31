@@ -80,6 +80,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('plantillas-bascula/{plantilla}/muestra', [PlantillaBasculaController::class, 'muestra'])->whereNumber('plantilla');
         Route::get('fotos/{foto}',             [FotoRecepcionController::class, 'imagen'])->whereNumber('foto');
         Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
+        Route::get('reportes/resumen',         [\App\Modules\Cargas\Http\Controllers\ReporteCargasController::class, 'resumen']);
+        Route::get('reportes/resumen/pdf',     [\App\Modules\Cargas\Http\Controllers\ReporteCargasController::class, 'pdf']);
+        Route::get('reportes/resumen/excel',   [\App\Modules\Cargas\Http\Controllers\ReporteCargasController::class, 'excel']);
         Route::get('reglas-peso',              [\App\Modules\Cargas\Http\Controllers\ReglaPesoController::class, 'index']);
         Route::get('reglas-peso/calcular',     [\App\Modules\Cargas\Http\Controllers\ReglaPesoController::class, 'calcular']);
         Route::get('bono-laboratorio-tramos',  [\App\Modules\Cargas\Http\Controllers\BonoLaboratorioController::class, 'tramos']);

@@ -51,6 +51,12 @@ class OpcionesController extends Controller
                 ->when(! $usuario->can('cargas.ver-todos-almacenes'), fn ($q) => $q->whereIn('id', $usuario->almacenesIds()))
                 ->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
             'almacen_predeterminado' => $usuario->almacenPredeterminado()?->id,
+            // Acopios que el usuario puede consultar (para filtrar y clasificar la carga), con el nombre del centro de costo.
+            'acopios' => Almacen::query()->where('activo', true)->deAcopios()
+                ->when(! $usuario->can('cargas.ver-todos-almacenes'), fn ($q) => $q->whereIn('id', $usuario->almacenesIds()))
+                ->with('centroCosto:id,almacen_id,codigo,nombre')->orderBy('nombre')->get(['id', 'codigo', 'nombre'])
+                ->map(fn ($a) => ['id' => $a->id, 'nombre' => $a->centroCosto?->nombre ?? $a->nombre, 'codigo' => $a->centroCosto?->codigo ?? $a->codigo])
+                ->values(),
             'foto_ticket_obligatoria' => \App\Modules\Cargas\Http\Requests\PesajeRequest::fotoObligatoria(),
             // Dónde recibe carga este usuario (con una sola asignada, el formulario no pide sede).
             'sedes_recepcion' => app(\App\Modules\Cargas\Services\SedeRecepcionService::class)->sedesDe($usuario),

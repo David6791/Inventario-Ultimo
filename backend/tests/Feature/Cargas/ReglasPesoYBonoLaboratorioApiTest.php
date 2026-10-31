@@ -238,4 +238,31 @@ class ReglasPesoYBonoLaboratorioApiTest extends TestCase
         $this->postJson('/api/cargas/bono-laboratorio-tramos', ['vigente_desde' => now()->toDateString(), 'tramos' => [
             ['num_elementos' => 1, 'monto' => 30]]])->assertForbidden();
     }
+
+    // ---------------------------------------------------------- Clasificación
+
+    public function test_resumen_y_filtros_de_cargas_por_clasificacion(): void
+    {
+        $this->como($this->usuario([...self::RECEPCION, 'cargas.anular-lote']));
+        $a = $this->recibir(['material' => 'ZN-AG'], $this->pesaje(['ticket' => 'R-1', 'peso_bruto_kg' => 20000, 'tara_kg' => 8000]))->json('data');
+        $this->recibir(['material' => 'ZN'], $this->pesaje(['ticket' => 'R-2', 'peso_bruto_kg' => 10000, 'tara_kg' => 4000]))->assertCreated();
+        $anulado = $this->recibir([], $this->pesaje(['ticket' => 'R-3']))->json('data');
+        $this->postJson("/api/cargas/lotes/{$anulado['id']}/anular", ['motivo' => 'Carga rechazada en el acopio'])->assertOk();
+
+        $hoy = now()->toDateString();
+        $r = $this->getJson("/api/cargas/reportes/resumen?desde={$hoy}&hasta={$hoy}")->assertOk()->json('data');
+        $this->assertSame(2, $r['totales']['lotes']);                       // el anulado no cuenta
+        $this->assertEqualsWithDelta(18000, $r['totales']['kg'], 0.01);
+        $this->assertSame(['ZN-AG', 'ZN'], array_column($r['por_material'], 'clave'));
+        $this->assertSame('CZP', $r['por_tipo'][0]['clave']);
+        $this->assertSame(1, count($r['por_dia']));
+
+        $this->getJson("/api/cargas/reportes/resumen?desde={$hoy}&hasta={$hoy}&material=ZN")->assertJsonPath('data.totales.lotes', 1);
+        $this->getJson("/api/cargas/lotes?material=ZN-AG")->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $a['id']);
+        $this->getJson("/api/cargas/lotes?origen=PROPIA")->assertOk()->assertJsonPath('total', 0);
+
+        $this->get("/api/cargas/reportes/resumen/pdf?desde={$hoy}&hasta={$hoy}")->assertOk()->assertHeader('content-type', 'application/pdf');
+        $this->get("/api/cargas/reportes/resumen/excel?desde={$hoy}&hasta={$hoy}")->assertOk();
+        $this->getJson("/api/cargas/reportes/resumen?desde={$hoy}&hasta=2020-01-01")->assertStatus(422);
+    }
 }
