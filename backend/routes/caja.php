@@ -75,6 +75,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('sesiones/{sesion}/validar',         [SesionController::class, 'validar'])->whereNumber('sesion');
     Route::post('movimientos/{movimiento}/anular',   [MovimientoController::class, 'anular'])->whereNumber('movimiento');
 
+    // --- Envío de dinero de la sede central a las cajas -----------------------
+    Route::get('cajas/{caja}/envios',   [\App\Modules\Caja\Http\Controllers\EnvioFondosController::class, 'deCaja'])->whereNumber('caja')
+        ->middleware('can:caja.ver');
+    Route::post('cajas/{caja}/envios',  [\App\Modules\Caja\Http\Controllers\EnvioFondosController::class, 'store'])->whereNumber('caja')
+        ->middleware('can:caja.registrar');
+    Route::post('envios/{envio}/recibir', [\App\Modules\Caja\Http\Controllers\EnvioFondosController::class, 'recibir'])->whereNumber('envio')
+        ->middleware('can:caja.registrar');
+    Route::post('envios/{envio}/anular',  [\App\Modules\Caja\Http\Controllers\EnvioFondosController::class, 'anular'])->whereNumber('envio')
+        ->middleware('can:caja.registrar');
+
     // --- Comprobantes provisionales: ajuste en el día y validación ----------
     Route::post('movimientos/{movimiento}/ajustes',  [AjusteController::class, 'ajustar'])->whereNumber('movimiento');
     Route::post('movimientos/{movimiento}/validar',  [AjusteController::class, 'validar'])->whereNumber('movimiento');

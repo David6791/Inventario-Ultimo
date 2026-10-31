@@ -127,6 +127,13 @@ class Caja extends CajaModel
         });
     }
 
+    /** La caja es de la sede central (el centro de costo de su almacén es la central). */
+    public function esCentral(): bool
+    {
+        return \Illuminate\Support\Facades\DB::table('activos.centro_costo')
+            ->where('almacen_id', $this->almacen_id)->where('es_central', true)->where('activo', true)->exists();
+    }
+
     public function esDelAmbitoDe(User $usuario): bool
     {
         return $usuario->can('caja.administrar') || $usuario->can('almacenes.ver-todos')

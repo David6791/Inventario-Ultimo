@@ -170,6 +170,10 @@ export interface Caja {
   ultimo_correlativo_ingreso?: number | null;
   proximo_numero_ingreso?: string | null;
   solicitudes_por_pagar?: number;
+  /** La caja es de la sede central: envía dinero a las demás. */
+  es_central?: boolean;
+  /** Envíos de la sede central que esperan que esta caja los reciba. */
+  envios_por_recibir?: number;
   cajeros?: UsuarioCorto[];
   aprobadores?: UsuarioCorto[];
   /** Si el usuario que mira está asignado: solo entonces opera la caja. */
@@ -350,3 +354,29 @@ export interface LibroCaja {
     glosa: string; monto: string; estado: 'VIGENTE' | 'ANULADO';
   }[];
 }
+
+/** Dinero que la caja de la sede central envía a otra caja. */
+export interface EnvioFondos {
+  id: number;
+  numero: string;
+  caja_origen_id: number;
+  caja_destino_id: number;
+  origen: { id: number; codigo: string; nombre: string };
+  destino: { id: number; codigo: string; nombre: string };
+  monto: string;
+  moneda: Moneda;
+  motivo: string;
+  entregado_a: string | null;
+  estado: 'EN_TRANSITO' | 'RECIBIDO' | 'ANULADO';
+  enviado_en: string;
+  enviado_por?: UsuarioCorto;
+  recibido_en: string | null;
+  recibido_por?: UsuarioCorto | null;
+  anulado_en: string | null;
+  anulado_por?: UsuarioCorto | null;
+  motivo_anulacion: string | null;
+  movimiento_envio?: { id: number; numero: string };
+  movimiento_recepcion?: { id: number; numero: string } | null;
+  movimiento_reintegro?: { id: number; numero: string } | null;
+}
+export interface DestinoEnvio { id: number; codigo: string; nombre: string; centro_costo: string | null; }

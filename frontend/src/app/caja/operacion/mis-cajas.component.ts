@@ -47,7 +47,10 @@ import { ESTILOS_CAJA } from '../core/estilos';
             {{ c.sesion_abierta ? 'Abierta · sesión ' + c.sesion_abierta.numero : 'Cerrada' }}
           </span>
         </div>
-        <div class="nombre">{{ c.nombre }}</div>
+        <div class="nombre">{{ c.nombre }}
+          <span class="por-recibir" *ngIf="c.envios_por_recibir"><i class="pi pi-send"></i>
+            {{ c.envios_por_recibir === 1 ? '1 envío por recibir' : c.envios_por_recibir + ' envíos por recibir' }}</span>
+          <span class="central" *ngIf="c.es_central">Sede central</span></div>
         <div class="secundario">
           {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }} ·
           <span [class.mia]="c.soy_cajero">{{ c.soy_cajero ? 'Usted es cajero' : 'Solo consulta' }}</span>
@@ -115,6 +118,8 @@ import { ESTILOS_CAJA } from '../core/estilos';
     .flecha { position: absolute; right: 1rem; bottom: 1rem; color: var(--text-color-secondary, #9ca3af); }
     .vacio { grid-column: 1 / -1; }
     .tarjeta.ajena { background: var(--surface-ground, #f8fafc); }
+    .por-recibir { font-size: 0.72rem; font-weight: 600; color: #1d4ed8; background: #dbeafe; border-radius: 999px; padding: 0.1rem 0.5rem; margin-left: 0.4rem; }
+    .central { font-size: 0.72rem; font-weight: 600; color: #075985; background: #e0f2fe; border-radius: 999px; padding: 0.1rem 0.5rem; margin-left: 0.4rem; }
     .ver-otras { margin-top: 1rem; }
     .titulo-otras { font-size: 0.95rem; margin: 1.2rem 0 0.7rem; }
     .titulo-otras .secundario { font-weight: 400; font-size: 0.82rem; }

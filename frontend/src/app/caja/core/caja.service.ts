@@ -6,7 +6,7 @@ import {
   Caja, CajaOperacion, Concepto, DatosCaja, DatosMovimiento, Moneda, Movimiento, OpcionesCaja, Pagina,
   Persona, PersonaCorta, PersonaDetalle, SaldoSesion, SesionAbierta, UsuarioCorto, VistaPreviaComprobante,
   DatosCierre, FiltrosLibro, LibroCaja, SesionDetalle, SesionFila, DatosSolicitud, FormaPago, OpcionesSolicitud,
-  SolicitudConUsuarios, AjusteMovimiento,
+  SolicitudConUsuarios, AjusteMovimiento, EnvioFondos, DestinoEnvio,
 } from './caja.model';
 
 interface Respuesta<T> { data: T; mensaje?: string; }
@@ -23,6 +23,24 @@ export class CajaService {
    */
   opciones(): Observable<OpcionesCaja> {
     return this.http.get<Respuesta<OpcionesCaja>>(`${this.base}/opciones`).pipe(map((r) => r.data));
+  }
+
+  // ------------------------------------------------- Envío de dinero entre cajas
+  envios(cajaId: number): Observable<{ data: EnvioFondos[]; destinos: DestinoEnvio[] }> {
+    return this.http.get<{ data: EnvioFondos[]; destinos: DestinoEnvio[] }>(`${this.base}/cajas/${cajaId}/envios`);
+  }
+
+  enviar(cajaId: number, datos: { caja_destino_id: number; monto: number; moneda: Moneda; motivo: string; entregado_a: string | null }):
+      Observable<Respuesta<EnvioFondos>> {
+    return this.http.post<Respuesta<EnvioFondos>>(`${this.base}/cajas/${cajaId}/envios`, datos);
+  }
+
+  recibirEnvio(id: number): Observable<Respuesta<EnvioFondos>> {
+    return this.http.post<Respuesta<EnvioFondos>>(`${this.base}/envios/${id}/recibir`, {});
+  }
+
+  anularEnvio(id: number, motivo: string): Observable<Respuesta<EnvioFondos>> {
+    return this.http.post<Respuesta<EnvioFondos>>(`${this.base}/envios/${id}/anular`, { motivo });
   }
 
   // ------------------------------------------------------------ Cajas

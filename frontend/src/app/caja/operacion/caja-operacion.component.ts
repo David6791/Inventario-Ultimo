@@ -17,6 +17,7 @@ import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { mensajeDeError } from '../../cargas/core/errores';
 import { BonoLabPendiente, BonoPendiente } from '../../cargas/core/models/cargas.model';
+import { EnviosFondosComponent } from './envios-fondos.component';
 import { RecepcionService } from '../../cargas/core/services/recepcion.service';
 import { PermisosService } from '../../core/services/permisos.service';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
@@ -44,7 +45,7 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
   imports: [
     CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AutoCompleteModule, ButtonModule, CheckboxModule, DialogModule, DropdownModule,
     InputNumberModule, InputTextModule, InputTextareaModule, SelectButtonModule, TableModule, ToastModule,
-    TooltipModule, DineroPipe, TienePermisoDirective,
+    TooltipModule, DineroPipe, TienePermisoDirective, EnviosFondosComponent,
   ],
   providers: [MessageService],
   template: `
@@ -113,6 +114,8 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
         <span>Solo consulta: no está asignado como cajero de esta caja.
               Cajeros: {{ nombresCajeros() || 'ninguno todavía' }}.</span>
       </div>
+
+      <app-envios-fondos [caja]="c" (cambio)="cargar()" />
 
       <!-- ===================== Caja cerrada: apertura ===================== -->
       <section class="apertura" *ngIf="!c.sesion_abierta && c.soy_cajero">
