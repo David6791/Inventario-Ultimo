@@ -51,6 +51,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('empleados/importar/validar',  [EmpleadoController::class, 'validarImportacion']);
         Route::post('empleados/importar',          [EmpleadoController::class, 'importar']);
 
+        Route::post('areas',                       [CentroCostoController::class, 'storeArea']);
         Route::post('centros-costo',               [CentroCostoController::class, 'store']);
         Route::put('centros-costo/{centro}',       [CentroCostoController::class, 'update'])->whereNumber('centro');
     });

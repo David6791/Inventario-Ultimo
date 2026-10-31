@@ -93,6 +93,12 @@ export class OrganizacionService {
       .pipe(map((r) => r.data));
   }
 
+  crearArea(datos: { codigo: string; nombre: string }): Observable<Area> {
+    return this.http
+      .post<{ data: Area }>(`${this.base}/areas`, datos)
+      .pipe(map((r) => r.data));
+  }
+
   crearCentro(datos: Partial<CentroCosto>): Observable<CentroCosto> {
     return this.http
       .post<{ data: CentroCosto }>(`${this.base}/centros-costo`, datos)

@@ -122,4 +122,21 @@ class SedesRecepcionApiTest extends TestCase
         $this->expectExceptionMessage('ux_cc_una_central');
         $this->centro('TRES', 2, ['es_central' => true]);
     }
+
+    public function test_se_crean_areas_para_agrupar_centros(): void
+    {
+        $this->prepararBaseCargas();
+        $this->filaConId('almacenes', 2);
+        $sin = $this->usuario(['activos.ver']);
+        Sanctum::actingAs($sin);
+        $this->postJson('/api/activos/areas', ['codigo' => 'PORCO', 'nombre' => 'Zona Porco'])->assertForbidden();
+
+        Sanctum::actingAs($this->usuario(['activos.ver', 'activos-config.administrar']));
+        $id = $this->postJson('/api/activos/areas', ['codigo' => 'PORCO', 'nombre' => 'Zona Porco'])
+            ->assertCreated()->json('data.id');
+        $this->postJson('/api/activos/areas', ['codigo' => 'PORCO', 'nombre' => 'Otra'])->assertUnprocessable();
+        $this->getJson('/api/activos/areas')->assertOk()->assertJsonFragment(['codigo' => 'PORCO']);
+        $this->postJson('/api/activos/centros-costo', ['area_id' => $id, 'codigo' => 'ACOPIO_PORCO', 'nombre' => 'Acopio Porco'])
+            ->assertCreated();
+    }
 }

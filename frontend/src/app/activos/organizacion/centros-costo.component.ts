@@ -10,6 +10,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { CheckboxModule } from 'primeng/checkbox';
 import { ToastModule } from 'primeng/toast';
+import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { OrganizacionService } from '../core/services/organizacion.service';
 import { CatalogoService } from '../core/services/catalogo.service';
@@ -21,7 +22,7 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
   standalone: true,
   imports: [
     CommonModule, ReactiveFormsModule, RouterLink, TableModule, ButtonModule,
-    DialogModule, DropdownModule, InputTextModule, TagModule, ToastModule, CheckboxModule,
+    DialogModule, DropdownModule, InputTextModule, TagModule, ToastModule, CheckboxModule, TooltipModule,
   ],
   providers: [MessageService],
   template: `
@@ -117,9 +118,24 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
       <form [formGroup]="form" class="campos">
         <div class="campo span-3">
           <label for="area">Área</label>
-          <p-dropdown inputId="area" formControlName="area_id" [options]="areas()"
-                      optionLabel="codigo" optionValue="id" placeholder="Seleccione"
-                      appendTo="body" />
+          <div class="con-boton">
+            <p-dropdown inputId="area" formControlName="area_id" [options]="areas()"
+                        optionLabel="codigo" optionValue="id" placeholder="Seleccione"
+                        [emptyMessage]="'Sin áreas: cree una con +'" appendTo="body" />
+            <p-button icon="pi pi-plus" [text]="true" pTooltip="Nueva área"
+                      ariaLabel="Nueva área" (onClick)="nuevaArea = !nuevaArea" />
+          </div>
+          <small>Zona que agrupa centros (ej. PORCO, POTOSI).</small>
+        </div>
+
+        <div class="campo span-6 nueva-area" *ngIf="nuevaArea">
+          <label>Nueva área</label>
+          <div class="con-boton">
+            <input pInputText #codArea placeholder="Código (ej. PORCO)" maxlength="30" />
+            <input pInputText #nomArea placeholder="Nombre (ej. Zona Porco)" maxlength="120" />
+            <p-button label="Crear" icon="pi pi-check" [loading]="creandoArea()"
+                      (onClick)="crearArea(codArea.value, nomArea.value)" />
+          </div>
         </div>
 
         <div class="campo span-3">
@@ -164,6 +180,9 @@ import { Almacen, Area, CentroCosto } from '../core/models/organizacion.model';
   styles: [ESTILOS_CONFIG, `
     .fila-alerta { background: #fffbf5; }
     .funciones { gap: 0.55rem; }
+    .con-boton { display: flex; gap: 0.4rem; align-items: center; }
+    .con-boton p-dropdown, .con-boton input { flex: 1; min-width: 0; }
+    .nueva-area { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 0.6rem; }
     .check { display: flex; gap: 0.55rem; align-items: flex-start; font-size: 0.88rem; font-weight: 400 !important; cursor: pointer; }
     td p-tag + p-tag { margin-left: 0.25rem; }
 
@@ -187,6 +206,8 @@ export class CentrosCostoComponent implements OnInit {
   readonly editando = signal<CentroCosto | null>(null);
 
   dialogVisible = false;
+  nuevaArea = false;
+  readonly creandoArea = signal(false);
 
   readonly form = this.fb.group({
     area_id: [null as number | null, Validators.required],
@@ -220,6 +241,30 @@ export class CentrosCostoComponent implements OnInit {
 
   sinAmbito(): number {
     return this.centros().filter((c) => c.sin_ambito && c.activo).length;
+  }
+
+  crearArea(codigo: string, nombre: string): void {
+    codigo = codigo.trim().toUpperCase();
+    nombre = nombre.trim();
+    if (!codigo || !nombre) {
+      this.toast.add({ severity: 'warn', summary: 'Falta el código o el nombre del área' });
+      return;
+    }
+    this.creandoArea.set(true);
+    this.servicio.crearArea({ codigo, nombre }).subscribe({
+      next: (a) => {
+        this.creandoArea.set(false);
+        this.nuevaArea = false;
+        this.areas.update((l) => [...l, a].sort((x, y) => x.codigo.localeCompare(y.codigo)));
+        this.form.patchValue({ area_id: a.id });
+        this.toast.add({ severity: 'success', summary: `Área ${a.codigo} creada` });
+      },
+      error: (e) => {
+        this.creandoArea.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se pudo crear el área',
+          detail: e?.error?.message ?? 'Revise los datos.' });
+      },
+    });
   }
 
   abrirNuevo(): void {
