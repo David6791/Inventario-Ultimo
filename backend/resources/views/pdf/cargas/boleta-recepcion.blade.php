@@ -121,7 +121,8 @@
           <td class="num">{{ $p->modalidad === 'SACOS' ? '—' : $kg($p->tara_kg) }}</td>
           <td class="num">{{ $kg($p->peso_neto_kg) }}@if ((float) $p->descuento_sacos_kg > 0)<br><span style="font-size: 5.6pt;">− {{ $kg($p->descuento_sacos_kg) }} sacos</span>@endif @if ($p->criterio_peso && $p->criterio_peso !== 'EMPRESA')<br><b style="font-size: 6pt;">vale {{ $kg($p->peso_final_kg) }} ({{ $p->criterio_peso === 'CLIENTE' ? 'cliente' : 'promedio' }})</b>@endif</td>
           @if ($conCliente)<td class="num">@if ($p->peso_cliente_kg === null)—@elseif ($p->peso_cliente_tipo === 'BRUTO'){{ $kg($p->peso_cliente_kg - $p->tara_kg) }}<br><span style="font-size: 5.6pt;">bruto {{ $kg($p->peso_cliente_kg) }}</span>@else{{ $kg($p->peso_cliente_kg) }}@endif</td>@endif
-          <td class="num">{{ $p->bono && $p->bono->estado !== 'ANULADO' ? ($p->bono->moneda === 'USD' ? 'US$' : 'Bs') . ' ' . $kg($p->bono->monto) . ($p->bono->estado === 'PAGADO' ? ' ✓' : '') : '—' }}</td>
+          @php($bonosP = $p->bonos->where('estado', '!=', 'ANULADO'))
+          <td class="num">@forelse ($bonosP as $b){{ $b->moneda === 'USD' ? 'US$' : 'Bs' }} {{ $kg($b->monto) }}{{ $b->estado === 'PAGADO' ? ' ✓' : '' }}@if (! $loop->last)<br>@endif @empty — @endforelse</td>
         </tr>
       @empty
         <tr><td colspan="{{ $conCliente ? 10 : 9 }}">Sin pesajes registrados todavía.</td></tr>
@@ -139,6 +140,10 @@
   <div class="nota">
     Pesos húmedos. El peso seco y las leyes se determinan en laboratorio con la muestra del lote; el productor
     recibe su porción de muestra precintada. ✓ = bono pagado.
+    @php($bonosLote = $lote->bonos->whereNull('pesaje_id')->where('estado', '!=', 'ANULADO'))
+    @if ($bonosLote->isNotEmpty())
+      Bonos del lote: @foreach ($bonosLote as $b){{ $b->tipo->nombre }} {{ $b->moneda === 'USD' ? 'US$' : 'Bs' }} {{ $kg($b->monto) }}{{ $b->estado === 'PAGADO' ? ' ✓' : '' }}{{ $loop->last ? '.' : ' · ' }}@endforeach
+    @endif
     @if ($conCliente)
       Vale el peso de la báscula de la empresa; el del cliente es el que él declaró
       (diferencia {{ (float) $resumen['diferencia_cliente_kg'] > 0 ? '+' : '' }}{{ $kg($resumen['diferencia_cliente_kg']) }} kg).

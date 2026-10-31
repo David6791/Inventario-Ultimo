@@ -48,10 +48,11 @@ class ReglasPesoYBonoLaboratorioApiTest extends TestCase
         $this->minaPropia = Mina::create(['nombre' => 'MINA PORCO', 'propia' => true, 'municipio_id' => $this->municipio->id]);
         $this->bocamina = Bocamina::create(['mina_id' => $this->minaPropia->id, 'codigo' => 'BM-03', 'nombre' => 'Nivel 3']);
 
-        DB::table('cargas.bono_transporte_tramo')->insert([
-            ['tipo_vehiculo' => 'TONKA',    'peso_desde_kg' => 500,  'peso_hasta_kg' => 7000,  'monto' => 50,  'vigente_desde' => '2026-01-01'],
-            ['tipo_vehiculo' => 'SENCILLO', 'peso_desde_kg' => 7000, 'peso_hasta_kg' => 10000, 'monto' => 80,  'vigente_desde' => '2026-01-01'],
-            ['tipo_vehiculo' => 'DOBLE',    'peso_desde_kg' => 10000, 'peso_hasta_kg' => null, 'monto' => 100, 'vigente_desde' => '2026-01-01'],
+        $k = DB::table('cargas.tipo_bono')->where('codigo', 'TRANSPORTE')->value('id');
+        DB::table('cargas.tipo_bono_tramo')->insert([
+            ['tipo_bono_id' => $k, 'etiqueta' => 'TONKA',    'desde' => 500,  'hasta' => 7000,  'monto' => 50,  'vigente_desde' => '2026-01-01'],
+            ['tipo_bono_id' => $k, 'etiqueta' => 'SENCILLO', 'desde' => 7000, 'hasta' => 10000, 'monto' => 80,  'vigente_desde' => '2026-01-01'],
+            ['tipo_bono_id' => $k, 'etiqueta' => 'DOBLE',    'desde' => 10000, 'hasta' => null, 'monto' => 100, 'vigente_desde' => '2026-01-01'],
         ]);
     }
 
@@ -108,9 +109,20 @@ class ReglasPesoYBonoLaboratorioApiTest extends TestCase
     private function tablaLaboratorio(): void
     {
         $this->como($this->usuario(self::CONFIG));
-        $this->postJson('/api/cargas/bono-laboratorio-tramos', ['vigente_desde' => now()->toDateString(), 'tramos' => [
-            ['num_elementos' => 1, 'monto' => 30], ['num_elementos' => 2, 'monto' => 50], ['num_elementos' => 3, 'monto' => 70],
+        $this->postJson("/api/cargas/tipos-bono/{$this->lab()}/tramos", ['vigente_desde' => now()->toDateString(), 'tramos' => [
+            ['desde' => 1, 'monto' => 30], ['desde' => 2, 'monto' => 50], ['desde' => 3, 'monto' => 70],
         ]])->assertCreated();
+    }
+
+    private function lab(): int
+    {
+        return (int) DB::table('cargas.tipo_bono')->where('codigo', 'LABORATORIO')->value('id');
+    }
+
+    /** El bono del lote de ese tipo (de la ficha). */
+    private static function bonoDe(array $lote, string $codigo): ?array
+    {
+        return collect($lote['bonos'])->first(fn ($b) => $b['tipo']['codigo'] === $codigo && $b['estado'] !== 'ANULADO');
     }
 
     // ---------------------------------------------------------- Reglas de peso
@@ -183,38 +195,40 @@ class ReglasPesoYBonoLaboratorioApiTest extends TestCase
     {
         $this->tablaLaboratorio();
         $this->como($this->usuario(self::RECEPCION));
-        $this->getJson('/api/cargas/bono-laboratorio-tramos/calcular?material=ZN-AG-PB')->assertJsonPath('data.monto', '70.00');
+        $this->getJson('/api/cargas/tipos-bono/calcular?material=ZN-AG-PB')->assertJsonPath('data.0.codigo', 'LABORATORIO')
+            ->assertJsonPath('data.0.monto', '70.00')->assertJsonPath('data.0.detalle', '3 elementos');
 
         $r = $this->recibir(['material' => 'ZN-AG'])->assertCreated();
-        $this->assertStringContainsString('Bono de laboratorio: Bs 50,00', $r->json('mensaje'));
+        $this->assertStringContainsString('bono de laboratorio Bs 50,00', $r->json('mensaje'));
+        $this->assertStringContainsString('bono de transporte Bs 80,00', $r->json('mensaje'));
         $lote = $r->json('data');
-        $this->assertSame('50.00', $lote['bono_laboratorio']['monto']);
-        $this->assertSame(2, $lote['bono_laboratorio']['num_elementos']);
+        $lab = self::bonoDe($lote, 'LABORATORIO');
+        $this->assertSame(['50.00', '2.00', 'JUAN MAMANI', 'ANTICIPO'], [$lab['monto'], $lab['base'], $lab['beneficiario_nombre'], $lab['naturaleza']]);
         $sinMaterial = $this->recibir([], $this->pesaje(['ticket' => 't-101']))->assertCreated()->json('data');
-        $this->assertNull($sinMaterial['bono_laboratorio']);
+        $this->assertNull(self::bonoDe($sinMaterial, 'LABORATORIO'));
 
         [$caja] = $this->cajaAbierta(1000);
-        $pend = $this->getJson("/api/cargas/bonos-laboratorio/pendientes?caja_id={$caja->id}")->assertOk()->assertJsonCount(1, 'data')->json('data.0');
+        $pend = collect($this->getJson("/api/cargas/bonos/pendientes?caja_id={$caja->id}")->assertOk()->assertJsonCount(3, 'data')->json('data'))
+            ->firstWhere('id', $lab['id']);
         $this->assertSame('JUAN MAMANI', $pend['lote']['productor']['nombre']);
+        $this->assertTrue($pend['tipo']['permite_otro']);
 
-        $this->postJson("/api/cargas/bonos-laboratorio/{$pend['id']}/pagar", ['caja_id' => $caja->id])
-            ->assertStatus(422)->assertJsonValidationErrors('beneficiario_nombre');
-        $mov = $this->postJson("/api/cargas/bonos-laboratorio/{$pend['id']}/pagar",
+        $mov = $this->postJson("/api/cargas/bonos/{$lab['id']}/pagar",
             ['caja_id' => $caja->id, 'beneficiario_nombre' => 'rosa  condori', 'beneficiario_ci' => '556 677'])->assertCreated()
             ->assertJsonPath('data.concepto.codigo', 'BONO_LABORATORIO')
             ->assertJsonPath('data.persona_nombre', 'ROSA CONDORI')
             ->assertJsonPath('data.monto', '50.00')->json('data');
         $this->assertStringContainsString('por cuenta de JUAN MAMANI', $mov['glosa']);
-        $b = DB::table('cargas.bono_laboratorio')->find($pend['id']);
+        $b = DB::table('cargas.bono')->find($lab['id']);
         $this->assertSame(['PAGADO', 'ROSA CONDORI', '556677'], [$b->estado, $b->beneficiario_nombre, $b->beneficiario_ci]);
 
         // Desde caja no se anula.
         $this->postJson("/api/caja/movimientos/{$mov['id']}/anular", ['motivo' => 'Pagado por error a otra persona'])->assertForbidden();
 
         // Los dos bonos pagados son lo adelantado del lote.
-        $this->postJson("/api/cargas/bonos/{$lote['pesajes'][0]['bono']['id']}/pagar", ['caja_id' => $caja->id])->assertCreated();
+        $this->postJson('/api/cargas/bonos/' . self::bonoDe($lote, 'TRANSPORTE')['id'] . '/pagar', ['caja_id' => $caja->id])->assertCreated();
         $a = DB::table('cargas.v_lote_anticipos')->where('lote_id', $lote['id'])->first();
-        $this->assertSame([80.0, 50.0, 130.0, 0], [(float) $a->bono_transporte_bob, (float) $a->bono_laboratorio_bob, (float) $a->total_bob, (int) $a->bonos_pendientes]);
+        $this->assertSame([130.0, 0.0, 130.0, 0], [(float) $a->bonos_bob, (float) $a->premios_bob, (float) $a->total_bob, (int) $a->bonos_pendientes]);
     }
 
     public function test_anular_el_lote_anula_su_bono_de_laboratorio_pendiente(): void
@@ -222,21 +236,107 @@ class ReglasPesoYBonoLaboratorioApiTest extends TestCase
         $this->tablaLaboratorio();
         $this->como($this->usuario([...self::RECEPCION, 'cargas.anular-lote']));
         $lote = $this->recibir(['material' => 'ZN'])->json('data');
-        $this->assertSame('30.00', $lote['bono_laboratorio']['monto']);
+        $this->assertSame('30.00', self::bonoDe($lote, 'LABORATORIO')['monto']);
         $this->postJson("/api/cargas/lotes/{$lote['id']}/anular", ['motivo' => 'Carga rechazada por humedad'])->assertOk();
-        $this->assertSame('ANULADO', DB::table('cargas.bono_laboratorio')->where('lote_id', $lote['id'])->value('estado'));
+        $this->assertSame(['ANULADO'], DB::table('cargas.bono')->where('lote_id', $lote['id'])->distinct()->pluck('estado')->all());
     }
 
     public function test_la_tabla_de_laboratorio_no_repite_cantidades_ni_rige_hacia_atras(): void
     {
         $this->como($this->usuario(self::CONFIG));
-        $this->postJson('/api/cargas/bono-laboratorio-tramos', ['vigente_desde' => now()->toDateString(), 'tramos' => [
-            ['num_elementos' => 1, 'monto' => 30], ['num_elementos' => 1, 'monto' => 40]]])->assertStatus(422)->assertJsonValidationErrors('tramos');
-        $this->postJson('/api/cargas/bono-laboratorio-tramos', ['vigente_desde' => now()->subDay()->toDateString(), 'tramos' => [
-            ['num_elementos' => 1, 'monto' => 30]]])->assertStatus(422)->assertJsonValidationErrors('vigente_desde');
+        $this->postJson("/api/cargas/tipos-bono/{$this->lab()}/tramos", ['vigente_desde' => now()->toDateString(), 'tramos' => [
+            ['desde' => 1, 'monto' => 30], ['desde' => 1, 'monto' => 40]]])->assertStatus(422)->assertJsonValidationErrors('tramos');
+        $this->postJson("/api/cargas/tipos-bono/{$this->lab()}/tramos", ['vigente_desde' => now()->subDay()->toDateString(), 'tramos' => [
+            ['desde' => 1, 'monto' => 30]]])->assertStatus(422)->assertJsonValidationErrors('vigente_desde');
         $this->como($this->usuario(self::RECEPCION));
-        $this->postJson('/api/cargas/bono-laboratorio-tramos', ['vigente_desde' => now()->toDateString(), 'tramos' => [
-            ['num_elementos' => 1, 'monto' => 30]]])->assertForbidden();
+        $this->postJson("/api/cargas/tipos-bono/{$this->lab()}/tramos", ['vigente_desde' => now()->toDateString(), 'tramos' => [
+            ['desde' => 1, 'monto' => 30]]])->assertForbidden();
+    }
+
+    // ---------------------------------------------------------- Catálogo de bonos
+
+    public function test_catalogo_bono_fijo_premio_y_por_tonelada(): void
+    {
+        $this->como($this->usuario(self::RECEPCION));
+        $this->postJson('/api/cargas/tipos-bono', ['codigo' => 'X'])->assertForbidden();
+
+        $this->como($this->usuario(self::CONFIG));
+        $carguio = $this->postJson('/api/cargas/tipos-bono', [
+            'codigo' => 'carguio', 'nombre' => 'Bono de carguío', 'calculo' => 'POR_TONELADA', 'naturaleza' => 'ANTICIPO',
+            'cobra' => 'CHOFER', 'permite_otro' => false, 'aplica_a' => 'TODOS',
+        ])->assertCreated()->assertJsonPath('data.codigo', 'CARGUIO')->json('data');
+        $this->assertSame('BONO_CARGUIO', DB::table('caja.concepto')->where('id', $carguio['concepto_id'])->value('codigo'));
+        $premio = $this->postJson('/api/cargas/tipos-bono', [
+            'codigo' => 'FIDELIDAD', 'nombre' => 'Premio de fidelidad', 'calculo' => 'FIJO', 'naturaleza' => 'PREMIO',
+            'cobra' => 'PRODUCTOR', 'permite_otro' => true, 'aplica_a' => 'COMPRA', 'serie_id' => $this->serie('CZP'),
+        ])->assertCreated()->json('data');
+        $this->postJson("/api/cargas/tipos-bono/{$premio['id']}/tramos", ['vigente_desde' => now()->toDateString(),
+            'tramos' => [['monto' => 20], ['monto' => 30]]])->assertStatus(422)->assertJsonValidationErrors('tramos');
+        $this->postJson("/api/cargas/tipos-bono/{$premio['id']}/tramos", ['vigente_desde' => now()->toDateString(),
+            'tramos' => [['monto' => 25]]])->assertCreated();
+        $this->postJson("/api/cargas/tipos-bono/{$carguio['id']}/tramos", ['vigente_desde' => now()->toDateString(),
+            'tramos' => [['monto' => 4.5]]])->assertCreated();
+
+        // Transporte no cambia de cálculo; el bono con tabla, tampoco.
+        $transporte = DB::table('cargas.tipo_bono')->where('codigo', 'TRANSPORTE')->first();
+        $this->putJson("/api/cargas/tipos-bono/{$transporte->id}", ['codigo' => 'TRANSPORTE', 'nombre' => 'Bono de transporte',
+            'calculo' => 'FIJO', 'naturaleza' => 'ANTICIPO', 'cobra' => 'CHOFER', 'permite_otro' => true, 'aplica_a' => 'TODOS'])
+            ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'no se cambia'));
+
+        $this->como($this->usuario(self::RECEPCION));
+        $this->getJson('/api/cargas/tipos-bono/calcular?peso_kg=8200&serie_id=' . $this->serie('CZP'))->assertOk()
+            ->assertJsonCount(3, 'data')->assertJsonPath('data.2.codigo', 'FIDELIDAD');
+        $lote = $this->recibir()->assertCreated()->json('data');
+        $fid = self::bonoDe($lote, 'FIDELIDAD');
+        $car = self::bonoDe($lote, 'CARGUIO');
+        $this->assertSame(['25.00', 'PREMIO', 'JUAN MAMANI'], [$fid['monto'], $fid['naturaleza'], $fid['beneficiario_nombre']]);
+        $this->assertSame(['36.90', '8200.00', 'PEDRO QUISPE'], [$car['monto'], $car['base'], $car['beneficiario_nombre']]);   // 4,50 × 8,2 t
+
+        // Producción propia: el premio de compra no aplica.
+        $bm = $this->recibir(['serie_id' => $this->serie('BM'), 'productor_id' => null, 'mina_id' => $this->minaPropia->id,
+            'bocamina_id' => $this->bocamina->id], $this->pesaje(['ticket' => 't-200']))->assertCreated()->json('data');
+        $this->assertNull(self::bonoDe($bm, 'FIDELIDAD'));
+        $this->assertNotNull(self::bonoDe($bm, 'CARGUIO'));
+
+        [$caja] = $this->cajaAbierta(1000);
+        $this->postJson("/api/cargas/bonos/{$car['id']}/pagar", ['caja_id' => $caja->id, 'beneficiario_nombre' => 'Otro Señor'])
+            ->assertStatus(422)->assertJsonValidationErrors('beneficiario_nombre');
+        $this->postJson("/api/cargas/bonos/{$car['id']}/pagar", ['caja_id' => $caja->id])->assertCreated()
+            ->assertJsonPath('data.concepto.codigo', 'BONO_CARGUIO')->assertJsonPath('data.persona_nombre', 'PEDRO QUISPE');
+        $this->postJson("/api/cargas/bonos/{$fid['id']}/pagar", ['caja_id' => $caja->id])->assertCreated();
+
+        $a = DB::table('cargas.v_lote_anticipos')->where('lote_id', $lote['id'])->first();
+        $this->assertSame([36.9, 25.0, 36.9, 1], [(float) $a->bonos_bob, (float) $a->premios_bob, (float) $a->total_bob, (int) $a->bonos_pendientes]);
+    }
+
+    public function test_bono_manual_se_agrega_en_la_ficha_y_se_anula_si_esta_pendiente(): void
+    {
+        $this->como($this->usuario(self::CONFIG));
+        $manual = $this->postJson('/api/cargas/tipos-bono', [
+            'codigo' => 'ESTIBAJE', 'nombre' => 'Bono de estibaje', 'calculo' => 'MANUAL', 'naturaleza' => 'ANTICIPO',
+            'cobra' => 'PRODUCTOR', 'permite_otro' => true, 'aplica_a' => 'TODOS',
+        ])->assertCreated()->json('data');
+        $this->postJson("/api/cargas/tipos-bono/{$manual['id']}/tramos", ['vigente_desde' => now()->toDateString(),
+            'tramos' => [['monto' => 10]]])->assertStatus(422);
+
+        $this->como($this->usuario(self::RECEPCION));
+        $lote = $this->recibir()->json('data');
+        $this->assertNull(self::bonoDe($lote, 'ESTIBAJE'));
+        $transporte = DB::table('cargas.tipo_bono')->where('codigo', 'TRANSPORTE')->value('id');
+        $this->postJson("/api/cargas/lotes/{$lote['id']}/bonos", ['tipo_bono_id' => $transporte, 'monto' => 10])
+            ->assertStatus(422)->assertJsonValidationErrors('tipo_bono_id');
+        $b = $this->postJson("/api/cargas/lotes/{$lote['id']}/bonos", ['tipo_bono_id' => $manual['id'], 'monto' => 45.5,
+            'observacion' => 'Descarga de 160 sacos'])->assertCreated()
+            ->assertJsonPath('data.monto', '45.50')->assertJsonPath('data.beneficiario_nombre', 'JUAN MAMANI')->json('data');
+        $this->postJson("/api/cargas/lotes/{$lote['id']}/bonos", ['tipo_bono_id' => $manual['id'], 'monto' => 5])
+            ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'ya tiene ese bono'));
+
+        $this->postJson("/api/cargas/bonos/{$b['id']}/anular", ['motivo' => 'Se cargó dos veces'])->assertForbidden();
+        $this->como($this->usuario([...self::RECEPCION, 'cargas.anular-lote']));
+        $this->postJson("/api/cargas/bonos/{$b['id']}/anular", ['motivo' => 'x'])->assertStatus(422);
+        $this->postJson("/api/cargas/bonos/{$b['id']}/anular", ['motivo' => 'Se cargó dos veces'])->assertOk()
+            ->assertJsonPath('data.estado', 'ANULADO');
+        $this->postJson("/api/cargas/bonos/{$b['id']}/anular", ['motivo' => 'Otra vez'])->assertStatus(422);
     }
 
     // ---------------------------------------------------------- Clasificación

@@ -3,7 +3,6 @@
 namespace App\Modules\Cargas\Services;
 
 use App\Models\User;
-use App\Modules\Cargas\Models\BonoTransporte;
 use App\Modules\Cargas\Models\Lote;
 use App\Modules\Cargas\Models\Pesaje;
 use App\Modules\Cargas\Models\PesajeSaco;
@@ -32,14 +31,14 @@ class RecepcionService
      * @param  ?array $pesaje    pesaje de báscula, con foto_interior_id / foto_exterior_id
      * @param  ?array $sacos     bascula, pesadas [{sacos, peso_kg, foto_id}], placa, chofer_nombre, chofer_ci
      * @param  ?array $loteSacos material y observaciones del lote de sacos (mixta)
-     * @return array{lote: Lote, pesaje: ?Pesaje, bono: ?BonoTransporte, lote_sacos: ?Lote}
+     * @return array{lote: Lote, pesaje: ?Pesaje, lote_sacos: ?Lote}  (los bonos los genera la base)
      */
     public function recibir(array $lote, ?array $pesaje, User $usuario, string $tipo = 'BASCULA',
                             ?array $sacos = null, ?array $loteSacos = null): array
     {
         return Transaccion::como($usuario->id, function () use ($lote, $pesaje, $usuario, $tipo, $sacos, $loteSacos) {
             $nuevo = Lote::create([...$lote, 'tipo_recepcion' => $tipo, 'registrado_por' => $usuario->id])->refresh();
-            $resultado = ['lote' => $nuevo, 'pesaje' => null, 'bono' => null, 'lote_sacos' => null];
+            $resultado = ['lote' => $nuevo, 'pesaje' => null, 'lote_sacos' => null];
 
             if ($tipo === 'SACOS') {
                 $resultado['pesaje'] = $this->pesarSacos($nuevo, $sacos, $usuario);
@@ -54,7 +53,7 @@ class RecepcionService
             }
 
             if ($pesaje) {
-                ['pesaje' => $resultado['pesaje'], 'bono' => $resultado['bono']] = $this->pesar($nuevo, $pesaje, $usuario);
+                $resultado['pesaje'] = $this->pesar($nuevo, $pesaje, $usuario)['pesaje'];
             }
 
             if ($tipo === 'MIXTA') {
@@ -78,7 +77,7 @@ class RecepcionService
         });
     }
 
-    /** @return array{pesaje: Pesaje, bono: ?BonoTransporte} */
+    /** @return array{pesaje: Pesaje, bonos: \Illuminate\Support\Collection} */
     public function agregarPesaje(Lote $lote, array $datos, User $usuario): array
     {
         return Transaccion::como($usuario->id, fn () => $this->pesar($lote, $datos, $usuario));
@@ -117,19 +116,7 @@ class RecepcionService
         });
     }
 
-    /** Cuánto bono corresponde a un peso neto hoy (o null si ningún tramo lo cubre). */
-    public function bonoPara(float $pesoNetoKg, ?string $fecha = null): ?array
-    {
-        $tramo = DB::selectOne(
-            'select t.* from cargas.bono_transporte_tramo t where t.id = cargas.tramo_bono(?, ?::date)',
-            [$pesoNetoKg, $fecha ?? now()->toDateString()]
-        );
-
-        return $tramo ? ['tramo_id' => $tramo->id, 'tipo_vehiculo' => $tramo->tipo_vehiculo,
-                         'monto' => $tramo->monto, 'moneda' => $tramo->moneda] : null;
-    }
-
-    /** Pesaje de báscula con sus fotos y, si es de ingreso y hay tramo para el camión, su bono pendiente. */
+    /** Pesaje de báscula con sus fotos. Sus bonos (transporte y los demás por peso) los genera la base. */
     private function pesar(Lote $lote, array $datos, User $usuario): array
     {
         $fotos = array_filter([
@@ -143,19 +130,7 @@ class RecepcionService
             RecepcionFoto::whereIn('id', $fotos)->update(['pesaje_id' => $pesaje->id]);
         }
 
-        $bono = null;
-        $camion = (float) $pesaje->peso_bruto_kg - (float) $pesaje->tara_kg;    // con sacos, si es mixta
-        if ($pesaje->tipo === 'INGRESO' && $this->bonoPara($camion, $pesaje->fecha->toDateString())) {
-            $bono = BonoTransporte::create([
-                'pesaje_id'           => $pesaje->id,
-                'beneficiario_nombre' => $pesaje->chofer_nombre,
-                'beneficiario_ci'     => $pesaje->chofer_ci,
-                'monto'               => 0,                    // lo fija la base con el tramo
-                'registrado_por'      => $usuario->id,
-            ])->refresh();
-        }
-
-        return ['pesaje' => $pesaje, 'bono' => $bono];
+        return ['pesaje' => $pesaje, 'bonos' => $pesaje->bonos()->with('tipo:id,codigo,nombre')->get()];
     }
 
     /**

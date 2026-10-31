@@ -52,22 +52,18 @@ export const CARGAS_ROUTES: Routes = [
     loadComponent: () => import('./precios/retenciones.component').then((m) => m.RetencionesComponent),
   },
   {
-    path: 'bono',
-    title: 'Bono de transporte',
+    path: 'bonos',
+    title: 'Bonos',
     canMatch: [conPermiso('cargas.ver')],
-    loadComponent: () => import('./recepcion/bono-tramos.component').then((m) => m.BonoTramosComponent),
+    loadComponent: () => import('./configuracion/catalogo-bonos.component').then((m) => m.CatalogoBonosComponent),
   },
+  { path: 'bono', redirectTo: 'bonos', pathMatch: 'full' },
+  { path: 'bono-laboratorio', redirectTo: 'bonos', pathMatch: 'full' },
   {
     path: 'resumen',
     title: 'Resumen de cargas',
     canMatch: [conPermiso('cargas.ver')],
     loadComponent: () => import('./recepcion/resumen-cargas.component').then((m) => m.ResumenCargasComponent),
-  },
-  {
-    path: 'bono-laboratorio',
-    title: 'Bono de laboratorio',
-    canMatch: [conPermiso('cargas.ver')],
-    loadComponent: () => import('./recepcion/bono-laboratorio.component').then((m) => m.BonoLaboratorioComponent),
   },
   {
     path: 'reglas-peso',

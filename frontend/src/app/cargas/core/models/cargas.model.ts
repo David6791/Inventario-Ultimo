@@ -222,18 +222,63 @@ export type EstadoBono = 'PENDIENTE' | 'PAGADO' | 'ANULADO';
 
 export interface Usuario { id: number; name: string; }
 
+export type CalculoBono = 'TRAMOS_PESO' | 'POR_TONELADA' | 'POR_ELEMENTOS' | 'FIJO' | 'MANUAL';
+
+/** Un bono del catálogo (cargas.tipo_bono). */
+export interface TipoBono {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  calculo: CalculoBono;
+  naturaleza: 'ANTICIPO' | 'PREMIO';
+  cobra: 'PRODUCTOR' | 'CHOFER';
+  permite_otro: boolean;
+  aplica_a: 'TODOS' | 'COMPRA' | 'PROPIA';
+  serie_id: number | null;
+  serie?: { id: number; prefijo: string; nombre: string } | null;
+  concepto?: { id: number; codigo: string; nombre: string } | null;
+  sistema: boolean;
+  activo: boolean;
+  orden: number;
+  bonos_pendientes?: number;
+  bonos_total?: number;
+  tablas?: TablaBono[];
+}
+export interface TramoBono { id?: number; etiqueta?: string | null; desde?: string | number | null; hasta?: string | number | null;
+                             monto: string | number; moneda?: string; }
+export interface TablaBono { vigente_desde: string; vigente_hasta: string | null; estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR'; tramos: TramoBono[]; }
+
+/** Bono de un lote (o de su pesaje). */
 export interface Bono {
   id: number;
-  pesaje_id: number;
-  tramo_id: number;
-  beneficiario_nombre: string;
-  beneficiario_ci: string | null;
+  tipo_bono_id: number;
+  tipo?: Pick<TipoBono, 'id' | 'codigo' | 'nombre'> & Partial<Pick<TipoBono, 'calculo' | 'naturaleza' | 'cobra' | 'permite_otro'>>;
+  lote_id: number;
+  pesaje_id: number | null;
+  pesaje?: { id: number; ticket: string | null } | null;
+  base: string | null;
   monto: string;
   moneda: 'BOB' | 'USD';
+  naturaleza: 'ANTICIPO' | 'PREMIO';
   estado: EstadoBono;
+  beneficiario_nombre: string | null;
+  beneficiario_ci: string | null;
+  observacion?: string | null;
   movimiento_caja_id: number | null;
   movimiento?: { id: number; numero: string; caja_id: number; fecha: string } | null;
   motivo_anulacion: string | null;
+}
+
+/** Lo que generaría una recepción (cálculo previo). */
+export interface BonoCalculado { tipo_bono_id: number; codigo: string; nombre: string; calculo: CalculoBono; naturaleza: 'ANTICIPO' | 'PREMIO';
+                                 cobra: 'PRODUCTOR' | 'CHOFER'; monto: string; moneda: string; detalle: string | null; }
+
+export interface BonoPendiente extends Bono {
+  tipo: Pick<TipoBono, 'id' | 'codigo' | 'nombre' | 'calculo' | 'naturaleza' | 'cobra' | 'permite_otro'>;
+  pesaje: { id: number; lote_id: number; ticket: string; placa: string | null; peso_neto_kg: string; peso_bruto_kg: string; tara_kg: string; fecha: string } | null;
+  lote: { id: number; codigo: string; material: string | null; origen: string; fecha_recepcion: string;
+          productor?: { id: number; nombre: string; ci: string | null } | null };
 }
 
 export interface Pesaje {
@@ -273,7 +318,7 @@ export interface Pesaje {
   anulado: boolean;
   motivo_anulacion: string | null;
   registrado_por: Usuario | number;
-  bono?: Bono | null;
+  bonos?: Bono[];
 }
 
 export interface ResumenLote {
@@ -324,7 +369,7 @@ export interface Lote extends ResumenLote {
   lote_par?: { id: number; codigo: string; material: string | null; estado: EstadoLote } | null;
   /** URL pública del QR del rótulo (solo en la ficha). */
   url_verificacion?: string;
-  bono_laboratorio?: BonoLaboratorio | null;
+  bonos?: Bono[];
   anticipos?: AnticiposLote | null;
   eventos?: { id: number; estado_anterior: string | null; estado_nuevo: string; ocurrido_en: string; detalle: string | null; usuario?: Usuario }[];
 }
@@ -386,21 +431,10 @@ export interface ReglaPeso {
 export interface JuegoReglas { vigente_desde: string; vigente_hasta: string | null; estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR'; reglas: ReglaPeso[]; }
 export interface PesoQueVale { kg: number; criterio: CriterioPeso; regla: { id: number; orden: number; formula: string; descripcion: string | null } | null; }
 
-/** Bono de laboratorio: monto por cantidad de elementos del material. */
-export interface TramoLaboratorio { id?: number; num_elementos: number; monto: string | number; moneda?: string; }
-export interface TablaLaboratorio { vigente_desde: string; vigente_hasta: string | null; estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR'; tramos: TramoLaboratorio[]; }
-export interface BonoLaboratorio {
-  id: number; lote_id: number; num_elementos: number; monto: string; moneda: 'BOB' | 'USD'; estado: EstadoBono;
-  beneficiario_nombre: string | null; beneficiario_ci: string | null; motivo_anulacion?: string | null;
-  movimiento?: { id: number; numero: string; caja_id: number; fecha: string } | null;
-}
-export interface BonoLabPendiente extends BonoLaboratorio {
-  lote: { id: number; codigo: string; material: string | null; fecha_recepcion: string; productor?: { id: number; nombre: string; ci: string | null } | null };
-}
 /** Lo adelantado en el lote (cargas.v_lote_anticipos): lo que la liquidación descuenta. */
 export interface AnticiposLote {
-  anticipos_bob: string; anticipos_usd: string; bono_transporte_bob: string; bono_transporte_usd: string;
-  bono_laboratorio_bob: string; bono_laboratorio_usd: string; total_bob: string; total_usd: string; bonos_pendientes: number;
+  anticipos_bob: string; anticipos_usd: string; bonos_bob: string; bonos_usd: string;
+  premios_bob: string; premios_usd: string; total_bob: string; total_usd: string; bonos_pendientes: number;
 }
 
 /** Centro de costo de un almacén: da el nombre del acopio. */
@@ -471,28 +505,6 @@ export interface FotoRecepcion {
 
 export interface PesadaSaco { id: number; orden: number; sacos: number; peso_kg: string; fotos?: FotoRecepcion[]; }
 
-export interface Tramo {
-  id?: number;
-  tipo_vehiculo: string;
-  peso_desde_kg: string | number;
-  peso_hasta_kg: string | number | null;
-  monto: string | number;
-  moneda?: string;
-}
-
-export interface TablaTramos {
-  vigente_desde: string;
-  vigente_hasta: string | null;
-  estado: 'VIGENTE' | 'PROXIMA' | 'ANTERIOR';
-  tramos: Tramo[];
-}
-
-export interface BonoCalculado { tramo_id: number; tipo_vehiculo: string; monto: string; moneda: string; }
-
-export interface BonoPendiente extends Bono {
-  pesaje: { id: number; lote_id: number; ticket: string; placa: string | null; peso_neto_kg: string; fecha: string;
-            lote: { id: number; codigo: string; productor?: { id: number; nombre: string } | null } };
-}
 
 // ---------------------------------------------------------- Laboratorio (sprint 5)
 

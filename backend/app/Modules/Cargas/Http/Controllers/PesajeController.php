@@ -25,9 +25,9 @@ class PesajeController extends Controller
         $r = $this->recepcion->agregarPesaje($lote, $request->validated(), $request->user());
 
         return response()->json([
-            'data'    => $r['pesaje']->load('bono'),
+            'data'    => $r['pesaje']->load('bonos.tipo:id,codigo,nombre'),
             'mensaje' => "Pesaje {$r['pesaje']->ticket} registrado: {$r['pesaje']->peso_neto_kg} kg netos."
-                . ($r['bono'] ? " Bono: " . self::monto($r['bono']) . "." : ''),
+                . ($r['bonos']->isNotEmpty() ? ' ' . $r['bonos']->map(fn ($b) => "{$b->tipo->nombre}: {$b->montoTexto()}")->join(' · ') . '.' : ''),
         ], 201);
     }
 
@@ -47,11 +47,6 @@ class PesajeController extends Controller
 
         $pesaje = $this->recepcion->anularPesaje($pesaje, $request->input('motivo'), $request->user());
 
-        return response()->json(['data' => $pesaje->load('bono'), 'mensaje' => "Pesaje {$pesaje->ticket} anulado."]);
-    }
-
-    private static function monto(\App\Modules\Cargas\Models\BonoTransporte $bono): string
-    {
-        return ($bono->moneda === 'USD' ? '$us ' : 'Bs ') . number_format((float) $bono->monto, 2, ',', '.');
+        return response()->json(['data' => $pesaje->load('bonos'), 'mensaje' => "Pesaje {$pesaje->ticket} anulado."]);
     }
 }

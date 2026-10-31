@@ -69,8 +69,7 @@ class LoteController extends Controller
             'data'    => $this->ficha($r['lote']),
             'mensaje' => ($r['lote_sacos'] ? "Lotes {$r['lote']->codigo} (granel) y {$r['lote_sacos']->codigo} (sacos) recibidos."
                                            : "Lote {$r['lote']->codigo} recibido.")
-                . ($r['bono'] ? " Bono de transporte: " . self::monto($r['bono']) . ", por pagar en caja." : '')
-                . (($lab = $r['lote']->bonoLaboratorio()->first()) ? " Bono de laboratorio: " . self::monto($lab) . ", por pagar en caja." : ''),
+                . self::bonosTexto([$r['lote']->id, $r['lote_sacos']?->id]),
         ], 201);
     }
 
@@ -89,7 +88,7 @@ class LoteController extends Controller
 
         return Pdf::loadView('pdf.cargas.boleta-recepcion', [
             'lote'        => $lote->load(['productor', 'cooperativa', 'linea', 'serie', 'mina', 'bocamina', 'municipio',
-                                          'almacen', 'registradoPor:id,name', 'pesajes.bono', 'lotePar:id,codigo']),
+                                          'almacen', 'registradoPor:id,name', 'pesajes.bonos', 'bonos.tipo:id,nombre', 'lotePar:id,codigo']),
             'resumen'     => $this->resumen([$lote->id])[$lote->id] ?? [],
             'barras'      => CodigoBarras::dataUri($lote->codigo, 1.3, 46),
             'institucion' => config('app.empresa'),
@@ -123,11 +122,13 @@ class LoteController extends Controller
             'productor:id,nombre,ci,nit,nim,tipo', 'cooperativa:id,nombre', 'linea:id,codigo,nombre,forma',
             'serie:id,prefijo,nombre', 'mina:id,nombre,propia', 'bocamina:id,codigo,nombre', 'municipio:id,nombre',
             'almacen:id,nombre', 'almacen.centroCosto:id,almacen_id,codigo,nombre', 'registradoPor:id,name', 'anuladoPor:id,name',
-            'pesajes.registradoPor:id,name', 'pesajes.bono.movimiento:id,numero,caja_id,fecha',
+            'pesajes.registradoPor:id,name', 'pesajes.bonos.tipo:id,codigo,nombre',
             'pesajes.correccionesCliente.corregidoPor:id,name',
             'pesajes.fotos:id,tipo,plantilla_id,pesaje_id,lectura,created_at', 'pesajes.sacos.fotos:id,tipo,pesaje_saco_id,created_at',
             'pesajes.viaje:id,lote_id,ticket,bascula', 'pesajes.viaje.lote:id,codigo', 'lotePar:id,codigo,material,estado',
-            'eventos.usuario:id,name', 'bonoLaboratorio.movimiento:id,numero,caja_id,fecha', 'pesajes.reglaPeso:id,orden,formula,descripcion',
+            'eventos.usuario:id,name', 'pesajes.reglaPeso:id,orden,formula,descripcion',
+            'bonos.tipo:id,codigo,nombre,calculo,naturaleza,cobra,permite_otro', 'bonos.movimiento:id,numero,caja_id,fecha',
+            'bonos.pesaje:id,ticket', 'bonos.registradoPor:id,name', 'bonos.anuladoPor:id,name',
         ]);
         $anticipos = DB::table('cargas.v_lote_anticipos')->where('lote_id', $lote->id)->first();
 
@@ -150,13 +151,13 @@ class LoteController extends Controller
             ->get(['lote_id', 'peso_cliente_kg', 'diferencia_kg', 'pesajes_con_peso_cliente']))->keyBy('lote_id');
 
         $bonos = collect(DB::select(
-            "select p.lote_id,
+            "select b.lote_id,
                     count(*) filter (where b.estado = 'PENDIENTE') as bonos_pendientes,
                     coalesce(sum(b.monto) filter (where b.estado = 'PENDIENTE'), 0) as bonos_por_pagar,
                     coalesce(sum(b.monto) filter (where b.estado = 'PAGADO'), 0) as bonos_pagados
-               from cargas.bono_transporte b join cargas.pesaje p on p.id = b.pesaje_id
-              where p.lote_id = any(?::bigint[])
-              group by p.lote_id",
+               from cargas.bono b
+              where b.lote_id = any(?::bigint[])
+              group by b.lote_id",
             ['{' . implode(',', $ids) . '}']
         ))->keyBy('lote_id');
 
@@ -180,8 +181,13 @@ class LoteController extends Controller
         ]])->all();
     }
 
-    private static function monto(\App\Modules\Cargas\Models\BonoTransporte|\App\Modules\Cargas\Models\BonoLaboratorio $bono): string
+    /** « Bonos por pagar en caja: transporte Bs 50,00 · laboratorio Bs 30,00.» */
+    public static function bonosTexto(array $loteIds): string
     {
-        return ($bono->moneda === 'USD' ? '$us ' : 'Bs ') . number_format((float) $bono->monto, 2, ',', '.');
+        $bonos = \App\Modules\Cargas\Models\Bono::query()->whereIn('lote_id', array_filter($loteIds))
+            ->where('estado', 'PENDIENTE')->with('tipo:id,nombre')->orderBy('id')->get();
+
+        return $bonos->isEmpty() ? ''
+            : ' Bonos por pagar en caja: ' . $bonos->map(fn ($b) => mb_strtolower($b->tipo->nombre) . ' ' . $b->montoTexto())->join(' · ') . '.';
     }
 }

@@ -253,24 +253,27 @@ END $$;
    5. Bono de transporte
    --------------------------------------------------------------------- */
 DO $$ BEGIN RAISE NOTICE '--- 5. Bono de transporte ---'; END $$;
-INSERT INTO cargas.bono_transporte_tramo (tipo_vehiculo, peso_desde_kg, peso_hasta_kg, monto, vigente_desde) VALUES
-    ('TONKA',     500,  7000,  50, '2026-01-01'),
-    ('SENCILLO', 7000, 10000,  80, '2026-01-01'),
-    ('DOBLE',   10000, 13000, 100, '2026-01-01'),
-    ('ARAÑA',   13000,  NULL, 150, '2026-01-01');
+INSERT INTO cargas.tipo_bono_tramo (tipo_bono_id, etiqueta, desde, hasta, monto, vigente_desde)
+SELECT (SELECT id FROM cargas.tipo_bono WHERE codigo = 'TRANSPORTE'), x.* FROM (VALUES
+    ('TONKA',     500::numeric,  7000::numeric,  50::numeric, '2026-01-01'::date),
+    ('SENCILLO', 7000,          10000,           80,          '2026-01-01'),
+    ('DOBLE',   10000,          13000,          100,          '2026-01-01'),
+    ('ARAÑA',   13000,           NULL,          150,          '2026-01-01')) AS x;
 DO $$
+DECLARE
+    k bigint := (SELECT id FROM cargas.tipo_bono WHERE codigo = 'TRANSPORTE');
 BEGIN
-    PERFORM pg_temp.afirma((SELECT monto FROM cargas.bono_transporte_tramo
-                             WHERE id = cargas.tramo_bono(6999.50, '2026-10-17')) = 50,
+    PERFORM pg_temp.afirma((SELECT monto FROM cargas.tipo_bono_tramo
+                             WHERE id = cargas.tramo_tipo_bono(k, 6999.50, '2026-10-17')) = 50,
                            '6.999,50 kg cae en TONKA (en el sistema anterior caía en un hueco)');
-    PERFORM pg_temp.afirma((SELECT monto FROM cargas.bono_transporte_tramo
-                             WHERE id = cargas.tramo_bono(7000, '2026-10-17')) = 80,
+    PERFORM pg_temp.afirma((SELECT monto FROM cargas.tipo_bono_tramo
+                             WHERE id = cargas.tramo_tipo_bono(k, 7000, '2026-10-17')) = 80,
                            '7.000 kg exactos ya es SENCILLO');
-    PERFORM pg_temp.afirma(cargas.tramo_bono(400, '2026-10-17') IS NULL, '400 kg no tiene bono');
-    PERFORM pg_temp.espera_error(
-        $q$INSERT INTO cargas.bono_transporte_tramo (tipo_vehiculo, peso_desde_kg, peso_hasta_kg, monto, vigente_desde)
-           VALUES ('X', 9000, 11000, 90, '2026-03-01')$q$,
-        'ex_btt_solape');
+    PERFORM pg_temp.afirma(cargas.tramo_tipo_bono(k, 400, '2026-10-17') IS NULL, '400 kg no tiene bono');
+    PERFORM pg_temp.espera_error(format(
+        $q$INSERT INTO cargas.tipo_bono_tramo (tipo_bono_id, etiqueta, desde, hasta, monto, vigente_desde)
+           VALUES (%s, 'X', 9000, 11000, 90, '2026-03-01')$q$, k),
+        'ex_tbt_solape');
 END $$;
 
 /* ---------------------------------------------------------------------
@@ -377,7 +380,7 @@ DO $$
 DECLARE
     v_lote bigint := (SELECT id FROM cargas.lote WHERE codigo = 'CZP-202610-0001');
     v_pes  bigint; v_mue bigint;
-    b      cargas.bono_transporte;
+    b      cargas.bono;
 BEGIN
     PERFORM pg_temp.espera_error(
         $q$UPDATE cargas.lote SET estado = 'ANALIZADO' WHERE codigo = 'CZP-202610-0001'$q$, 'Transición no permitida');
@@ -397,12 +400,16 @@ BEGIN
     PERFORM pg_temp.espera_error(format('UPDATE cargas.pesaje SET peso_bruto_kg = 13000 WHERE id = %s', v_pes),
         'se anula y se registra otro');
 
-    INSERT INTO cargas.bono_transporte (pesaje_id, beneficiario_nombre, monto, registrado_por)
-    VALUES (v_pes, NULL, 999999, 1) RETURNING * INTO b;
-    PERFORM pg_temp.afirma(b.monto = 80 AND b.estado = 'PENDIENTE' AND b.beneficiario_nombre = 'Chofer de prueba',
-                           'bono de 8.200 kg = 80 (SENCILLO), PENDIENTE de pago; el monto digitado se ignora');
+    SELECT * INTO b FROM cargas.bono WHERE pesaje_id = v_pes;
+    PERFORM pg_temp.afirma(b.monto = 80 AND b.estado = 'PENDIENTE' AND b.beneficiario_nombre = 'Chofer de prueba'
+                           AND b.base = 8200 AND b.naturaleza = 'ANTICIPO',
+                           'el pesaje genera solo su bono de transporte: 8.200 kg = 80 (SENCILLO), PENDIENTE, a nombre del chofer');
     PERFORM pg_temp.espera_error(format(
-        'UPDATE cargas.bono_transporte SET estado = ''PAGADO'' WHERE id = %s', b.id), 'indique el comprobante de caja');
+        'INSERT INTO cargas.bono (tipo_bono_id, lote_id, pesaje_id, monto, naturaleza, registrado_por) VALUES (%s, %s, %s, 999, ''PREMIO'', 1)',
+        b.tipo_bono_id, v_lote, v_pes), 'ux_bono_uno_por_tipo');
+    PERFORM pg_temp.espera_error(format('UPDATE cargas.bono SET monto = 1 WHERE id = %s', b.id), 'no se modifican');
+    PERFORM pg_temp.espera_error(format(
+        'UPDATE cargas.bono SET estado = ''PAGADO'', beneficiario_nombre = ''Chofer'' WHERE id = %s', b.id), 'indique el comprobante de caja');
 
     PERFORM pg_temp.espera_error(
         $q$UPDATE cargas.lote SET estado = 'MUESTREADO' WHERE codigo = 'CZP-202610-0001'$q$, 'no tiene muestra');
@@ -603,7 +610,8 @@ DECLARE
     k_serv  bigint := (SELECT id FROM caja.concepto WHERE codigo = 'PAGO_SERVICIOS');
     v_lote  bigint := (SELECT id FROM cargas.lote WHERE codigo = 'CZP-202610-0001');
     v_bm    bigint := (SELECT id FROM cargas.lote WHERE codigo = 'BM-202610-0001');
-    v_bono  bigint := (SELECT id FROM cargas.bono_transporte LIMIT 1);
+    v_bono  bigint := (SELECT b.id FROM cargas.bono b JOIN cargas.tipo_bono t ON t.id = b.tipo_bono_id
+                        WHERE t.codigo = 'TRANSPORTE' AND b.estado = 'PENDIENTE' ORDER BY b.id LIMIT 1);
     a       cargas.anticipo;
     v_mov   bigint; v_mov_mal bigint; v_mov_dev bigint; v_mov_bono bigint;
 BEGIN
@@ -665,7 +673,7 @@ BEGIN
     -- Bono de transporte pagado por caja
     INSERT INTO caja.movimiento (sesion_id, concepto_id, monto, persona_nombre, glosa, registrado_por, caja_id, numero, tipo)
     VALUES (v_ses, k_bono, 80, 'Chofer de prueba', 'Bono viaje T-1', 1, 0, 'x', 'x') RETURNING id INTO v_mov_bono;
-    UPDATE cargas.bono_transporte SET estado = 'PAGADO', movimiento_caja_id = v_mov_bono WHERE id = v_bono;
+    UPDATE cargas.bono SET estado = 'PAGADO', movimiento_caja_id = v_mov_bono WHERE id = v_bono;
     SET CONSTRAINTS ALL IMMEDIATE;
     SET CONSTRAINTS ALL DEFERRED;
     PERFORM pg_temp.afirma(true, 'bono pagado con su egreso de caja vinculado');

@@ -74,19 +74,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('laboratorio/bandeja',      [AnalisisController::class, 'bandeja']);
         Route::get('muestras/{muestra}/etiquetas', [AnalisisController::class, 'etiquetas'])->whereNumber('muestra');
         Route::get('analisis/{analisis}/certificado', [AnalisisController::class, 'certificado'])->whereNumber('analisis');
-        Route::get('bono-tramos',              [BonoController::class, 'tramos']);
+        Route::get('tipos-bono',               [\App\Modules\Cargas\Http\Controllers\TipoBonoController::class, 'index']);
         Route::get('plantillas-bascula',       [PlantillaBasculaController::class, 'index']);
         Route::get('sedes-recepcion',          [SedeRecepcionController::class, 'index']);
         Route::get('plantillas-bascula/{plantilla}/muestra', [PlantillaBasculaController::class, 'muestra'])->whereNumber('plantilla');
         Route::get('fotos/{foto}',             [FotoRecepcionController::class, 'imagen'])->whereNumber('foto');
-        Route::get('bono-tramos/calcular',     [BonoController::class, 'calcular']);
+        Route::get('tipos-bono/calcular',      [\App\Modules\Cargas\Http\Controllers\TipoBonoController::class, 'calcular']);
         Route::get('reportes/resumen',         [\App\Modules\Cargas\Http\Controllers\ReporteCargasController::class, 'resumen']);
         Route::get('reportes/resumen/pdf',     [\App\Modules\Cargas\Http\Controllers\ReporteCargasController::class, 'pdf']);
         Route::get('reportes/resumen/excel',   [\App\Modules\Cargas\Http\Controllers\ReporteCargasController::class, 'excel']);
         Route::get('reglas-peso',              [\App\Modules\Cargas\Http\Controllers\ReglaPesoController::class, 'index']);
         Route::get('reglas-peso/calcular',     [\App\Modules\Cargas\Http\Controllers\ReglaPesoController::class, 'calcular']);
-        Route::get('bono-laboratorio-tramos',  [\App\Modules\Cargas\Http\Controllers\BonoLaboratorioController::class, 'tramos']);
-        Route::get('bono-laboratorio-tramos/calcular', [\App\Modules\Cargas\Http\Controllers\BonoLaboratorioController::class, 'calcular']);
         Route::get('series/{serie}',          [SerieLoteController::class, 'show'])->whereNumber('serie');
     });
 
@@ -179,16 +177,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('lotes/{lote}/leyes/{elemento}',    [AnalisisController::class, 'quitarLey'])->whereNumber(['lote', 'elemento']);
     Route::post('lotes/{lote}/cerrar-analisis',       [AnalisisController::class, 'cerrar'])->whereNumber('lote');
     Route::post('lotes/{lote}/reabrir',               [AnalisisController::class, 'reabrir'])->whereNumber('lote');
-    Route::post('bono-tramos',                  [BonoController::class, 'publicar']);
+    // --- Catálogo de bonos (cargas.configurar-bono) ---------------------------
+    Route::post('tipos-bono',                   [\App\Modules\Cargas\Http\Controllers\TipoBonoController::class, 'store']);
+    Route::put('tipos-bono/{tipo}',             [\App\Modules\Cargas\Http\Controllers\TipoBonoController::class, 'update'])->whereNumber('tipo');
+    Route::post('tipos-bono/{tipo}/tramos',     [\App\Modules\Cargas\Http\Controllers\TipoBonoController::class, 'publicar'])->whereNumber('tipo');
+    Route::post('lotes/{lote}/bonos',           [BonoController::class, 'agregar'])->whereNumber('lote');
+    Route::post('bonos/{bono}/anular',          [BonoController::class, 'anular'])->whereNumber('bono');
 
     // --- Pago de bonos por caja (caja.pagar-bono) ---------------------------
     Route::get('bonos/pendientes',              [BonoController::class, 'pendientes'])->middleware('can:caja.pagar-bono');
     Route::post('bonos/{bono}/pagar',           [BonoController::class, 'pagar'])->whereNumber('bono');
-    Route::get('bonos-laboratorio/pendientes',  [\App\Modules\Cargas\Http\Controllers\BonoLaboratorioController::class, 'pendientes'])->middleware('can:caja.pagar-bono');
-    Route::post('bonos-laboratorio/{bono}/pagar', [\App\Modules\Cargas\Http\Controllers\BonoLaboratorioController::class, 'pagar'])->whereNumber('bono');
 
-    // --- Reglas de peso y tabla del bono de laboratorio ------------------------
+    // --- Reglas de peso ---------------------------------------------------------
     Route::post('reglas-peso',                  [\App\Modules\Cargas\Http\Controllers\ReglaPesoController::class, 'publicar']);
     Route::post('reglas-peso/probar',           [\App\Modules\Cargas\Http\Controllers\ReglaPesoController::class, 'probar'])->middleware('can:cargas.catalogos');
-    Route::post('bono-laboratorio-tramos',      [\App\Modules\Cargas\Http\Controllers\BonoLaboratorioController::class, 'publicar']);
 });

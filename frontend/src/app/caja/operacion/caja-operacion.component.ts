@@ -16,7 +16,7 @@ import { TableModule } from 'primeng/table';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { mensajeDeError } from '../../cargas/core/errores';
-import { BonoLabPendiente, BonoPendiente } from '../../cargas/core/models/cargas.model';
+import { BonoPendiente } from '../../cargas/core/models/cargas.model';
 import { EnviosFondosComponent } from './envios-fondos.component';
 import { RecepcionService } from '../../cargas/core/services/recepcion.service';
 import { PermisosService } from '../../core/services/permisos.service';
@@ -71,7 +71,7 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
           <ng-container *ngIf="c.soy_cajero && !deOtroDia()">
           <ng-container *appTienePermiso="'caja.pagar-bono'">
             <p-button label="Bonos por pagar" icon="pi pi-truck" severity="secondary" [outlined]="true" (onClick)="abrirBonos()"
-                      [badge]="(bonos().length + bonosLab().length) ? '' + (bonos().length + bonosLab().length) : ''" badgeClass="p-badge-warning" />
+                      [badge]="bonos().length ? '' + bonos().length : ''" badgeClass="p-badge-warning" />
           </ng-container>
           <ng-container *ngIf="c.requiere_aprobacion">
             <ng-container *appTienePermiso="'caja.registrar'">
@@ -506,63 +506,47 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
       </ng-template>
     </p-dialog>
 
-    <!-- Bonos por pagar (lotes recibidos en la sede de esta caja): transporte y laboratorio -->
-    <p-dialog [(visible)]="bonosVisible" header="Bonos por pagar" [modal]="true" [style]="{ width: '56rem', maxWidth: '97vw' }"
+    <!-- Bonos por pagar de los lotes recibidos en el acopio de esta caja (catálogo de bonos) -->
+    <p-dialog [(visible)]="bonosVisible" header="Bonos por pagar" [modal]="true" [style]="{ width: '62rem', maxWidth: '97vw' }"
               [draggable]="false">
-      <h4 class="titulo-bonos"><i class="pi pi-truck"></i> Bono de transporte</h4>
-      <p class="explicacion">Se paga en efectivo al chofer del pesaje. El comprobante sale a su nombre y el bono queda pagado en el lote.
-        Es un anticipo: la liquidación lo descuenta.</p>
+      <p class="explicacion">Bonos de los lotes recibidos en este acopio. El comprobante sale a nombre de quien cobra y el bono queda
+        pagado en el lote. Los <b>anticipos</b> se descuentan en la liquidación; los <b>premios</b>, no.</p>
       <p-table [value]="bonos()" dataKey="id" styleClass="p-datatable-sm tabla">
         <ng-template pTemplate="header">
-          <tr><th style="width: 10rem">Lote</th><th>Chofer</th><th style="width: 9rem">Pesaje</th>
-              <th class="derecha" style="width: 8rem">Bono</th><th style="width: 7rem"></th></tr>
+          <tr><th style="width: 10rem">Lote</th><th style="width: 13rem">Bono</th><th>Cobra</th><th style="width: 8rem">CI</th>
+              <th class="derecha" style="width: 8rem">Monto</th><th style="width: 7rem"></th></tr>
         </ng-template>
         <ng-template pTemplate="body" let-b>
           <tr>
-            <td><span class="codigo">{{ b.pesaje.lote.codigo }}</span><div class="secundario">{{ b.pesaje.lote.productor?.nombre ?? 'Producción propia' }}</div></td>
-            <td>{{ b.beneficiario_nombre }}<div class="secundario">{{ b.beneficiario_ci ? 'CI ' + b.beneficiario_ci : 'Sin CI' }}</div></td>
-            <td><span class="codigo">{{ b.pesaje.ticket }}</span><div class="secundario">{{ b.pesaje.placa ?? 'Sin placa' }} · {{ b.pesaje.peso_neto_kg | dinero }} kg</div></td>
+            <td><span class="codigo">{{ b.lote.codigo }}</span><div class="secundario">{{ b.lote.productor?.nombre ?? 'Producción propia' }}</div></td>
+            <td>{{ b.tipo.nombre }}
+              <div class="secundario">{{ detalleBono(b) }}</div>
+              <span class="pastilla-bono" [class.premio]="b.naturaleza === 'PREMIO'">{{ b.naturaleza === 'PREMIO' ? 'Premio' : 'Anticipo' }}</span></td>
+            <td>
+              <input *ngIf="b.tipo.permite_otro || !b.beneficiario_nombre; else fijo" pInputText [(ngModel)]="cobra[b.id].nombre" maxlength="150" class="ancho"
+                     [attr.aria-label]="'Quién cobra el ' + b.tipo.nombre + ' del lote ' + b.lote.codigo" />
+              <ng-template #fijo>{{ b.beneficiario_nombre }}</ng-template>
+              <div class="secundario" *ngIf="b.beneficiario_nombre && cobra[b.id].nombre.trim().toUpperCase() !== b.beneficiario_nombre.toUpperCase()">
+                Por cuenta de {{ b.beneficiario_nombre }} · <button type="button" class="enlace" (click)="cobraTitular(b)">cobra el titular</button></div>
+              <div class="secundario" *ngIf="!b.beneficiario_nombre || cobra[b.id].nombre.trim().toUpperCase() === b.beneficiario_nombre.toUpperCase()">
+                {{ b.tipo.cobra === 'CHOFER' ? 'Chofer' : 'Productor' }}{{ b.tipo.permite_otro ? '' : ' (no puede cobrar otra persona)' }}</div></td>
+            <td><input pInputText [(ngModel)]="cobra[b.id].ci" maxlength="15" class="ancho" [disabled]="!b.tipo.permite_otro && !!b.beneficiario_nombre"
+                       [attr.aria-label]="'CI de quien cobra el bono del lote ' + b.lote.codigo" /></td>
             <td class="derecha monto">{{ b.monto | dinero: b.moneda }}</td>
-            <td><p-button label="Pagar" size="small" icon="pi pi-check" [loading]="pagando() === b.id" [disabled]="pagando() !== null"
-                          (onClick)="pagarBono(b)" /></td>
+            <td><p-button label="Pagar" size="small" icon="pi pi-check" [loading]="pagando() === b.id"
+                          [disabled]="pagando() !== null || cobra[b.id].nombre.trim().length < 3" (onClick)="pagarBono(b)" /></td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="5"><div class="vacio"><i class="pi pi-check-circle"></i><div class="titulo-vacio">No hay bonos de transporte por pagar en esta sede</div></div></td></tr>
-        </ng-template>
-      </p-table>
-
-      <h4 class="titulo-bonos"><i class="pi pi-filter-fill"></i> Bono de laboratorio</h4>
-      <p class="explicacion">Para los ensayos del lote. Por lo general cobra el productor; si viene otra persona, anote su nombre y CI.
-        Es un anticipo: la liquidación lo descuenta.</p>
-      <p-table [value]="bonosLab()" dataKey="id" styleClass="p-datatable-sm tabla">
-        <ng-template pTemplate="header">
-          <tr><th style="width: 10rem">Lote</th><th>Cobra</th><th style="width: 8rem">CI</th>
-              <th class="derecha" style="width: 8rem">Bono</th><th style="width: 7rem"></th></tr>
-        </ng-template>
-        <ng-template pTemplate="body" let-b>
-          <tr>
-            <td><span class="codigo">{{ b.lote.codigo }}</span>
-              <div class="secundario">{{ b.lote.material }} · {{ b.num_elementos }} elemento{{ b.num_elementos === 1 ? '' : 's' }}</div></td>
-            <td><input pInputText [(ngModel)]="cobra[b.id].nombre" maxlength="150" class="ancho" [attr.aria-label]="'Quién cobra el bono del lote ' + b.lote.codigo" />
-              <div class="secundario" *ngIf="cobra[b.id].nombre.trim().toUpperCase() !== (b.lote.productor?.nombre ?? '').toUpperCase()">
-                Por cuenta de {{ b.lote.productor?.nombre }} · <button type="button" class="enlace" (click)="cobraProductor(b)">es el productor</button></div>
-              <div class="secundario" *ngIf="cobra[b.id].nombre.trim().toUpperCase() === (b.lote.productor?.nombre ?? '').toUpperCase()">Productor del lote</div></td>
-            <td><input pInputText [(ngModel)]="cobra[b.id].ci" maxlength="15" class="ancho" [attr.aria-label]="'CI de quien cobra el bono del lote ' + b.lote.codigo" /></td>
-            <td class="derecha monto">{{ b.monto | dinero: b.moneda }}</td>
-            <td><p-button label="Pagar" size="small" icon="pi pi-check" [loading]="pagando() === -b.id"
-                          [disabled]="pagando() !== null || cobra[b.id].nombre.trim().length < 3" (onClick)="pagarBonoLab(b)" /></td>
-          </tr>
-        </ng-template>
-        <ng-template pTemplate="emptymessage">
-          <tr><td colspan="5"><div class="vacio"><i class="pi pi-check-circle"></i><div class="titulo-vacio">No hay bonos de laboratorio por pagar en esta sede</div></div></td></tr>
+          <tr><td colspan="6"><div class="vacio"><i class="pi pi-check-circle"></i><div class="titulo-vacio">No hay bonos por pagar en este acopio</div></div></td></tr>
         </ng-template>
       </p-table>
     </p-dialog>
   `,
   styles: [...ESTILOS_CAJA, `
-    .titulo-bonos { margin: 0.6rem 0 0.2rem; font-size: 0.95rem; display: flex; gap: 0.45rem; align-items: center; }
-    .titulo-bonos + .explicacion { margin-top: 0.2rem; }
+    .pastilla-bono { display: inline-block; margin-top: 0.15rem; padding: 0.02rem 0.4rem; border-radius: 999px; font-size: 0.68rem;
+                     background: #e0f2fe; color: #075985; }
+    .pastilla-bono.premio { background: #ede9fe; color: #5b21b6; }
     input.ancho { width: 100%; }
     .enlace { border: 0; background: none; color: #1d4ed8; font-weight: 600; cursor: pointer; padding: 0; font-size: inherit; }
     .volver { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; margin-bottom: 0.6rem;
@@ -634,8 +618,7 @@ export class CajaOperacionComponent implements OnInit {
   ajuste = { monto: '', motivo: '', documento: '' };
 
   readonly bonos = signal<BonoPendiente[]>([]);
-  readonly bonosLab = signal<BonoLabPendiente[]>([]);
-  /** Quién cobra cada bono de laboratorio (por defecto, el productor). */
+  /** Quién cobra cada bono (por defecto, el que indica el catálogo: productor o chofer). */
   cobra: Record<number, { nombre: string; ci: string }> = {};
   readonly pagando = signal<number | null>(null);
   bonosVisible = false;
@@ -886,38 +869,28 @@ export class CajaOperacionComponent implements OnInit {
 
   cargarBonos(): void {
     const c = this.caja();
-    if (!c?.sesion_abierta || !c.soy_cajero || !this.permisos.can('caja.pagar-bono')) { this.bonos.set([]); this.bonosLab.set([]); return; }
-    this.recepcion.bonosPendientes(c.id).subscribe({ next: (b) => this.bonos.set(b), error: () => this.bonos.set([]) });
-    this.recepcion.bonosLaboratorioPendientes(c.id).subscribe({
+    if (!c?.sesion_abierta || !c.soy_cajero || !this.permisos.can('caja.pagar-bono')) { this.bonos.set([]); return; }
+    this.recepcion.bonosPendientes(c.id).subscribe({
       next: (b) => {
-        for (const x of b) this.cobra[x.id] ??= { nombre: x.lote.productor?.nombre ?? '', ci: x.lote.productor?.ci ?? '' };
-        this.bonosLab.set(b);
+        for (const x of b) {
+          const titular = x.beneficiario_nombre ?? (x.tipo.cobra === 'PRODUCTOR' ? x.lote.productor?.nombre : null);
+          this.cobra[x.id] ??= { nombre: titular ?? '', ci: (x.beneficiario_nombre ? x.beneficiario_ci : x.lote.productor?.ci) ?? '' };
+        }
+        this.bonos.set(b);
       },
-      error: () => this.bonosLab.set([]),
+      error: () => this.bonos.set([]),
     });
   }
 
-  cobraProductor(b: BonoLabPendiente): void {
-    this.cobra[b.id] = { nombre: b.lote.productor?.nombre ?? '', ci: b.lote.productor?.ci ?? '' };
+  cobraTitular(b: BonoPendiente): void {
+    this.cobra[b.id] = { nombre: b.beneficiario_nombre ?? '', ci: b.beneficiario_ci ?? '' };
   }
 
-  pagarBonoLab(b: BonoLabPendiente): void {
-    const c = this.caja();
-    if (!c) return;
-    const quien = this.cobra[b.id];
-    this.pagando.set(-b.id);
-    this.recepcion.pagarBonoLaboratorio(b.id, c.id, quien.nombre.trim(), quien.ci.trim() || null).subscribe({
-      next: (r) => {
-        this.pagando.set(null);
-        this.ultimo.set(r.data as unknown as Movimiento);
-        this.toast.add({ severity: 'success', summary: r.mensaje, detail: 'Imprima el comprobante para que lo firme quien cobró.', life: 8000 });
-        this.cargar();
-      },
-      error: (e) => {
-        this.pagando.set(null);
-        this.toast.add({ severity: 'error', summary: 'No se pagó el bono de laboratorio', detail: mensajeDeError(e), life: 9000 });
-      },
-    });
+  detalleBono(b: BonoPendiente): string {
+    const kg = (v: string | number) => new Intl.NumberFormat('es-BO', { maximumFractionDigits: 0 }).format(+v);
+    if (b.pesaje) return `Ticket ${b.pesaje.ticket}${b.pesaje.placa ? ' · ' + b.pesaje.placa : ''} · ${kg(b.base ?? 0)} kg`;
+    if (b.tipo.calculo === 'POR_ELEMENTOS') return `${b.lote.material ?? ''} · ${+(b.base ?? 0)} elemento${+(b.base ?? 0) === 1 ? '' : 's'}`;
+    return b.observacion ?? (b.tipo.calculo === 'MANUAL' ? 'Monto a mano' : 'Por lote');
   }
 
   abrirBonos(): void {
@@ -928,12 +901,13 @@ export class CajaOperacionComponent implements OnInit {
   pagarBono(b: BonoPendiente): void {
     const c = this.caja();
     if (!c) return;
+    const quien = this.cobra[b.id];
     this.pagando.set(b.id);
-    this.recepcion.pagarBono(b.id, c.id).subscribe({
+    this.recepcion.pagarBono(b.id, c.id, quien.nombre.trim(), quien.ci.trim() || null).subscribe({
       next: (r) => {
         this.pagando.set(null);
         this.ultimo.set(r.data as unknown as Movimiento);
-        this.toast.add({ severity: 'success', summary: r.mensaje, detail: 'Imprima el comprobante para que lo firme el chofer.', life: 8000 });
+        this.toast.add({ severity: 'success', summary: r.mensaje, detail: 'Imprima el comprobante para que lo firme quien cobró.', life: 8000 });
         this.cargar();
       },
       error: (e) => {

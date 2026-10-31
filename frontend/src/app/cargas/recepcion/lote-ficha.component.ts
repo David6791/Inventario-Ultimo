@@ -7,6 +7,7 @@ import { Observable } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { InputTextModule } from 'primeng/inputtext';
 import { InputTextareaModule } from 'primeng/inputtextarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TableModule } from 'primeng/table';
@@ -17,7 +18,8 @@ import { formatoDinero } from '../../caja/core/dinero';
 import { TienePermisoDirective } from '../../shared/directives/tiene-permiso.directive';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
-import { FotoRecepcion, PesoQueVale, LecturaTicket, Lote, Pesaje, PlantillaBascula } from '../core/models/cargas.model';
+import { Bono, FotoRecepcion, PesoQueVale, LecturaTicket, Lote, Pesaje, PlantillaBascula, TipoBono } from '../core/models/cargas.model';
+import { PermisosService } from '../../core/services/permisos.service';
 import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
 import { diferenciasBoleta } from '../core/diferencias';
 import { ETIQUETA_CRITERIO } from '../core/peso-que-vale';
@@ -31,7 +33,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
 @Component({
   selector: 'app-lote-ficha',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, InputNumberModule, InputTextareaModule,
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ButtonModule, DialogModule, InputNumberModule, InputTextModule, InputTextareaModule,
             SelectButtonModule, TableModule, ToastModule, TooltipModule, TienePermisoDirective, PesajeCamposComponent, ConfirmarPesajeComponent, LoteLaboratorioComponent, LoteValorComponent],
   providers: [MessageService],
   template: `
@@ -89,22 +91,15 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
           <span class="monto">{{ kg(l.peso_cliente_kg) }} kg</span>
           <small [class.alerta]="alerta(l)" class="secundario">Diferencia {{ +l.diferencia_cliente_kg > 0 ? '+' : '' }}{{ kg(l.diferencia_cliente_kg) }} kg
             ({{ pct(l) }} %) · vale lo que dice «Peso que vale»</small></div>
-        <div class="dato grande"><span class="rotulo">Bono de transporte</span>
+        <div class="dato grande"><span class="rotulo">Bonos</span>
           <span class="monto">Bs {{ kg(+l.bonos_pagados + +l.bonos_por_pagar) }}</span>
           <small class="secundario" *ngIf="l.bonos_pendientes">Bs {{ kg(l.bonos_por_pagar) }} por pagar en caja</small>
-          <small class="secundario" *ngIf="!l.bonos_pendientes && +l.bonos_pagados">Pagado</small></div>
-        <div class="dato grande"><span class="rotulo">Bono de laboratorio</span>
-          <ng-container *ngIf="l.bono_laboratorio as b; else sinBonoLab">
-            <span class="monto" [class.tachado]="b.estado === 'ANULADO'">Bs {{ kg(b.monto) }}</span>
-            <small class="secundario">{{ b.num_elementos }} elemento{{ b.num_elementos === 1 ? '' : 's' }} ·
-              {{ b.estado === 'PENDIENTE' ? 'por pagar en caja' : b.estado === 'PAGADO' ? 'cobró ' + b.beneficiario_nombre : 'anulado' }}</small>
-          </ng-container>
-          <ng-template #sinBonoLab><span class="monto">—</span>
-            <small class="secundario">{{ l.material ? 'Sin tabla vigente para ese material' : 'Sin material: no se generó' }}</small></ng-template></div>
+          <small class="secundario" *ngIf="!l.bonos_pendientes && +l.bonos_pagados">Pagados</small>
+          <small class="secundario" *ngIf="!l.bonos_pendientes && !+l.bonos_pagados">Sin bonos</small></div>
         <div class="dato grande anticipos" *ngIf="l.anticipos as a">
-          <span class="rotulo" pTooltip="Anticipos, bono de transporte y de laboratorio ya pagados: la liquidación los descuenta.">A descontar en la liquidación</span>
+          <span class="rotulo" pTooltip="Anticipos y bonos de tipo anticipo ya pagados: la liquidación los descuenta. Los premios no.">A descontar en la liquidación</span>
           <span class="monto">Bs {{ kg(a.total_bob) }}<span *ngIf="+a.total_usd"> · US$ {{ kg(a.total_usd) }}</span></span>
-          <small class="secundario">Anticipos {{ kg(a.anticipos_bob) }} · transporte {{ kg(a.bono_transporte_bob) }} · laboratorio {{ kg(a.bono_laboratorio_bob) }}
+          <small class="secundario">Anticipos {{ kg(a.anticipos_bob) }} · bonos {{ kg(a.bonos_bob) }}{{ +a.premios_bob ? ' · premios ' + kg(a.premios_bob) + ' (no se descuentan)' : '' }}
             {{ a.bonos_pendientes ? '· ' + a.bonos_pendientes + ' bono(s) por pagar' : '' }}</small></div>
       </section>
       <p class="secundario observaciones" *ngIf="l.observaciones">{{ l.observaciones }}</p>
@@ -123,7 +118,7 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
             <th style="width: 7rem" class="derecha">Tara kg</th>
             <th style="width: 8rem" class="derecha">Neto kg</th>
             <th style="width: 8rem" class="derecha">Cliente kg</th>
-            <th style="width: 11rem">Bono</th>
+            <th style="width: 11rem">Bonos</th>
             <th style="width: 4rem"></th>
           </tr>
         </ng-template>
@@ -167,16 +162,16 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
               <div class="secundario" *ngIf="p.correcciones_cliente?.length" [pTooltip]="historialCliente(p)">
                 <i class="pi pi-history"></i> {{ p.correcciones_cliente!.length }} corrección(es)</div></td>
             <td>
-              <ng-container *ngIf="p.bono as b; else sinBono">
-                <span class="monto">Bs {{ kg(b.monto) }}</span>
+              <div *ngFor="let b of p.bonos ?? []" class="bono-pesaje">
+                <span class="monto" [class.tachado]="b.estado === 'ANULADO'">Bs {{ kg(b.monto) }}</span>
                 <span class="pastilla separada" [class.pastilla-aviso]="b.estado === 'PENDIENTE'" [class.pastilla-ok]="b.estado === 'PAGADO'">
                   {{ b.estado === 'PENDIENTE' ? 'Por pagar' : b.estado === 'PAGADO' ? 'Pagado' : 'Anulado' }}</span>
-                <div class="secundario" *ngIf="b.movimiento">{{ b.movimiento.numero }}</div>
-              </ng-container>
-              <ng-template #sinBono><span class="secundario">—</span></ng-template>
+                <div class="secundario">{{ b.tipo?.nombre }}</div>
+              </div>
+              <span class="secundario" *ngIf="!p.bonos?.length">—</span>
             </td>
             <td class="centro">
-              <ng-container *ngIf="!p.anulado && (l.estado === 'RECIBIDO' || p.tipo === 'CONTROL') && p.bono?.estado !== 'PAGADO'">
+              <ng-container *ngIf="!p.anulado && (l.estado === 'RECIBIDO' || p.tipo === 'CONTROL') && !bonoPagado(p)">
                 <p-button *appTienePermiso="'cargas.recibir'" icon="pi pi-ban" [text]="true" [rounded]="true" size="small"
                           severity="danger" pTooltip="Anular pesaje" (onClick)="pedirAnulacion(p)" />
               </ng-container>
@@ -186,6 +181,43 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
         <ng-template pTemplate="emptymessage">
           <tr><td colspan="8"><div class="vacio"><i class="pi pi-truck"></i><div class="titulo-vacio">Sin pesajes todavía</div>
             <span>Agregue el pesaje de ingreso cuando el camión pase por la báscula.</span></div></td></tr>
+        </ng-template>
+      </p-table>
+
+      <div class="titulo-con-accion">
+        <h3 class="titulo-seccion">Bonos</h3>
+        <ng-container *ngIf="manuales().length && l.estado !== 'ANULADO' && l.estado !== 'LIQUIDADO'">
+          <p-button *appTienePermiso="'cargas.recibir'" label="Agregar bono" icon="pi pi-plus" size="small" [outlined]="true"
+                    (onClick)="nuevoBono()" />
+        </ng-container>
+      </div>
+      <p-table [value]="l.bonos ?? []" dataKey="id" styleClass="p-datatable-sm tabla">
+        <ng-template pTemplate="header">
+          <tr><th>Bono</th><th style="width: 9rem">De</th><th>Cobra</th><th style="width: 8rem" class="derecha">Monto</th>
+              <th style="width: 10rem">Estado</th><th style="width: 4rem"></th></tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-b>
+          <tr [class.anulado]="b.estado === 'ANULADO'">
+            <td>{{ b.tipo?.nombre }}
+              <span class="pastilla separada" [class.premio]="b.naturaleza === 'PREMIO'">{{ b.naturaleza === 'PREMIO' ? 'Premio' : 'Anticipo' }}</span>
+              <div class="secundario" *ngIf="b.observacion">{{ b.observacion }}</div></td>
+            <td>{{ b.pesaje ? 'Ticket ' + b.pesaje.ticket : 'Lote' }}
+              <div class="secundario" *ngIf="b.base !== null">{{ b.tipo?.calculo === 'POR_ELEMENTOS' ? +b.base + ' elemento(s)' : kg(b.base) + ' kg' }}</div></td>
+            <td>{{ b.beneficiario_nombre ?? '—' }}<div class="secundario" *ngIf="b.beneficiario_ci">CI {{ b.beneficiario_ci }}</div></td>
+            <td class="derecha monto" [class.tachado]="b.estado === 'ANULADO'">{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ kg(b.monto) }}</td>
+            <td><span class="pastilla" [class.pastilla-aviso]="b.estado === 'PENDIENTE'" [class.pastilla-ok]="b.estado === 'PAGADO'">
+                  {{ b.estado === 'PENDIENTE' ? 'Por pagar en caja' : b.estado === 'PAGADO' ? 'Pagado' : 'Anulado' }}</span>
+              <div class="secundario" *ngIf="b.movimiento">{{ b.movimiento.numero }}</div>
+              <div class="secundario" *ngIf="b.motivo_anulacion" [pTooltip]="b.motivo_anulacion">{{ b.motivo_anulacion }}</div></td>
+            <td class="centro">
+              <p-button *ngIf="b.estado === 'PENDIENTE' && puedeAnularBono()" icon="pi pi-ban" [text]="true" [rounded]="true" size="small"
+                        severity="danger" pTooltip="Anular bono" (onClick)="pedirAnulacionBono(b)" />
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="6"><div class="vacio"><i class="pi pi-money-bill"></i><div class="titulo-vacio">Sin bonos</div>
+            <span>Los bonos nacen solos al recibir, según el catálogo (Manejo de cargas → Bonos).</span></div></td></tr>
         </ng-template>
       </p-table>
 
@@ -256,6 +288,50 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
       </ng-template>
     </p-dialog>
 
+    <p-dialog [(visible)]="bonoVisible" header="Agregar bono" [modal]="true" [style]="{ width: '34rem', maxWidth: '97vw' }" [draggable]="false">
+      <p class="explicacion">Bonos de monto a mano del catálogo. Queda por pagar en la caja del acopio.</p>
+      <div class="campos">
+        <div class="campo span-6">
+          <label for="tipo-bono">Bono</label>
+          <select id="tipo-bono" class="p-inputtext" [(ngModel)]="nuevo.tipo_bono_id">
+            <option *ngFor="let t of manuales()" [ngValue]="t.id">{{ t.nombre }} ({{ t.naturaleza === 'PREMIO' ? 'premio' : 'anticipo' }})</option>
+          </select>
+        </div>
+        <div class="campo span-3">
+          <label for="monto-bono">Monto</label>
+          <p-inputNumber inputId="monto-bono" [(ngModel)]="nuevo.monto" [min]="0" [minFractionDigits]="2" [maxFractionDigits]="2" locale="es-BO" />
+        </div>
+        <div class="campo span-3">
+          <label for="moneda-bono">Moneda</label>
+          <select id="moneda-bono" class="p-inputtext" [(ngModel)]="nuevo.moneda"><option value="BOB">Bs</option><option value="USD">US$</option></select>
+        </div>
+        <div class="campo span-6">
+          <label for="obs-bono">Detalle <span class="secundario">(opcional)</span></label>
+          <input id="obs-bono" pInputText [(ngModel)]="nuevo.observacion" maxlength="250" placeholder="Ej. descarga de 160 sacos" />
+          <small>Cobra el titular que indica el catálogo; en caja se puede anotar a otra persona si el bono lo permite.</small>
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="bonoVisible = false" />
+        <p-button label="Agregar" icon="pi pi-check" [loading]="guardando()" [disabled]="!nuevo.tipo_bono_id || !nuevo.monto || guardando()"
+                  (onClick)="agregarBono()" />
+      </ng-template>
+    </p-dialog>
+
+    <p-dialog [(visible)]="anularBonoVisible" [header]="'Anular ' + (aAnularBono()?.tipo?.nombre ?? 'bono')" [modal]="true"
+              [style]="{ width: '30rem' }" [draggable]="false">
+      <p class="explicacion">El bono queda anulado con su motivo y deja de aparecer en caja. Solo se anulan los que están por pagar.</p>
+      <div class="campo">
+        <label for="motivo-bono">Motivo</label>
+        <textarea id="motivo-bono" pInputTextarea rows="2" [(ngModel)]="motivoBono" maxlength="250"></textarea>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="anularBonoVisible = false" />
+        <p-button label="Anular" icon="pi pi-ban" severity="danger" [loading]="guardando()"
+                  [disabled]="motivoBono.trim().length < 5 || guardando()" (onClick)="anularBono()" />
+      </ng-template>
+    </p-dialog>
+
     <p-dialog [(visible)]="anularVisible" [header]="aAnular() ? 'Anular pesaje ' + aAnular()!.ticket : 'Anular lote ' + lote()?.codigo"
               [modal]="true" [style]="{ width: '32rem' }" [draggable]="false">
       <p class="explicacion" *ngIf="aAnular()">El pesaje no se borra: queda tachado y deja de sumar. Si tenía un bono por pagar, se anula con él.</p>
@@ -273,6 +349,11 @@ import { LoteValorComponent } from '../precios/lote-valor.component';
     </p-dialog>
   `,
   styles: [ESTILOS_CARGAS, `
+    .bono-pesaje + .bono-pesaje { margin-top: 0.3rem; }
+    .pastilla.premio { background: #ede9fe; color: #5b21b6; }
+    .titulo-con-accion { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    tr.anulado td { color: var(--text-color-secondary, #9ca3af); }
+    select.p-inputtext { width: 100%; }
     .volver { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; margin-bottom: 0.6rem;
               color: var(--text-color-secondary, #6b7280); text-decoration: none; }
     .codigo-lote { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
@@ -323,6 +404,7 @@ export class LoteFichaComponent implements OnInit, OnChanges {
   private readonly toast = inject(MessageService);
   private readonly fb = inject(FormBuilder);
   private readonly catalogos = inject(CatalogosCargasService);
+  private readonly permisos = inject(PermisosService);
 
   readonly plantillas = signal<PlantillaBascula[]>([]);
   readonly fotoObligatoria = signal(false);
@@ -355,10 +437,23 @@ export class LoteFichaComponent implements OnInit, OnChanges {
   tipoPesaje: 'INGRESO' | 'CONTROL' = 'INGRESO';
   motivo = '';
 
+  /** Bonos de monto a mano del catálogo (se agregan desde la ficha). */
+  readonly manuales = signal<TipoBono[]>([]);
+  readonly aAnularBono = signal<Bono | null>(null);
+  bonoVisible = false;
+  anularBonoVisible = false;
+  motivoBono = '';
+  nuevo: { tipo_bono_id: number | null; monto: number | null; moneda: string; observacion: string } =
+    { tipo_bono_id: null, monto: null, moneda: 'BOB', observacion: '' };
+
   ngOnInit(): void {
     const mensaje = history.state?.mensaje;
     if (mensaje) setTimeout(() => this.toast.add({ severity: 'success', summary: 'Lote recibido', detail: mensaje, life: 8000 }));
     this.servicio.plantillas(true).subscribe((r) => this.plantillas.set(r.data));
+    this.servicio.tiposBono().subscribe({
+      next: (t) => this.manuales.set(t.filter((x) => x.calculo === 'MANUAL' && x.activo)),
+      error: () => this.manuales.set([]),
+    });
     this.catalogos.opciones$.subscribe((o) => {
       this.fotoObligatoria.set(!!o.foto_ticket_obligatoria);
       this.claude.set(!!o.lector_claude);
@@ -517,6 +612,58 @@ export class LoteFichaComponent implements OnInit, OnChanges {
     this.servicio.corregirPesoCliente(p.id, this.correccion.kg, this.correccion.tipo, this.correccion.motivo.trim()).subscribe({
       next: (r) => { this.guardando.set(false); this.correccionVisible = false; this.toast.add({ severity: 'success', summary: r.mensaje }); this.cargar(); },
       error: (e) => { this.guardando.set(false); this.toast.add({ severity: 'error', summary: 'No se corrigió', detail: mensajeDeError(e), life: 9000 }); },
+    });
+  }
+
+  bonoPagado(p: Pesaje): boolean { return (p.bonos ?? []).some((b) => b.estado === 'PAGADO'); }
+
+  puedeAnularBono(): boolean { return this.permisos.can('cargas.anular-lote') || this.permisos.can('cargas.configurar-bono'); }
+
+  nuevoBono(): void {
+    this.nuevo = { tipo_bono_id: this.manuales()[0]?.id ?? null, monto: null, moneda: 'BOB', observacion: '' };
+    this.bonoVisible = true;
+  }
+
+  agregarBono(): void {
+    const l = this.lote();
+    if (!l || !this.nuevo.tipo_bono_id || !this.nuevo.monto) return;
+    this.guardando.set(true);
+    this.servicio.agregarBono(l.id, { tipo_bono_id: this.nuevo.tipo_bono_id, monto: this.nuevo.monto, moneda: this.nuevo.moneda,
+                                      observacion: this.nuevo.observacion.trim() || null }).subscribe({
+      next: (r) => {
+        this.guardando.set(false);
+        this.bonoVisible = false;
+        this.toast.add({ severity: 'success', summary: r.mensaje, life: 7000 });
+        this.cargar();
+      },
+      error: (e) => {
+        this.guardando.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se agregó el bono', detail: mensajeDeError(e), life: 9000 });
+      },
+    });
+  }
+
+  pedirAnulacionBono(b: Bono): void {
+    this.aAnularBono.set(b);
+    this.motivoBono = '';
+    this.anularBonoVisible = true;
+  }
+
+  anularBono(): void {
+    const b = this.aAnularBono();
+    if (!b) return;
+    this.guardando.set(true);
+    this.servicio.anularBono(b.id, this.motivoBono.trim()).subscribe({
+      next: (r) => {
+        this.guardando.set(false);
+        this.anularBonoVisible = false;
+        this.toast.add({ severity: 'success', summary: r.mensaje });
+        this.cargar();
+      },
+      error: (e) => {
+        this.guardando.set(false);
+        this.toast.add({ severity: 'error', summary: 'No se anuló el bono', detail: mensajeDeError(e), life: 9000 });
+      },
     });
   }
 

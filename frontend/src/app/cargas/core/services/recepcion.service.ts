@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
-  BonoCalculado, BonoLabPendiente, BonoPendiente, JuegoReglas, PesoQueVale, ReglaPeso, TablaLaboratorio, TramoLaboratorio, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, LectorBoleta, Lote, Pagina, Pesaje,
-  PlantillaBascula, ProductorParecido, RecuadroPlantilla, SedeRecepcion, RespuestaApi, TablaTramos, TipoFoto, Tramo,
+  Bono, BonoCalculado, BonoPendiente, JuegoReglas, PesoQueVale, ReglaPeso, TipoBono, TramoBono, CampoDisponible, DatosPesaje, DatosRecepcion, FotoRecepcion, LecturaTicket, LectorBoleta, Lote, Pagina, Pesaje,
+  PlantillaBascula, ProductorParecido, RecuadroPlantilla, SedeRecepcion, RespuestaApi, TipoFoto,
 } from '../models/cargas.model';
 
 export interface ListaPlantillas { data: PlantillaBascula[]; campos: CampoDisponible[]; ocr: boolean; }
@@ -81,18 +81,38 @@ export class RecepcionService {
     return this.http.post<RespuestaApi<Pesaje> & { mensaje: string }>(`${this.base}/pesajes/${id}/anular`, { motivo });
   }
 
-  // --------------------------------------------------------------- Bono
-  tramos(): Observable<TablaTramos[]> {
-    return this.http.get<RespuestaApi<TablaTramos[]>>(`${this.base}/bono-tramos`).pipe(map((r) => r.data));
+  // --------------------------------------------------------------- Catálogo de bonos
+  tiposBono(): Observable<TipoBono[]> {
+    return this.http.get<RespuestaApi<TipoBono[]>>(`${this.base}/tipos-bono`).pipe(map((r) => r.data));
   }
 
-  publicarTramos(vigenteDesde: string, tramos: Tramo[]): Observable<{ mensaje: string }> {
-    return this.http.post<{ mensaje: string }>(`${this.base}/bono-tramos`, { vigente_desde: vigenteDesde, tramos });
+  guardarTipoBono(datos: Partial<TipoBono>, id?: number): Observable<RespuestaApi<TipoBono> & { mensaje: string }> {
+    return id
+      ? this.http.put<RespuestaApi<TipoBono> & { mensaje: string }>(`${this.base}/tipos-bono/${id}`, datos)
+      : this.http.post<RespuestaApi<TipoBono> & { mensaje: string }>(`${this.base}/tipos-bono`, datos);
   }
 
-  calcularBono(pesoNetoKg: number): Observable<BonoCalculado | null> {
-    return this.http.get<RespuestaApi<BonoCalculado | null>>(`${this.base}/bono-tramos/calcular`, { params: { peso_neto_kg: pesoNetoKg } })
-      .pipe(map((r) => r.data));
+  publicarTablaBono(id: number, vigenteDesde: string, tramos: TramoBono[]): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${this.base}/tipos-bono/${id}/tramos`, { vigente_desde: vigenteDesde, tramos });
+  }
+
+  /** Bonos que generaría hoy la recepción: con peso (camión) los del pesaje; con material o serie los del lote. */
+  calcularBonos(params: { peso_kg?: number; material?: string | null; serie_id?: number | null }): Observable<BonoCalculado[]> {
+    const p: Record<string, string | number> = {};
+    if (params.peso_kg) p['peso_kg'] = params.peso_kg;
+    if (params.material) p['material'] = params.material;
+    if (params.serie_id) p['serie_id'] = params.serie_id;
+    if (!params.peso_kg) p['lote'] = 1;
+    return this.http.get<RespuestaApi<BonoCalculado[]>>(`${this.base}/tipos-bono/calcular`, { params: p }).pipe(map((r) => r.data));
+  }
+
+  agregarBono(loteId: number, datos: { tipo_bono_id: number; monto: number; moneda?: string; beneficiario_nombre?: string | null;
+                                        beneficiario_ci?: string | null; observacion?: string | null }): Observable<RespuestaApi<Bono> & { mensaje: string }> {
+    return this.http.post<RespuestaApi<Bono> & { mensaje: string }>(`${this.base}/lotes/${loteId}/bonos`, datos);
+  }
+
+  anularBono(id: number, motivo: string): Observable<RespuestaApi<Bono> & { mensaje: string }> {
+    return this.http.post<RespuestaApi<Bono> & { mensaje: string }>(`${this.base}/bonos/${id}/anular`, { motivo });
   }
 
   // --------------------------------------------------------------- Reglas de peso
@@ -115,39 +135,15 @@ export class RecepcionService {
     return this.http.get<RespuestaApi<PesoQueVale>>(`${this.base}/reglas-peso/calcular`, { params }).pipe(map((r) => r.data));
   }
 
-  // --------------------------------------------------------------- Bono de laboratorio
-  tablasLaboratorio(): Observable<TablaLaboratorio[]> {
-    return this.http.get<RespuestaApi<TablaLaboratorio[]>>(`${this.base}/bono-laboratorio-tramos`).pipe(map((r) => r.data));
-  }
-
-  publicarTablaLaboratorio(vigenteDesde: string, tramos: TramoLaboratorio[]): Observable<{ mensaje: string }> {
-    return this.http.post<{ mensaje: string }>(`${this.base}/bono-laboratorio-tramos`, { vigente_desde: vigenteDesde, tramos });
-  }
-
-  bonoLaboratorioPara(material: string): Observable<{ num_elementos: number; monto: string; moneda: string } | null> {
-    return this.http.get<RespuestaApi<{ num_elementos: number; monto: string; moneda: string } | null>>(
-      `${this.base}/bono-laboratorio-tramos/calcular`, { params: { material } }).pipe(map((r) => r.data));
-  }
-
-  bonosLaboratorioPendientes(cajaId: number): Observable<BonoLabPendiente[]> {
-    return this.http.get<RespuestaApi<BonoLabPendiente[]>>(`${this.base}/bonos-laboratorio/pendientes`, { params: { caja_id: cajaId } })
-      .pipe(map((r) => r.data));
-  }
-
-  pagarBonoLaboratorio(bonoId: number, cajaId: number, nombre: string, ci: string | null):
-      Observable<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }> {
-    return this.http.post<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }>(
-      `${this.base}/bonos-laboratorio/${bonoId}/pagar`, { caja_id: cajaId, beneficiario_nombre: nombre, beneficiario_ci: ci });
-  }
-
   bonosPendientes(cajaId: number): Observable<BonoPendiente[]> {
     return this.http.get<RespuestaApi<BonoPendiente[]>>(`${this.base}/bonos/pendientes`, { params: { caja_id: cajaId } })
       .pipe(map((r) => r.data));
   }
 
-  pagarBono(bonoId: number, cajaId: number): Observable<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }> {
+  pagarBono(bonoId: number, cajaId: number, nombre?: string | null, ci?: string | null):
+      Observable<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }> {
     return this.http.post<RespuestaApi<{ id: number; numero: string }> & { mensaje: string }>(
-      `${this.base}/bonos/${bonoId}/pagar`, { caja_id: cajaId });
+      `${this.base}/bonos/${bonoId}/pagar`, { caja_id: cajaId, beneficiario_nombre: nombre || null, beneficiario_ci: ci || null });
   }
 
   // --------------------------------------------------------------- Fotos y plantillas

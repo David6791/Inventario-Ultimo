@@ -50,9 +50,10 @@ class Pesaje extends CargasModel
         return $this->hasMany(PesajeClienteCorreccion::class, 'pesaje_id')->orderBy('id');
     }
 
-    public function bono(): HasOne
+    /** Bonos que nacieron con este pesaje (transporte y los demás por peso). */
+    public function bonos(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasOne(BonoTransporte::class, 'pesaje_id');
+        return $this->hasMany(Bono::class, 'pesaje_id')->orderBy('id');
     }
 
     /** Fotos de los tickets (interior y exterior). */

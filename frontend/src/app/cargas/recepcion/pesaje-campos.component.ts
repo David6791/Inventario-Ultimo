@@ -191,11 +191,13 @@ export function recordarBascula(valor: string | null | undefined): void {
       </div>
 
       <div class="campo span-6" *ngIf="neto() !== null && neto()! > 0">
-        <div class="bono" [class.sin-bono]="!bono()">
-          <i class="pi" [class.pi-truck]="bono()" [class.pi-info-circle]="!bono()"></i>
-          <span *ngIf="bono() as b">Bono de transporte{{ sinSacos() ? ' (camión completo)' : '' }}: <strong>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</strong>
-            ({{ b.tipo_vehiculo }}). Lo cobra el chofer en caja.</span>
-          <span *ngIf="!bono()">Para este peso no corresponde bono de transporte.</span>
+        <div class="bono" [class.sin-bono]="!bonos().length">
+          <i class="pi" [class.pi-truck]="bonos().length" [class.pi-info-circle]="!bonos().length"></i>
+          <span *ngIf="bonos().length">
+            <ng-container *ngFor="let b of bonos(); let ultimo = last">{{ b.nombre }}{{ sinSacos() ? ' (camión completo)' : '' }}:
+              <strong>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</strong>{{ b.detalle ? ' (' + b.detalle + ')' : '' }}{{ ultimo ? '.' : ' · ' }}</ng-container>
+            Se pagan en la caja del acopio.</span>
+          <span *ngIf="!bonos().length">Para este peso no corresponde bono por peso.</span>
         </div>
       </div>
 
@@ -326,7 +328,8 @@ export class PesajeCamposComponent implements OnInit {
 
   readonly neto = signal<number | null>(null);
   readonly clienteNeto = signal<number | null>(null);
-  readonly bono = signal<BonoCalculado | null>(null);
+  /** Bonos que nacerán con este pesaje (transporte y los demás por peso). */
+  readonly bonos = signal<BonoCalculado[]>([]);
   /** Peso que vale según las reglas vigentes (lo calcula la base). */
   readonly vale = signal<PesoQueVale | null>(null);
   readonly fmt = formatoDinero;
@@ -423,11 +426,13 @@ export class PesajeCamposComponent implements OnInit {
     );
     pesos$.subscribe(({ neto, cliente }) => { this.neto.set(neto); this.clienteNeto.set(cliente); });
 
-    // Bono por el neto del camión.
+    // Bonos por el peso del camión.
     pesos$.pipe(
       map((p) => p.neto), distinctUntilChanged(),
-      switchMap((neto) => neto && neto > 0 ? this.servicio.calcularBono(neto).pipe(catchError(() => of(null))) : of(null)),
-    ).subscribe((b) => this.bono.set(b));
+      switchMap((neto) => neto && neto > 0
+        ? this.servicio.calcularBonos({ peso_kg: neto }).pipe(catchError(() => of([] as BonoCalculado[])))
+        : of([] as BonoCalculado[])),
+    ).subscribe((b) => this.bonos.set(b));
 
     // Peso que vale con las reglas vigentes (en mixta, sin los sacos).
     combineLatest([pesos$, this.sacos$]).pipe(

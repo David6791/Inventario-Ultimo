@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, of, switchMap } from 'rxjs';
+import { catchError, combineLatest, of, startWith, switchMap } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -17,7 +17,7 @@ import { diferenciasBoleta } from '../core/diferencias';
 import { mensajeDeError } from '../core/errores';
 import { ESTILOS_CARGAS } from '../core/estilos';
 import { formatoDinero } from '../../caja/core/dinero';
-import { Bocamina, DatosRecepcion, PesoQueVale, LecturaTicket, Mina, Opciones, PlantillaBascula, Productor, ProductorParecido, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
+import { BonoCalculado, Bocamina, DatosRecepcion, PesoQueVale, LecturaTicket, Mina, Opciones, PlantillaBascula, Productor, ProductorParecido, SerieLote, TipoRecepcion } from '../core/models/cargas.model';
 import { CatalogosCargasService } from '../core/services/catalogos-cargas.service';
 import { RecepcionService } from '../core/services/recepcion.service';
 import { SeriesService } from '../core/services/series.service';
@@ -201,9 +201,9 @@ const CLAVE_TIPO = 'cargas.tipo-recepcion';
           <label for="material">Material</label>
           <p-dropdown inputId="material" formControlName="material" [options]="opciones()?.materiales ?? []" optionLabel="etiqueta"
                       optionValue="valor" placeholder="Elementos que trae" [showClear]="true" appendTo="body" [style]="{ width: '100%' }" />
-          <small *ngIf="bonoLab() as b" class="bono-lab"><i class="pi pi-filter-fill"></i>
-            Bono de laboratorio: <b>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</b> ({{ b.num_elementos }} elemento{{ b.num_elementos === 1 ? '' : 's' }})</small>
-          <small *ngIf="!form.value.material && serie()?.origen === 'COMPRA'" class="secundario">Sin material no se genera el bono de laboratorio.</small>
+          <small *ngFor="let b of bonosLote()" class="bono-lab"><i class="pi pi-money-bill"></i>
+            {{ b.nombre }}: <b>{{ b.moneda === 'USD' ? 'US$' : 'Bs' }} {{ fmt(b.monto) }}</b>{{ b.detalle ? ' (' + b.detalle + ')' : '' }}</small>
+          <small *ngIf="!form.value.material && serie()?.origen === 'COMPRA'" class="secundario">Sin material no se genera el bono por elementos (laboratorio).</small>
         </div>
         <div class="campo span-4">
           <label for="obs">Observaciones <span class="opcional">(opcional)</span></label>
@@ -301,7 +301,8 @@ export class RecibirLoteComponent implements OnInit {
   @ViewChild(PesajeCamposComponent) private camposPesaje?: PesajeCamposComponent;
   readonly aConfirmar = signal<PesajeAConfirmar | null>(null);
   readonly valeAConfirmar = signal<PesoQueVale | null>(null);
-  readonly bonoLab = signal<{ num_elementos: number; monto: string; moneda: string } | null>(null);
+  /** Bonos que nacerán con el lote (por elementos y fijos), según el catálogo. */
+  readonly bonosLote = signal<BonoCalculado[]>([]);
   readonly extrasConfirmar = signal<{ etiqueta: string; valor: string | null | undefined }[]>([]);
   readonly tipos = [
     { valor: 'BASCULA', etiqueta: 'Báscula', icono: 'pi pi-truck' },
@@ -377,9 +378,14 @@ export class RecibirLoteComponent implements OnInit {
       const sede = o.sede_recepcion_fija ?? pred ?? (lista.length === 1 ? lista[0].id : null);
       if (sede && !this.form.value.almacen_id) this.form.patchValue({ almacen_id: sede });
     });
-    this.form.get('material')!.valueChanges.pipe(
-      switchMap((m) => (m ? this.servicio.bonoLaboratorioPara(m).pipe(catchError(() => of(null))) : of(null))),
-    ).subscribe((b) => this.bonoLab.set(b));
+    combineLatest([
+      this.form.get('material')!.valueChanges.pipe(startWith(this.form.value.material ?? null)),
+      this.form.get('serie_id')!.valueChanges.pipe(startWith(this.form.value.serie_id ?? null)),
+    ]).pipe(
+      switchMap(([m, serie]) => (serie
+        ? this.servicio.calcularBonos({ material: m, serie_id: serie }).pipe(catchError(() => of([] as BonoCalculado[])))
+        : of([] as BonoCalculado[]))),
+    ).subscribe((b) => this.bonosLote.set(b));
     this.form.get('serie_id')!.valueChanges.subscribe((id) => {
       this.serieId.set(id);
       this.form.patchValue({ mina_id: null, bocamina_id: null }, { emitEvent: false });
@@ -537,7 +543,7 @@ export class RecibirLoteComponent implements OnInit {
             `${nSacos} sacos · ${this.fmt(kgSacos)} kg en ${sacos.pesadas.length} pesada${sacos.pesadas.length === 1 ? '' : 's'}` }] : []),
         ...(this.tipoRecepcion === 'MIXTA' && this.reparto() ? [{ etiqueta: 'Granel (este lote)', valor: `${this.fmt(this.reparto()!.granel)} kg` }] : []),
         ...(this.tipoRecepcion === 'SACOS' && sacos ? [{ etiqueta: 'Quién entrega', valor: sacos.chofer_nombre }] : []),
-        ...(this.bonoLab() ? [{ etiqueta: 'Bono de laboratorio', valor: `Bs ${this.fmt(this.bonoLab()!.monto)}` }] : []),
+        ...this.bonosLote().map((b) => ({ etiqueta: b.nombre, valor: `${b.moneda === 'USD' ? 'US$' : 'Bs'} ${this.fmt(b.monto)}` })),
       ]);
       this.confirmarVisible = true;
       return;

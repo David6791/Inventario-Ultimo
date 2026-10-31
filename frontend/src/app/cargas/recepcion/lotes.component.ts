@@ -69,7 +69,7 @@ import { SeriesService } from '../core/services/series.service';
           <th style="width: 12rem">Mina</th>
           <th style="width: 9rem" class="derecha">Neto húmedo kg</th>
           <th style="width: 14rem">Ley final</th>
-          <th style="width: 8rem" class="derecha">Bono por pagar</th>
+          <th style="width: 8rem" class="derecha">Bonos por pagar</th>
           <th style="width: 8rem">Estado</th>
         </tr>
       </ng-template>

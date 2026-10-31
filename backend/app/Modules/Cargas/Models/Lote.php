@@ -98,12 +98,13 @@ class Lote extends CargasModel
         return $usuario->can('cargas.ver-todos-almacenes') || $usuario->accedeAlmacen($this->almacen_id);
     }
 
-    /** Recepción mixta: el otro lote del mismo viaje. */
-    public function bonoLaboratorio(): \Illuminate\Database\Eloquent\Relations\HasOne
+    /** Todos los bonos del lote (los de sus pesajes incluidos). */
+    public function bonos(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasOne(BonoLaboratorio::class, 'lote_id');
+        return $this->hasMany(Bono::class, 'lote_id')->orderBy('id');
     }
 
+    /** Recepción mixta: el otro lote del mismo viaje. */
     public function lotePar(): BelongsTo
     {
         return $this->belongsTo(self::class, 'lote_par_id');

@@ -49,9 +49,10 @@ class RecepcionFotosApiTest extends TestCase
         $c = Cooperativa::create(['nombre' => 'COOPERATIVA PORCO', 'municipio_id' => $m->id]);
         $this->productor = Productor::create(['tipo' => 'COOPERATIVISTA', 'nombre' => 'PRODUCTOR PRUEBA', 'ci' => '1000001', 'cooperativa_id' => $c->id]);
         $this->mina = Mina::create(['nombre' => 'SANTA ROSA', 'cooperativa_id' => $c->id, 'municipio_id' => $m->id]);
-        DB::table('cargas.bono_transporte_tramo')->insert([
-            ['tipo_vehiculo' => 'TONKA',    'peso_desde_kg' => 500,  'peso_hasta_kg' => 10000, 'monto' => 50,  'vigente_desde' => '2026-01-01'],
-            ['tipo_vehiculo' => 'DOBLE',    'peso_desde_kg' => 10000, 'peso_hasta_kg' => null, 'monto' => 100, 'vigente_desde' => '2026-01-01'],
+        $k = DB::table('cargas.tipo_bono')->where('codigo', 'TRANSPORTE')->value('id');
+        DB::table('cargas.tipo_bono_tramo')->insert([
+            ['tipo_bono_id' => $k, 'etiqueta' => 'TONKA', 'desde' => 500,  'hasta' => 10000, 'monto' => 50,  'vigente_desde' => '2026-01-01'],
+            ['tipo_bono_id' => $k, 'etiqueta' => 'DOBLE', 'desde' => 10000, 'hasta' => null, 'monto' => 100, 'vigente_desde' => '2026-01-01'],
         ]);
 
         $this->recepcion = User::factory()->create();
@@ -214,7 +215,7 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertSame(12, $p['num_sacos']);
         $this->assertCount(3, $p['sacos']);
         $this->assertCount(1, $p['sacos'][2]['fotos']);
-        $this->assertNull($p['bono'] ?? null);
+        $this->assertSame([], $p['bonos']);
         $this->assertEquals(594.75, (float) $lote['peso_neto_humedo_kg']);
     }
 
@@ -257,7 +258,7 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertEquals(9550, (float) $granel['peso_neto_humedo_kg']);            // cliente 9.600: 100 kg más → promedio
         $this->assertSame('PROMEDIO', $granel['pesajes'][0]['criterio_peso']);
         $this->assertEquals(2500, (float) $granel['pesajes'][0]['descuento_sacos_kg']);
-        $this->assertEquals(100, (float) $granel['pesajes'][0]['bono']['monto']);      // por 12.000 kg del camión
+        $this->assertEquals(100, (float) $granel['pesajes'][0]['bonos'][0]['monto']);      // por 12.000 kg del camión
         $this->assertEquals(9600, (float) $granel['pesajes'][0]['peso_cliente_kg']);   // 12.100 del cliente − 2.500 de sacos
 
         $sacos = $this->getJson("/api/cargas/lotes/{$granel['lote_par']['id']}")->assertOk()->json('data');
@@ -267,7 +268,7 @@ class RecepcionFotosApiTest extends TestCase
         $this->assertSame(50, $sacos['pesajes'][0]['num_sacos']);
         $this->assertSame('CHOFER PRUEBA', $sacos['pesajes'][0]['chofer_nombre']);
         $this->assertSame($granel['pesajes'][0]['id'], $sacos['pesajes'][0]['pesaje_viaje_id']);
-        $this->assertSame(1, DB::table('cargas.bono_transporte')->count());
+        $this->assertSame(1, DB::table('cargas.bono')->count());
 
         // Anular el camión anula también los sacos del mismo viaje.
         $this->postJson("/api/cargas/pesajes/{$granel['pesajes'][0]['id']}/anular", ['motivo' => 'Ticket equivocado de otro camión'])->assertOk();
