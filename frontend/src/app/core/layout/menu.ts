@@ -91,26 +91,41 @@ const ESTRUCTURA: ItemMenu[] = [
     ],
   },
   {
+    // En el orden en que se trabaja una carga; abajo, lo que se configura una vez.
     etiqueta: 'Manejo de cargas', icono: 'pi pi-truck', hijos: [
-      { etiqueta: 'Recepción de lotes',  icono: 'pi pi-inbox',      ruta: '/cargas/lotes',        permiso: 'cargas.ver' },
-      { etiqueta: 'Resumen y tablero',   icono: 'pi pi-chart-bar',  ruta: '/cargas/resumen',      permiso: 'cargas.ver' },
-      { etiqueta: 'Laboratorio',         icono: 'pi pi-filter-fill', ruta: '/cargas/laboratorio',  permiso: 'cargas.ver' },
-      { etiqueta: 'Tablas de precio',    icono: 'pi pi-dollar',     ruta: '/cargas/precios',      permiso: 'cargas.ver' },
-      { etiqueta: 'Cotizaciones',        icono: 'pi pi-chart-line', ruta: '/cargas/cotizaciones', permiso: 'cargas.ver' },
-      { etiqueta: 'Retenciones',         icono: 'pi pi-percentage', ruta: '/cargas/retenciones',  permiso: 'cargas.ver' },
-      { etiqueta: 'Bonos',               icono: 'pi pi-money-bill', ruta: '/cargas/bonos',        permiso: 'cargas.ver' },
-      { etiqueta: 'Reglas de peso',      icono: 'pi pi-sliders-h',  ruta: '/cargas/reglas-peso',  permiso: 'cargas.ver' },
-      { etiqueta: 'Productores',         icono: 'pi pi-users',      ruta: '/cargas/productores',  permiso: 'cargas.ver' },
-      { etiqueta: 'Cooperativas',        icono: 'pi pi-sitemap',    ruta: '/cargas/cooperativas', permiso: 'cargas.ver' },
-      { etiqueta: 'Minas y bocaminas',   icono: 'pi pi-map',        ruta: '/cargas/minas',        permiso: 'cargas.ver' },
-      { etiqueta: 'Municipios',          icono: 'pi pi-map-marker', ruta: '/cargas/municipios',   permiso: 'cargas.ver' },
-      { etiqueta: 'Laboratorios',        icono: 'pi pi-filter',     ruta: '/cargas/laboratorios', permiso: 'cargas.ver' },
-      { etiqueta: 'Bancos',              icono: 'pi pi-building-columns', ruta: '/cargas/bancos', permiso: 'cargas.ver' },
-      { etiqueta: 'Líneas y elementos',  icono: 'pi pi-tags',       ruta: '/cargas/lineas',       permiso: 'cargas.ver' },
-      { etiqueta: 'Series de lote',      icono: 'pi pi-hashtag',    ruta: '/cargas/series',       permiso: 'cargas.ver' },
-      { etiqueta: 'Plantillas de báscula', icono: 'pi pi-camera',   ruta: '/cargas/plantillas-bascula', permiso: 'cargas.ver' },
-      { etiqueta: 'Acopios y recepcionistas',  icono: 'pi pi-map-marker', ruta: '/cargas/sedes-recepcion', permiso: 'cargas.ver' },
-      { etiqueta: 'Estado del módulo',   icono: 'pi pi-heart',      ruta: '/cargas/estado',       permiso: 'cargas.ver' },
+      { etiqueta: '1 · Recepción de lotes',  icono: 'pi pi-inbox',       ruta: '/cargas/lotes',       permiso: 'cargas.ver' },
+      { etiqueta: '2 · Pago de bonos (caja)', icono: 'pi pi-wallet',     ruta: '/caja/operar',        permiso: 'caja.pagar-bono' },
+      { etiqueta: '3 · Laboratorio',         icono: 'pi pi-filter-fill', ruta: '/cargas/laboratorio', permiso: 'cargas.ver' },
+      {
+        etiqueta: '4 · Valoración', icono: 'pi pi-dollar', hijos: [
+          { etiqueta: 'Cotizaciones',      icono: 'pi pi-chart-line', ruta: '/cargas/cotizaciones', permiso: 'cargas.ver' },
+          { etiqueta: 'Tablas de precio',  icono: 'pi pi-dollar',     ruta: '/cargas/precios',      permiso: 'cargas.ver' },
+          { etiqueta: 'Retenciones',       icono: 'pi pi-percentage', ruta: '/cargas/retenciones',  permiso: 'cargas.ver' },
+        ],
+      },
+      { etiqueta: '5 · Resumen y tablero',   icono: 'pi pi-chart-bar',   ruta: '/cargas/resumen',     permiso: 'cargas.ver' },
+      {
+        // En el orden en que se llenan: cada uno usa el anterior.
+        etiqueta: 'Catálogos', icono: 'pi pi-book', hijos: [
+          { etiqueta: 'Municipios',        icono: 'pi pi-map-marker', ruta: '/cargas/municipios',   permiso: 'cargas.ver' },
+          { etiqueta: 'Cooperativas',      icono: 'pi pi-sitemap',    ruta: '/cargas/cooperativas', permiso: 'cargas.ver' },
+          { etiqueta: 'Productores',       icono: 'pi pi-users',      ruta: '/cargas/productores',  permiso: 'cargas.ver' },
+          { etiqueta: 'Minas y bocaminas', icono: 'pi pi-map',        ruta: '/cargas/minas',        permiso: 'cargas.ver' },
+          { etiqueta: 'Laboratorios',      icono: 'pi pi-filter',     ruta: '/cargas/laboratorios', permiso: 'cargas.ver' },
+          { etiqueta: 'Bancos',            icono: 'pi pi-building-columns', ruta: '/cargas/bancos', permiso: 'cargas.ver' },
+        ],
+      },
+      {
+        etiqueta: 'Configuración', icono: 'pi pi-cog', hijos: [
+          { etiqueta: 'Acopios y recepcionistas', icono: 'pi pi-map-marker', ruta: '/cargas/sedes-recepcion', permiso: 'cargas.ver' },
+          { etiqueta: 'Series de lote',        icono: 'pi pi-hashtag',    ruta: '/cargas/series',       permiso: 'cargas.ver' },
+          { etiqueta: 'Líneas y elementos',    icono: 'pi pi-tags',       ruta: '/cargas/lineas',       permiso: 'cargas.ver' },
+          { etiqueta: 'Plantillas de báscula', icono: 'pi pi-camera',     ruta: '/cargas/plantillas-bascula', permiso: 'cargas.ver' },
+          { etiqueta: 'Reglas de peso',        icono: 'pi pi-sliders-h',  ruta: '/cargas/reglas-peso',  permiso: 'cargas.ver' },
+          { etiqueta: 'Bonos',                 icono: 'pi pi-money-bill', ruta: '/cargas/bonos',        permiso: 'cargas.ver' },
+          { etiqueta: 'Estado del módulo',     icono: 'pi pi-heart',      ruta: '/cargas/estado',       permiso: 'cargas.ver' },
+        ],
+      },
     ],
   },
 ];
