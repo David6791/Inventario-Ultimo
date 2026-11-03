@@ -142,6 +142,15 @@
     @endforeach
   </tbody>
 </table>
+@php($devoluciones = \App\Modules\Caja\Models\EnvioFondos::where('sesion_origen_id', $sesion->id)->with('destino:id,codigo,nombre')->get())
+@if ($devoluciones->isNotEmpty())
+  <p class="pequeno" style="margin-top: 2mm;">
+    <b>Devuelto a la caja principal al cerrar:</b>
+    @foreach ($devoluciones as $d){{ $simbolo($d->moneda) }} {{ $dinero($d->monto) }} ({{ $d->numero }}, caja {{ $d->destino->codigo }},
+      {{ $d->estado === 'RECIBIDO' ? 'recibido' : 'en tránsito' }}){{ $loop->last ? '.' : '; ' }}@endforeach
+    La caja queda en 0 para la siguiente apertura.
+  </p>
+@endif
 
 <h2>Por concepto</h2>
 @if ($porConcepto->isEmpty())

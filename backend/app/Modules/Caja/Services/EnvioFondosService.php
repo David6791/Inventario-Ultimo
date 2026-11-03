@@ -10,9 +10,11 @@ use App\Modules\Comun\Support\Transaccion;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Envío de dinero de la sede central a otra caja: cada paso registra su
- * comprobante y actualiza el envío en la misma transacción. Las reglas
- * (caja central, saldo, mismo monto y moneda) las vuelve a exigir la base.
+ * Movimiento de efectivo entre la caja principal y las demás: la ENTREGA del
+ * día (egreso en la principal, ingreso al recibirla) y la DEVOLUCIÓN de lo
+ * contado al cerrar (la genera el cierre; ingreso en la principal al
+ * recibirla). Cada paso registra su comprobante en la misma transacción; las
+ * reglas las vuelve a exigir la base.
  */
 class EnvioFondosService
 {
@@ -47,14 +49,18 @@ class EnvioFondosService
         $envio->loadMissing('origen', 'destino');
         $sesion = $this->sesionAbierta($envio->destino, 'recibir el envío');
 
-        return Transaccion::como($cajero->id, function () use ($envio, $cajero, $sesion) {
+        $devolucion = $envio->tipo === EnvioFondos::DEVOLUCION;
+
+        return Transaccion::como($cajero->id, function () use ($envio, $cajero, $sesion, $devolucion) {
             $mov = $this->cajas->registrar($sesion, $cajero, [
-                'concepto_id'    => Concepto::where('codigo', 'RECEPCION_FONDOS')->value('id'),
+                'concepto_id'    => Concepto::where('codigo', $devolucion ? 'RECEPCION_DEVOLUCION' : 'RECEPCION_FONDOS')->value('id'),
                 'monto'          => $envio->monto,
                 'moneda'         => $envio->moneda,
                 'forma_pago'     => 'EFECTIVO',
                 'persona_nombre' => $envio->entregado_a ?: mb_strtoupper("Caja {$envio->origen->codigo} · {$envio->origen->nombre}"),
-                'glosa'          => mb_substr("Recibido de la caja {$envio->origen->codigo} (envío {$envio->numero}) · {$envio->motivo}", 0, 250),
+                'glosa'          => mb_substr(($devolucion ? "Devolución de la caja {$envio->origen->codigo} ({$envio->numero})"
+                                                       : "Recibido de la caja {$envio->origen->codigo} (entrega {$envio->numero})")
+                                            . " · {$envio->motivo}", 0, 250),
             ]);
             $envio->forceFill(['estado' => 'RECIBIDO', 'movimiento_recepcion_id' => $mov->id,
                                'recibido_por' => $cajero->id, 'recibido_en' => now()])->save();
@@ -66,6 +72,10 @@ class EnvioFondosService
     public function anular(EnvioFondos $envio, User $cajero, string $motivo): EnvioFondos
     {
         $this->enTransito($envio);
+        if ($envio->tipo === EnvioFondos::DEVOLUCION) {
+            throw ValidationException::withMessages(['envio' =>
+                "La devolución {$envio->numero} no se anula: la caja principal la recibe y la diferencia, si la hay, sale en su arqueo."]);
+        }
         $envio->loadMissing('origen', 'destino');
         $sesion = $this->sesionAbierta($envio->origen, 'anular el envío (el dinero vuelve a ella)');
 

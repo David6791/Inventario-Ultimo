@@ -9,6 +9,7 @@ import { DialogModule } from 'primeng/dialog';
 import { DropdownModule } from 'primeng/dropdown';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { TableModule } from 'primeng/table';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
@@ -28,7 +29,7 @@ import { ESTILOS_CAJA } from '../core/estilos';
   selector: 'app-cajas',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ReactiveFormsModule, MultiSelectModule, TableModule, ButtonModule, DialogModule, DropdownModule,
+    CommonModule, FormsModule, ReactiveFormsModule, MultiSelectModule, SelectButtonModule, TableModule, ButtonModule, DialogModule, DropdownModule,
     InputTextModule, CheckboxModule, ToastModule, TooltipModule, TienePermisoDirective,
   ],
   providers: [MessageService],
@@ -67,6 +68,9 @@ import { ESTILOS_CAJA } from '../core/estilos';
             <div class="secundario">
               {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }}
               <span class="pastilla" *ngIf="c.maneja_usd">Bs y US$</span>
+              <span class="pastilla pastilla-principal" *ngIf="c.es_principal">Principal</span>
+              <span class="pastilla" *ngIf="c.devuelve_al_cerrar">Devuelve al cerrar</span>
+              <span class="pastilla pastilla-cargas" *ngIf="c.pagos === 'CARGAS'">Solo bonos y anticipos</span>
             </div>
             <div class="secundario cajeros">
               <i class="pi pi-user"></i>
@@ -264,6 +268,31 @@ import { ESTILOS_CAJA } from '../core/estilos';
           </ng-container>
         </div>
 
+        <div class="campo span-6 bloque-aprobacion bloque-efectivo">
+          <span class="rotulo-aprobadores">Ciclo del efectivo</span>
+          <small class="aviso-abierta" *ngIf="actual()?.sesion_abierta">
+            <i class="pi pi-lock"></i> La caja está abierta: estas tres opciones se cambian con la caja cerrada.</small>
+          <div class="check-campo">
+            <p-checkbox formControlName="es_principal" [binary]="true" inputId="principal" />
+            <label for="principal">Caja principal</label>
+          </div>
+          <small>Recibe el efectivo de la empresa, entrega el dinero del día a las demás cajas y recibe lo que devuelven al cerrar.
+            Hay una sola.</small>
+          <div class="check-campo" *ngIf="!form.value.es_principal">
+            <p-checkbox formControlName="devuelve_al_cerrar" [binary]="true" inputId="devuelve" />
+            <label for="devuelve">Devuelve el efectivo al cerrar</label>
+          </div>
+          <small *ngIf="!form.value.es_principal">
+            {{ form.value.devuelve_al_cerrar
+              ? 'Al cerrar, todo lo contado vuelve a la caja principal (en tránsito hasta que la reciba) y la caja abre al día siguiente en 0.'
+              : 'La caja se queda con su efectivo al cerrar y abre al día siguiente con lo contado.' }}</small>
+          <label for="pagos" class="rotulo-aprobadores" *ngIf="!form.value.es_principal">Qué puede pagar</label>
+          <p-selectButton *ngIf="!form.value.es_principal" formControlName="pagos" [options]="opcionesPagos" optionLabel="etiqueta"
+                          optionValue="valor" [allowEmpty]="false" inputId="pagos" />
+          <small *ngIf="!form.value.es_principal && form.value.pagos === 'CARGAS'">Solo bonos y anticipos de los lotes, más las entregas
+            y devoluciones de dinero. Los gastos (combustible, gastos menores…) no se registran en esta caja.</small>
+        </div>
+
         <div class="campo span-6 check-campo">
           <p-checkbox formControlName="activa" [binary]="true" inputId="activa" />
           <label for="activa">Activa (se puede abrir)</label>
@@ -279,6 +308,10 @@ import { ESTILOS_CAJA } from '../core/estilos';
     </p-dialog>
   `,
   styles: [...ESTILOS_CAJA, `
+    .pastilla-principal { background: #e0f2fe; color: #075985; }
+    .pastilla-cargas { background: #fef3c7; color: #92400e; }
+    .bloque-efectivo { gap: 0.4rem; }
+    .aviso-abierta { color: #b45309 !important; }
     .proximo { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-weight: 650; font-size: 0.9rem; }
     .cajeros { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.15rem; }
     .cajeros i { font-size: 0.7rem; }
@@ -338,6 +371,8 @@ export class CajasComponent implements OnInit {
   private proximoOriginal = 1;
   private proximoIngresoOriginal = 10000;
 
+  readonly opcionesPagos = [{ valor: 'TODO', etiqueta: 'Todo' }, { valor: 'CARGAS', etiqueta: 'Solo bonos y anticipos' }];
+
   readonly form = this.fb.group({
     codigo: ['', [Validators.required, Validators.maxLength(10)]],
     nombre: ['', [Validators.required, Validators.maxLength(100)]],
@@ -347,6 +382,9 @@ export class CajasComponent implements OnInit {
     reinicio_comprobante: ['ANUAL', Validators.required],
     activa: [true],
     requiere_aprobacion: [false],
+    es_principal: [false],
+    devuelve_al_cerrar: [false],
+    pagos: ['TODO' as 'TODO' | 'CARGAS'],
     proximo_comprobante: ['1'],
     numeracion_separada: [false],
     inicio_egreso: ['1'],
@@ -463,11 +501,16 @@ export class CajasComponent implements OnInit {
     } as any : {
       almacen_id: sede, maneja_usd: false, formato_comprobante: '{CAJA}-{AAAA}-{N:6}',
       reinicio_comprobante: 'ANUAL', activa: true, requiere_aprobacion: false, proximo_comprobante: '1', motivo_numeracion: '',
+      es_principal: false, devuelve_al_cerrar: true, pagos: 'CARGAS',
       numeracion_separada: false, inicio_egreso: '1', inicio_ingreso: '10000', formato_ingreso: '', proximo_ingreso: '10000',
     });
 
     for (const campo of ['codigo', 'almacen_id']) {
       c?.tiene_sesiones ? this.form.get(campo)!.disable({ emitEvent: false }) : this.form.get(campo)!.enable({ emitEvent: false });
+    }
+    // Principal, devolución y qué puede pagar: solo con la caja cerrada.
+    for (const campo of ['es_principal', 'devuelve_al_cerrar', 'pagos']) {
+      c?.sesion_abierta ? this.form.get(campo)!.disable({ emitEvent: false }) : this.form.get(campo)!.enable({ emitEvent: false });
     }
 
     this.editorVisible = true;
@@ -495,6 +538,9 @@ export class CajasComponent implements OnInit {
       codigo: v.codigo ?? '', nombre: v.nombre ?? '', almacen_id: v.almacen_id!, maneja_usd: !!v.maneja_usd,
       formato_comprobante: v.formato_comprobante ?? '', reinicio_comprobante: v.reinicio_comprobante as any,
       activa: !!v.activa, requiere_aprobacion: !!v.requiere_aprobacion,
+      es_principal: !!v.es_principal,
+      devuelve_al_cerrar: !v.es_principal && !!v.devuelve_al_cerrar,
+      pagos: v.es_principal ? 'TODO' : (v.pagos ?? 'TODO'),
       // El correlativo solo viaja si se cambió: así no se registra un ajuste por cada edición.
       proximo_comprobante: this.proximoCambiado() ? this.proximo() : null,
       motivo_numeracion: this.proximoCambiado() || this.proximoIngresoCambiado() ? (v.motivo_numeracion || null) : null,

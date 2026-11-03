@@ -14,7 +14,7 @@ class EnvioFondos extends CajaModel
 {
     protected $table = 'caja.envio_fondos';
 
-    protected $fillable = ['caja_origen_id', 'caja_destino_id', 'monto', 'moneda', 'motivo', 'entregado_a',
+    protected $fillable = ['tipo', 'sesion_origen_id', 'caja_origen_id', 'caja_destino_id', 'monto', 'moneda', 'motivo', 'entregado_a',
                            'movimiento_envio_id', 'enviado_por'];
 
     protected $casts = [
@@ -28,6 +28,10 @@ class EnvioFondos extends CajaModel
 
     public const EN_TRANSITO = 'EN_TRANSITO';
 
+    public const ENTREGA = 'ENTREGA';
+    public const DEVOLUCION = 'DEVOLUCION';
+
+    public function sesionOrigen(): BelongsTo { return $this->belongsTo(Sesion::class, 'sesion_origen_id'); }
     public function origen(): BelongsTo { return $this->belongsTo(Caja::class, 'caja_origen_id'); }
     public function destino(): BelongsTo { return $this->belongsTo(Caja::class, 'caja_destino_id'); }
     public function movimientoEnvio(): BelongsTo { return $this->belongsTo(Movimiento::class, 'movimiento_envio_id'); }

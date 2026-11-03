@@ -53,7 +53,6 @@ class CajaController extends Controller
                     // Envíos de la sede central que esperan que esta caja los reciba.
                     'envios_por_recibir' => \App\Modules\Caja\Models\EnvioFondos::where('caja_destino_id', $caja->id)
                         ->where('estado', 'EN_TRANSITO')->count(),
-                    'es_central'      => (bool) $caja->almacen?->centroCosto?->es_central,
                     'ultimo_correlativo' => $this->solicitudes->ultimoComprobante($caja, $caja->numeracion_separada ? 'EGRESO' : null),
                     'ultimo_correlativo_ingreso' => $caja->numeracion_separada ? $this->solicitudes->ultimoComprobante($caja, 'INGRESO') : null,
                     'proximo_numero_ingreso' => $caja->numeracion_separada ? $this->solicitudes->proximoComprobante($caja, 'INGRESO') : null,
@@ -91,7 +90,7 @@ class CajaController extends Controller
             'cajeros'         => $this->cajeros($caja),
             'aprobadores'     => $this->usuariosDe($caja->aprobadores),
             'soy_cajero'      => $caja->cajeros->contains('id', $request->user()->id),
-            'es_central'      => $caja->esCentral(),
+            'hay_principal'   => Caja::principal() !== null,
             'envios_por_recibir' => \App\Modules\Caja\Models\EnvioFondos::where('caja_destino_id', $caja->id)->where('estado', 'EN_TRANSITO')->count(),
             'saldos_arranque' => $this->cajas->saldosDeArranque($caja),
             'ultima_cerrada'  => $ultima ? [

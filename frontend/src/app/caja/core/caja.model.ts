@@ -170,9 +170,15 @@ export interface Caja {
   ultimo_correlativo_ingreso?: number | null;
   proximo_numero_ingreso?: string | null;
   solicitudes_por_pagar?: number;
-  /** La caja es de la sede central: envía dinero a las demás. */
-  es_central?: boolean;
-  /** Envíos de la sede central que esperan que esta caja los reciba. */
+  /** Caja principal: entrega el dinero a las demás y recibe sus devoluciones. */
+  es_principal?: boolean;
+  /** Al cerrar devuelve todo el efectivo contado a la principal y abre en 0. */
+  devuelve_al_cerrar?: boolean;
+  /** TODO: bonos, anticipos y gastos. CARGAS: solo bonos y anticipos. */
+  pagos?: 'TODO' | 'CARGAS';
+  /** Hay una caja principal marcada (para cerrar una caja que devuelve). */
+  hay_principal?: boolean;
+  /** Entregas (o devoluciones, en la principal) que esperan que esta caja las reciba. */
   envios_por_recibir?: number;
   cajeros?: UsuarioCorto[];
   aprobadores?: UsuarioCorto[];
@@ -201,6 +207,9 @@ export interface DatosCaja {
   reinicio_comprobante: Reinicio;
   activa: boolean;
   requiere_aprobacion: boolean;
+  es_principal?: boolean;
+  devuelve_al_cerrar?: boolean;
+  pagos?: 'TODO' | 'CARGAS';
   /** Desde qué número sigue el comprobante; solo se manda si cambia. */
   proximo_comprobante?: number | null;
   numeracion_separada?: boolean;
@@ -330,6 +339,8 @@ export interface SesionFila {
 export interface DatosCierre {
   monedas: Partial<Record<Moneda, { arqueo?: { denominacion: number; cantidad: number }[]; contado?: number | null }>>;
   observaciones: string | null;
+  /** Cajas que devuelven al cerrar: quién lleva el efectivo a la principal. */
+  entregado_a?: string | null;
 }
 
 export interface FiltrosLibro {
@@ -355,10 +366,12 @@ export interface LibroCaja {
   }[];
 }
 
-/** Dinero que la caja de la sede central envía a otra caja. */
+/** Efectivo entre cajas: ENTREGA de la principal a una caja, DEVOLUCION de lo contado al cerrar. */
 export interface EnvioFondos {
   id: number;
   numero: string;
+  tipo: 'ENTREGA' | 'DEVOLUCION';
+  sesion_origen?: { id: number; numero: number } | null;
   caja_origen_id: number;
   caja_destino_id: number;
   origen: { id: number; codigo: string; nombre: string };

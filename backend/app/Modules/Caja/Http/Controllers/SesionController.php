@@ -89,11 +89,17 @@ class SesionController extends Controller
         $this->asegurarCajero($sesion->caja);
 
         $sesion = $this->cajas->cerrar($sesion->load('saldos'), $request->user(),
-            $request->input('monedas', []), $request->input('observaciones'));
+            $request->input('monedas', []), $request->input('observaciones'), $request->input('entregado_a'));
+        $devoluciones = \App\Modules\Caja\Models\EnvioFondos::where('sesion_origen_id', $sesion->id)->with('destino:id,codigo')->get();
 
         return response()->json([
-            'data'    => [...$sesion->toArray(), 'saldos' => $this->cajas->resumen($sesion)],
-            'mensaje' => "Sesión {$sesion->numero} cerrada. Imprima el reporte y entréguelo con el efectivo.",
+            'data'    => [...$sesion->toArray(), 'saldos' => $this->cajas->resumen($sesion), 'devoluciones' => $devoluciones],
+            'mensaje' => "Sesión {$sesion->numero} cerrada."
+                . ($devoluciones->isNotEmpty()
+                    ? ' Devolución ' . $devoluciones->map(fn ($d) => "{$d->numero} (" . ($d->moneda === 'USD' ? '$us ' : 'Bs ')
+                        . number_format((float) $d->monto, 2, ',', '.') . ')')->join(', ')
+                      . " a la caja {$devoluciones->first()->destino->codigo}: entregue el efectivo y el reporte; queda en tránsito hasta que la reciban."
+                    : ' Imprima el reporte y entréguelo con el efectivo.'),
         ]);
     }
 

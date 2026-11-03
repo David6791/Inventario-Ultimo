@@ -38,6 +38,10 @@ class CajaRequest extends FormularioCaja
             'reinicio_comprobante' => ['required', Rule::in(Caja::REINICIOS)],
             'activa'               => ['boolean'],
             'requiere_aprobacion'  => ['boolean'],
+            // Ciclo del efectivo: principal, devuelve al cerrar, qué puede pagar.
+            'es_principal'         => ['boolean'],
+            'devuelve_al_cerrar'   => ['boolean'],
+            'pagos'                => [Rule::in(Caja::PAGOS)],
             // Desde qué número sigue el comprobante (por ejemplo, continuar otro sistema).
             'proximo_comprobante'  => ['nullable', 'integer', 'min:1', 'max:99999999'],
             'motivo_numeracion'    => ['nullable', 'string', 'max:250'],
@@ -60,6 +64,28 @@ class CajaRequest extends FormularioCaja
 
                 /** @var Caja|null $caja */
                 $caja = $this->route('caja');
+                if ($this->boolean('es_principal') && ($this->boolean('devuelve_al_cerrar') || $this->input('pagos', 'TODO') !== 'TODO')) {
+                    $validator->errors()->add('es_principal', 'La caja principal no devuelve al cerrar y paga todo: es la que recibe y reparte el dinero.');
+                }
+                if ($this->boolean('es_principal') && Caja::where('es_principal', true)->where('activa', true)
+                        ->when($caja, fn ($q) => $q->whereKeyNot($caja->id))->exists()) {
+                    $otra = Caja::principal();
+                    $validator->errors()->add('es_principal', "Ya hay una caja principal ({$otra?->codigo}): quítele la marca antes de marcar otra.");
+                }
+                if ($caja && $caja->sesionAbierta()->exists()) {
+                    $cambia = [
+                        'es_principal'       => $this->has('es_principal') && $this->boolean('es_principal') !== $caja->es_principal,
+                        'devuelve_al_cerrar' => $this->has('devuelve_al_cerrar') && $this->boolean('devuelve_al_cerrar') !== $caja->devuelve_al_cerrar,
+                        'pagos'              => $this->has('pagos') && $this->input('pagos') !== $caja->pagos,
+                    ];
+                    $que = ['es_principal' => 'si es principal', 'devuelve_al_cerrar' => 'si devuelve al cerrar', 'pagos' => 'qué puede pagar'];
+                    foreach (array_keys(array_filter($cambia)) as $campo) {
+                        $validator->errors()->add($campo, "La caja está abierta: {$que[$campo]} se cambia con la caja cerrada.");
+                    }
+                }
+                if ($validator->errors()->isNotEmpty()) {
+                    return;
+                }
 
                 if ($caja?->tieneSesiones()) {
                     if ($this->input('codigo') !== $caja->codigo) {

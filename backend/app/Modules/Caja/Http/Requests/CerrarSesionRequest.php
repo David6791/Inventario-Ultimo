@@ -15,7 +15,7 @@ class CerrarSesionRequest extends FormularioCaja
 
     protected function prepareForValidation(): void
     {
-        $this->colapsarEspacios('observaciones');
+        $this->colapsarEspacios('observaciones', 'entregado_a');
     }
 
     public function rules(): array
@@ -27,6 +27,8 @@ class CerrarSesionRequest extends FormularioCaja
             'monedas.*.arqueo.*.denominacion'  => ['required', 'numeric', 'gt:0'],
             'monedas.*.arqueo.*.cantidad'      => ['required', 'integer', 'min:0', 'max:1000000'],
             'observaciones'                    => ['nullable', 'string', 'max:1000'],
+            // Cajas que devuelven al cerrar: quién lleva el efectivo a la principal.
+            'entregado_a'                      => ['nullable', 'string', 'max:150'],
         ];
     }
 
@@ -34,6 +36,10 @@ class CerrarSesionRequest extends FormularioCaja
     {
         return [
             function (Validator $validator) {
+                $caja = $this->route('sesion')?->caja;
+                if ($caja?->devuelve_al_cerrar && ! \App\Modules\Caja\Models\Caja::principal()) {
+                    $validator->errors()->add('monedas', "La caja {$caja->codigo} devuelve el efectivo al cerrar, pero no hay caja principal: márquela en Caja → Cajas.");
+                }
                 // Cada moneda con que trabaja la sesión tiene que contarse.
                 $monedas = $this->route('sesion')?->saldos()->pluck('moneda')->all() ?? array_keys((array) $this->input('monedas', []));
                 foreach ($monedas as $moneda) {

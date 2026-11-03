@@ -22,6 +22,7 @@ class Caja extends CajaModel
         'codigo', 'nombre', 'almacen_id', 'maneja_usd',
         'formato_comprobante', 'reinicio_comprobante', 'activa', 'requiere_aprobacion',
         'numeracion_separada', 'inicio_egreso', 'inicio_ingreso', 'formato_ingreso',
+        'es_principal', 'devuelve_al_cerrar', 'pagos',
     ];
 
     protected $casts = [
@@ -32,7 +33,12 @@ class Caja extends CajaModel
         'numeracion_separada' => 'boolean',
         'inicio_egreso'       => 'integer',
         'inicio_ingreso'      => 'integer',
+        'es_principal'        => 'boolean',
+        'devuelve_al_cerrar'  => 'boolean',
     ];
+
+    /** TODO: bonos, anticipos y gastos. CARGAS: solo bonos y anticipos. */
+    public const PAGOS = ['TODO', 'CARGAS'];
 
     public const REINICIOS = ['NUNCA', 'ANUAL', 'MENSUAL', 'DIARIO'];
 
@@ -127,11 +133,15 @@ class Caja extends CajaModel
         });
     }
 
-    /** La caja es de la sede central (el centro de costo de su almacén es la central). */
-    public function esCentral(): bool
+    /** La caja principal: entrega el dinero a las demás y recibe sus devoluciones. */
+    public function esPrincipal(): bool
     {
-        return \Illuminate\Support\Facades\DB::table('activos.centro_costo')
-            ->where('almacen_id', $this->almacen_id)->where('es_central', true)->where('activo', true)->exists();
+        return $this->es_principal && $this->activa;
+    }
+
+    public static function principal(): ?self
+    {
+        return self::query()->where('es_principal', true)->where('activa', true)->first();
     }
 
     public function esDelAmbitoDe(User $usuario): bool

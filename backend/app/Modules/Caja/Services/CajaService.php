@@ -5,6 +5,7 @@ namespace App\Modules\Caja\Services;
 use App\Models\User;
 use App\Modules\Caja\Models\Arqueo;
 use App\Modules\Caja\Models\Caja;
+use App\Modules\Caja\Models\EnvioFondos;
 use App\Modules\Caja\Models\Movimiento;
 use App\Modules\Caja\Models\Sesion;
 use App\Modules\Caja\Models\SesionSaldo;
@@ -203,9 +204,12 @@ class CajaService
      *
      * @param  array<string, array{arqueo?: array<array{denominacion: float, cantidad: int}>, contado?: float|string|null}>  $monedas
      */
-    public function cerrar(Sesion $sesion, User $cajero, array $monedas, ?string $observaciones): Sesion
+    public function cerrar(Sesion $sesion, User $cajero, array $monedas, ?string $observaciones, ?string $entregadoA = null): Sesion
     {
-        return Transaccion::como($cajero->id, function () use ($sesion, $cajero, $monedas, $observaciones) {
+        $caja = $sesion->caja;
+        $principal = $caja->devuelve_al_cerrar ? Caja::principal() : null;
+
+        return Transaccion::como($cajero->id, function () use ($sesion, $cajero, $monedas, $observaciones, $caja, $principal, $entregadoA) {
             // Un cierre que falló pudo dejar arqueo: se vuelve a contar desde cero.
             Arqueo::where('sesion_id', $sesion->id)->delete();
 
@@ -226,7 +230,9 @@ class CajaService
                     ? round($cortes->sum(fn ($c) => round($c['denominacion'] * $c['cantidad'], 2)), 2)
                     : ($datos['contado'] ?? null);
 
-                $saldo->forceFill(['saldo_contado' => $contado])->save();
+                // Una caja que devuelve al cerrar entrega todo lo contado a la principal.
+                $saldo->forceFill(['saldo_contado' => $contado,
+                                   'devuelto' => $principal && $contado !== null ? $contado : 0])->save();
             }
 
             $sesion->forceFill([
@@ -235,6 +241,21 @@ class CajaService
                 'cerrada_en'    => now(),
                 'observaciones' => $observaciones,
             ])->save();
+
+            if ($principal) {
+                foreach ($sesion->saldos()->get() as $saldo) {
+                    if ((float) $saldo->devuelto <= 0) {
+                        continue;
+                    }
+                    EnvioFondos::create([
+                        'tipo' => EnvioFondos::DEVOLUCION, 'sesion_origen_id' => $sesion->id,
+                        'caja_origen_id' => $caja->id, 'caja_destino_id' => $principal->id,
+                        'monto' => $saldo->devuelto, 'moneda' => $saldo->moneda,
+                        'motivo' => "Cierre {$sesion->numero} de la caja {$caja->codigo}",
+                        'entregado_a' => $entregadoA ? mb_strtoupper($entregadoA) : null, 'enviado_por' => $cajero->id,
+                    ]);
+                }
+            }
 
             return $sesion->refresh();
         });

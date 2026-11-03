@@ -61,6 +61,11 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
             Sesión {{ s.numero }} abierta por {{ s.abierta_por }} el {{ s.abierta_en | date: 'dd/MM/yyyy HH:mm' }} · {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }}
           </p>
           <p class="subtitulo" *ngIf="!c.sesion_abierta">Caja cerrada · {{ c.almacen?.centro_costo?.nombre ?? c.almacen?.nombre }}</p>
+          <p class="reglas-caja">
+            <span class="regla principal" *ngIf="c.es_principal"><i class="pi pi-building"></i> Caja principal</span>
+            <span class="regla" *ngIf="c.devuelve_al_cerrar"><i class="pi pi-replay"></i> Devuelve el efectivo al cerrar</span>
+            <span class="regla cargas" *ngIf="c.pagos === 'CARGAS'"><i class="pi pi-truck"></i> Solo bonos y anticipos</span>
+          </p>
         </div>
         <div class="acciones" *ngIf="c.sesion_abierta as s">
           <p-button label="Reporte del día" icon="pi pi-file-pdf" [text]="true" (onClick)="reporte(s.id)" />
@@ -80,11 +85,13 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
                         [badge]="c.solicitudes_por_pagar ? '' + c.solicitudes_por_pagar : ''" badgeClass="p-badge-warning" />
             </ng-container>
           </ng-container>
+          <ng-container *ngIf="c.pagos !== 'CARGAS'">
           <ng-container *appTienePermiso="'caja.registrar'">
             <p-button label="Ingreso" icon="pi pi-arrow-down-left" severity="success" [outlined]="true"
                       (onClick)="nuevoMovimiento('INGRESO')" />
             <p-button label="Egreso" icon="pi pi-arrow-up-right" severity="danger" [outlined]="true"
                       (onClick)="nuevoMovimiento('EGRESO')" />
+          </ng-container>
           </ng-container>
           </ng-container>
         </div>
@@ -544,6 +551,11 @@ import { aNumero, numeroInvalido } from '../../cargas/core/numeros';
     </p-dialog>
   `,
   styles: [...ESTILOS_CAJA, `
+    .reglas-caja { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0 0; }
+    .regla { font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 0.1rem 0.55rem; background: #f1f5f9; color: #334155;
+             display: inline-flex; gap: 0.3rem; align-items: center; }
+    .regla.principal { background: #e0f2fe; color: #075985; }
+    .regla.cargas { background: #fef3c7; color: #92400e; }
     .pastilla-bono { display: inline-block; margin-top: 0.15rem; padding: 0.02rem 0.4rem; border-radius: 999px; font-size: 0.68rem;
                      background: #e0f2fe; color: #075985; }
     .pastilla-bono.premio { background: #ede9fe; color: #5b21b6; }

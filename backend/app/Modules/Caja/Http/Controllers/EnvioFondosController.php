@@ -10,14 +10,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-/** Envíos de dinero de la sede central a las cajas: enviar, recibir y anular. */
+/** Entregas de la caja principal y devoluciones al cerrar: entregar, recibir y anular (solo entregas). */
 class EnvioFondosController extends Controller
 {
     use AmbitoDeCaja;
 
     private const RELACIONES = [
         'origen:id,codigo,nombre', 'destino:id,codigo,nombre', 'enviadoPor:id,name', 'recibidoPor:id,name', 'anuladoPor:id,name',
-        'movimientoEnvio:id,numero', 'movimientoRecepcion:id,numero', 'movimientoReintegro:id,numero',
+        'movimientoEnvio:id,numero', 'movimientoRecepcion:id,numero', 'movimientoReintegro:id,numero', 'sesionOrigen:id,numero',
     ];
 
     public function __construct(private readonly EnvioFondosService $envios)
@@ -54,7 +54,7 @@ class EnvioFondosController extends Controller
             trim($d['motivo']), isset($d['entregado_a']) ? mb_strtoupper(trim($d['entregado_a'])) : null, $request->user());
 
         return response()->json(['data' => $envio->load(self::RELACIONES),
-            'mensaje' => "Envío {$envio->numero} registrado: queda en tránsito hasta que la caja {$envio->destino->codigo} lo reciba."], 201);
+            'mensaje' => "Entrega {$envio->numero} registrada: queda en tránsito hasta que la caja {$envio->destino->codigo} la reciba."], 201);
     }
 
     public function recibir(Request $request, EnvioFondos $envio): JsonResponse
@@ -63,11 +63,16 @@ class EnvioFondosController extends Controller
         $envio = $this->envios->recibir($envio, $request->user());
 
         return response()->json(['data' => $envio->load(self::RELACIONES),
-            'mensaje' => "Envío {$envio->numero} recibido: ingresó a la caja con el comprobante {$envio->movimientoRecepcion->numero}."]);
+            'mensaje' => ($envio->tipo === EnvioFondos::DEVOLUCION ? 'Devolución' : 'Entrega')
+                . " {$envio->numero} recibida: ingresó a la caja con el comprobante {$envio->movimientoRecepcion->numero}."]);
     }
 
     public function anular(Request $request, EnvioFondos $envio): JsonResponse
     {
+        if ($envio->tipo === EnvioFondos::DEVOLUCION) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['envio' =>
+                "La devolución {$envio->numero} no se anula: la caja principal la recibe y la diferencia, si la hay, sale en su arqueo."]);
+        }
         $this->asegurarCajero($envio->origen);
         $motivo = $request->validate(['motivo' => ['required', 'string', 'min:5', 'max:250']])['motivo'];
         $envio = $this->envios->anular($envio, $request->user(), trim($motivo));
@@ -76,10 +81,10 @@ class EnvioFondosController extends Controller
             'mensaje' => "Envío {$envio->numero} anulado: el dinero volvió a la caja con el comprobante {$envio->movimientoReintegro->numero}."]);
     }
 
-    /** A qué cajas puede enviar (solo la caja de la sede central envía). */
+    /** A qué cajas puede entregar (solo la caja principal entrega). */
     private function destinos(Caja $caja): array
     {
-        if (! $caja->esCentral()) {
+        if (! $caja->esPrincipal()) {
             return [];
         }
 

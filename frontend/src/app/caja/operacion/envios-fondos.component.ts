@@ -14,9 +14,10 @@ import { CajaService } from '../core/caja.service';
 import { DineroPipe } from '../core/dinero';
 
 /**
- * Dinero entre cajas. En la caja de la sede central: «Enviar dinero» a la caja
- * de un acopio. En la caja que recibe: los envíos en tránsito con «Recibir».
- * En las dos, el historial. El dinero en tránsito no está en ninguna caja.
+ * Efectivo entre cajas. En la caja principal: «Entregar dinero» a la caja de
+ * un acopio y recibir las devoluciones de los cierres. En la caja que recibe:
+ * lo que está en tránsito con «Recibir». En todas, el historial. El dinero en
+ * tránsito no está en ninguna caja.
  */
 @Component({
   selector: 'app-envios-fondos',
@@ -26,10 +27,11 @@ import { DineroPipe } from '../core/dinero';
     <!-- Por recibir: aviso destacado -->
     <section class="por-recibir" *ngIf="porRecibir().length">
       <div class="titulo"><i class="pi pi-send"></i>
-        <b>{{ porRecibir().length === 1 ? 'Hay un envío de dinero por recibir' : 'Hay ' + porRecibir().length + ' envíos de dinero por recibir' }}</b></div>
+        <b>{{ porRecibir().length === 1 ? 'Hay dinero por recibir' : 'Hay ' + porRecibir().length + ' entregas o devoluciones por recibir' }}</b></div>
       <div class="envio" *ngFor="let e of porRecibir()">
         <div>
           <span class="monto">{{ e.monto | dinero: e.moneda }}</span>
+          <span class="pastilla-tipo" [class.dev]="e.tipo === 'DEVOLUCION'">{{ e.tipo === 'DEVOLUCION' ? 'Devolución' : 'Entrega' }}</span>
           <span class="secundario"> de la caja {{ e.origen.codigo }} · {{ e.motivo }}{{ e.entregado_a ? ' · lo trae ' + e.entregado_a : '' }}</span>
           <div class="secundario">{{ e.numero }} · enviado por {{ e.enviado_por?.name }} el {{ e.enviado_en | date: 'dd/MM HH:mm' }}</div>
         </div>
@@ -40,29 +42,31 @@ import { DineroPipe } from '../core/dinero';
       <small class="secundario">Cuente el dinero antes de recibirlo: al confirmar entra a esta caja con su comprobante.</small>
     </section>
 
-    <!-- Sede central: enviar y lo que está en tránsito -->
-    <section class="central" *ngIf="caja().es_central">
+    <!-- Caja principal: entregar y lo que está en tránsito -->
+    <section class="central" *ngIf="caja().es_principal">
       <div class="cabeza">
-        <span><i class="pi pi-building"></i> <b>Caja de la sede central</b>
-          <span class="secundario">· envía el dinero a las cajas de los acopios</span></span>
+        <span><i class="pi pi-building"></i> <b>Caja principal</b>
+          <span class="secundario">· entrega el dinero del día a las cajas y recibe lo que devuelven al cerrar</span></span>
         <div class="botones">
-          <p-button label="Historial de envíos" icon="pi pi-history" [text]="true" size="small" (onClick)="historialVisible = true" />
-          <p-button *ngIf="caja().soy_cajero && caja().sesion_abierta && operable()" label="Enviar dinero" icon="pi pi-send" size="small"
+          <p-button label="Historial" icon="pi pi-history" [text]="true" size="small" (onClick)="historialVisible = true" />
+          <p-button *ngIf="caja().soy_cajero && caja().sesion_abierta && operable()" label="Entregar dinero" icon="pi pi-send" size="small"
                     (onClick)="abrirEnvio()" />
         </div>
       </div>
       <div class="transito" *ngIf="enTransito().length">
         <span class="secundario">En tránsito:</span>
         <span class="chip" *ngFor="let e of enTransito()">{{ e.destino.codigo }} · {{ e.monto | dinero: e.moneda }}
-          <button type="button" class="enlace" *ngIf="caja().soy_cajero && caja().sesion_abierta && operable()" (click)="pedirAnular(e)">anular</button></span>
+          <button type="button" class="enlace" *ngIf="e.tipo === 'ENTREGA' && caja().soy_cajero && caja().sesion_abierta && operable()" (click)="pedirAnular(e)">anular</button></span>
       </div>
     </section>
-    <div class="solo-historial" *ngIf="!caja().es_central && envios().length && !porRecibir().length">
-      <p-button label="Envíos recibidos" icon="pi pi-history" [text]="true" size="small" (onClick)="historialVisible = true" />
+    <div class="solo-historial" *ngIf="!caja().es_principal && envios().length">
+      <span class="secundario" *ngIf="devolucionPendiente() as d"><i class="pi pi-clock"></i> Devolución {{ d.numero }} de {{ d.monto | dinero: d.moneda }}
+        en tránsito: la principal todavía no la recibió.</span>
+      <p-button label="Entregas y devoluciones" icon="pi pi-history" [text]="true" size="small" (onClick)="historialVisible = true" />
     </div>
 
     <!-- Enviar -->
-    <p-dialog [(visible)]="envioVisible" header="Enviar dinero a otra caja" [modal]="true" [style]="{ width: '30rem', maxWidth: '95vw' }" [draggable]="false">
+    <p-dialog [(visible)]="envioVisible" header="Entregar dinero a otra caja" [modal]="true" [style]="{ width: '30rem', maxWidth: '95vw' }" [draggable]="false">
       <div class="formulario">
         <div class="campo">
           <label for="destino">Caja que recibe</label>
@@ -90,11 +94,12 @@ import { DineroPipe } from '../core/dinero';
           <label for="entregado">Quién lo lleva <span class="opcional">(opcional)</span></label>
           <input id="entregado" pInputText [(ngModel)]="entregadoA" maxlength="150" />
         </div>
-        <small class="secundario">Sale de esta caja ahora y queda en tránsito hasta que el cajero de destino lo recibe.</small>
+        <small class="secundario">Sale de esta caja ahora y queda en tránsito hasta que el cajero de destino lo recibe.
+          Una caja que todavía no devolvió el cierre anterior no recibe la entrega del día.</small>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Cancelar" [text]="true" (onClick)="envioVisible = false" />
-        <p-button label="Enviar" icon="pi pi-send" [loading]="trabajando() === 0"
+        <p-button label="Entregar" icon="pi pi-send" [loading]="trabajando() === 0"
                   [disabled]="!destino || !monto || monto <= 0 || motivo.trim().length < 5 || trabajando() !== null" (onClick)="enviar()" />
       </ng-template>
     </p-dialog>
@@ -115,25 +120,30 @@ import { DineroPipe } from '../core/dinero';
     </p-dialog>
 
     <!-- Historial -->
-    <p-dialog [(visible)]="historialVisible" header="Envíos de dinero" [modal]="true" [style]="{ width: '52rem', maxWidth: '96vw' }" [draggable]="false">
+    <p-dialog [(visible)]="historialVisible" header="Entregas y devoluciones" [modal]="true" [style]="{ width: '52rem', maxWidth: '96vw' }" [draggable]="false">
       <table class="historial">
-        <thead><tr><th>Envío</th><th>De → a</th><th>Para qué</th><th class="derecha">Monto</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Número</th><th>De → a</th><th>Para qué</th><th class="derecha">Monto</th><th>Estado</th></tr></thead>
         <tbody>
           <tr *ngFor="let e of envios()">
             <td><span class="codigo">{{ e.numero }}</span><div class="secundario">{{ e.enviado_en | date: 'dd/MM/yy HH:mm' }}</div></td>
             <td>{{ e.origen.codigo }} → {{ e.destino.codigo }}</td>
-            <td>{{ e.motivo }}<div class="secundario" *ngIf="e.motivo_anulacion">Anulado: {{ e.motivo_anulacion }}</div></td>
+            <td><span class="pastilla-tipo" [class.dev]="e.tipo === 'DEVOLUCION'">{{ e.tipo === 'DEVOLUCION' ? 'Devolución' : 'Entrega' }}</span> {{ e.motivo }}
+              <div class="secundario" *ngIf="e.motivo_anulacion">Anulado: {{ e.motivo_anulacion }}</div></td>
             <td class="derecha monto">{{ e.monto | dinero: e.moneda }}</td>
             <td><span class="pastilla" [class.pastilla-aviso]="e.estado === 'EN_TRANSITO'" [class.pastilla-ok]="e.estado === 'RECIBIDO'">
               {{ e.estado === 'EN_TRANSITO' ? 'En tránsito' : e.estado === 'RECIBIDO' ? 'Recibido' : 'Anulado' }}</span>
               <div class="secundario" *ngIf="e.recibido_por">{{ e.recibido_por.name }} · {{ e.recibido_en | date: 'dd/MM HH:mm' }}</div></td>
           </tr>
-          <tr *ngIf="!envios().length"><td colspan="5" class="secundario">Todavía no hay envíos.</td></tr>
+          <tr *ngIf="!envios().length"><td colspan="5" class="secundario">Todavía no hay entregas ni devoluciones.</td></tr>
         </tbody>
       </table>
     </p-dialog>
   `,
   styles: [`
+    .pastilla-tipo { display: inline-block; font-size: 0.68rem; font-weight: 600; padding: 0.02rem 0.4rem; border-radius: 999px;
+                     background: #e0f2fe; color: #075985; margin-left: 0.4rem; }
+    .pastilla-tipo.dev { background: #fef3c7; color: #92400e; }
+    .solo-historial { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; }
     .por-recibir { border: 1px solid #93c5fd; background: #eff6ff; border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1rem;
                    display: flex; flex-direction: column; gap: 0.55rem; }
     .por-recibir .titulo { display: flex; gap: 0.5rem; align-items: center; color: #1e40af; }
@@ -182,6 +192,7 @@ export class EnviosFondosComponent implements OnChanges {
   readonly trabajando = signal<number | null>(null);
   readonly porRecibir = computed(() => this.envios().filter((e) => e.estado === 'EN_TRANSITO' && e.caja_destino_id === this.caja().id));
   readonly enTransito = computed(() => this.envios().filter((e) => e.estado === 'EN_TRANSITO' && e.caja_origen_id === this.caja().id));
+  readonly devolucionPendiente = computed(() => this.enTransito().find((e) => e.tipo === 'DEVOLUCION') ?? null);
   readonly aAnular = signal<EnvioFondos | null>(null);
   readonly monedas = [{ valor: 'BOB', etiqueta: 'Bs' }, { valor: 'USD', etiqueta: 'US$' }];
 

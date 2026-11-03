@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { InputTextModule } from 'primeng/inputtext';
 import { InputTextareaModule } from 'primeng/inputtextarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToastModule } from 'primeng/toast';
@@ -30,7 +31,7 @@ interface Conteo {
 @Component({
   selector: 'app-cierre-caja',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, ButtonModule, InputNumberModule, InputTextareaModule,
+  imports: [CommonModule, FormsModule, RouterLink, ButtonModule, InputNumberModule, InputTextModule, InputTextareaModule,
             SelectButtonModule, ToastModule, DineroPipe],
   providers: [MessageService],
   template: `
@@ -56,7 +57,8 @@ interface Conteo {
         <i class="pi pi-check-circle"></i>
         <div>
           <h3>Sesión {{ r.numero }} cerrada</h3>
-          <p>Imprima el reporte del día, fírmelo y entréguelo con el efectivo al supervisor para que valide el cierre.</p>
+          <p *ngIf="!r.mensaje">Imprima el reporte del día, fírmelo y entréguelo con el efectivo al supervisor para que valide el cierre.</p>
+          <p *ngIf="r.mensaje">{{ r.mensaje }}</p>
           <div class="botones">
             <p-button label="Imprimir reporte del día" icon="pi pi-print" (onClick)="reporte(r.id)" />
             <p-button label="Volver a la caja" [text]="true" [routerLink]="['/caja/operar', id()]" />
@@ -112,6 +114,17 @@ interface Conteo {
         </section>
 
         <section class="final">
+          <div class="nota nota-aviso devolucion" *ngIf="c.devuelve_al_cerrar">
+            <i class="pi pi-send"></i>
+            <span>Esta caja <b>devuelve todo el efectivo al cerrar</b>: lo contado
+              <ng-container *ngFor="let k of conteos(); let ultimo = last">{{ cuadre()[k.moneda]?.contado === null ? '—' : (cuadre()[k.moneda]!.contado! | dinero: k.moneda) }}{{ ultimo ? '' : ' y ' }}</ng-container>
+              vuelve a la caja principal y queda en tránsito hasta que la reciban. Mañana la caja abre en 0.
+              <ng-container *ngIf="!c.hay_principal"><br><b>Falta marcar la caja principal en Caja → Cajas: sin ella no se puede cerrar.</b></ng-container></span>
+          </div>
+          <div class="campo" *ngIf="c.devuelve_al_cerrar">
+            <label for="entregado-cierre">Quién lleva el efectivo <span class="secundario">(opcional)</span></label>
+            <input id="entregado-cierre" pInputText [(ngModel)]="entregadoA" maxlength="150" />
+          </div>
           <div class="campo">
             <label for="obs">Observaciones {{ hayDiferencia() ? '(obligatorias: explique la diferencia)' : '(opcional)' }}</label>
             <textarea id="obs" pInputTextarea rows="3" [(ngModel)]="observaciones" maxlength="1000"
@@ -175,8 +188,9 @@ export class CierreCajaComponent implements OnInit {
   readonly conteos = signal<Conteo[]>([]);
   readonly version = signal(0);   // fuerza el recálculo al escribir en los cortes
   readonly cerrando = signal(false);
-  readonly cerrada = signal<{ id: number; numero: number } | null>(null);
+  readonly cerrada = signal<{ id: number; numero: number; mensaje?: string } | null>(null);
   observaciones = '';
+  entregadoA = '';
 
   readonly simbolo = simbolo;
   readonly modos = [{ valor: 'arqueo', etiqueta: 'Billete por billete' }, { valor: 'total', etiqueta: 'Solo el total' }];
@@ -231,7 +245,8 @@ export class CierreCajaComponent implements OnInit {
     const sesion = this.caja()?.sesion_abierta;
     if (!sesion) return;
 
-    const datos: DatosCierre = { monedas: {}, observaciones: this.observaciones.trim() || null };
+    const datos: DatosCierre = { monedas: {}, observaciones: this.observaciones.trim() || null,
+                                 entregado_a: this.entregadoA.trim() || null };
     for (const k of this.conteos()) {
       datos.monedas[k.moneda] = k.modo === 'arqueo'
         ? { arqueo: k.cortes.filter((c) => (c.cantidad ?? 0) > 0).map((c) => ({ denominacion: c.denominacion, cantidad: c.cantidad! })),
@@ -243,7 +258,7 @@ export class CierreCajaComponent implements OnInit {
     this.servicio.cerrar(sesion.id, datos).subscribe({
       next: (r) => {
         this.cerrando.set(false);
-        this.cerrada.set({ id: sesion.id, numero: sesion.numero });
+        this.cerrada.set({ id: sesion.id, numero: sesion.numero, mensaje: this.caja()?.devuelve_al_cerrar ? r.mensaje : undefined });
         this.toast.add({ severity: 'success', summary: 'Caja cerrada', detail: r.mensaje, life: 8000 });
       },
       error: (e) => {
